@@ -5,7 +5,7 @@ Covers the Artisan's Splendent craft targets plus the Expert's Splendent, True D
 version of each slot (no crafting cost yet). Writes one JSON snapshot the dashboard reads
 (the API sends no CORS headers, so browsers on another origin can't call it directly).
 True Dragon crafting costs use the recipes in recipes/true_dragon.json priced at Siel's
-market; Expert's Splendent costs from the site's own model. About 95 requests per run.
+market; Expert's Splendent costs from the site's own model. About 96 requests per run.
 
 Usage: python scripts/fetch_snapshot.py [--out site/data/snapshot.json] [--base URL] [--server ID]
 Stdlib only, so the GitHub Action needs no installs.
@@ -152,6 +152,25 @@ def fetch_market(base: str, server_id: int) -> tuple[dict, dict | None, list[str
         for k, name in mat_names.items()
     ]
 
+    # Item icons: the site's icon index maps item key -> [file index, rarity index, ...].
+    # The page loads the images straight from the site (/item-icons/{file}.webp).
+    icons: dict[str, list] = {}
+    time.sleep(DELAY_S)
+    try:
+        idx = get_json(base, "/item-icons/index.json") or {}
+        files, rarities, entries = idx.get("files") or {}, idx.get("rarities") or [], idx.get("items") or {}
+        for t in targets:
+            e = entries.get(str(t["target_key"]))
+            if not e:
+                continue
+            f = files.get(str(e[0])) if isinstance(files, dict) else (files[e[0]] if e[0] < len(files) else None)
+            r = rarities[e[1]] if len(e) > 1 and isinstance(e[1], int) and e[1] < len(rarities) else {}
+            if f:
+                icons[str(t["target_key"])] = [f, r.get("color"), r.get("name")]
+    except Exception as err:  # icons are cosmetic; never fail the run over them
+        errors.append(f"icons: {err}")
+        print(errors[-1], file=sys.stderr)
+
     market = {
         "captured_at": crafts.get("captured_at"),
         "targets": targets,
@@ -159,6 +178,7 @@ def fetch_market(base: str, server_id: int) -> tuple[dict, dict | None, list[str
         "history": history,
         "recipes": td_recipes["recipes"],
         "materials": materials,
+        "icons": icons,
     }
     return market, crafts.get("model"), errors
 

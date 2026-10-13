@@ -151,6 +151,13 @@ td.name { font-family: inherit; font-size: 13.5px; }
 td.name a { color: var(--text); font-weight: 600; text-decoration: none; }
 td.name a:hover { text-decoration: underline; }
 td.name .meta { display: block; color: var(--muted); font-size: 12px; }
+.item-cell { display: flex; align-items: center; gap: 10px; }
+.item-icon {
+  width: 36px; height: 36px; flex: none; border-radius: 6px; object-fit: contain;
+  background: var(--surface-2); border: 2px solid var(--rarity, var(--border));
+}
+.item-icon.small { width: 22px; height: 22px; border-width: 1.5px; border-radius: 4px; margin-right: 6px; vertical-align: -6px; }
+.tip-title { display: flex; align-items: center; }
 td.rank { color: var(--muted); width: 1%; }
 td.neg { color: var(--critical); }
 td.pos { color: var(--good); }

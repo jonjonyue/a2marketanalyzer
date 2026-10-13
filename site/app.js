@@ -128,7 +128,16 @@ async function loadMarket() {
         const h = await fetchJson(`${API}/api/items/${t.target_key}/prices?bucket=raw&from=${since}&server=${sid}`);
         history[t.target_key] = (h.points || []).map((p) => [Math.floor(new Date(p.ts).getTime() / 60000), p.listings || 0, p.low]);
       }
-      state.market = { captured_at: crafts.captured_at, targets: crafts.targets, items: items.items, history };
+      const icons = {};
+      try {
+        const idx = await fetchJson(`${API}/item-icons/index.json`);
+        for (const t of crafts.targets) {
+          const e = idx.items?.[t.target_key];
+          const r = e && idx.rarities?.[e[1]];
+          if (e && idx.files?.[e[0]]) icons[t.target_key] = [idx.files[e[0]], r?.color, r?.name];
+        }
+      } catch { /* icons are optional */ }
+      state.market = { captured_at: crafts.captured_at, targets: crafts.targets, items: items.items, history, icons };
       if (crafts.model) setModelNote(crafts.model);
     } catch {
       showBanner("Lost connection to aion2.exchange; showing the last data loaded.");
@@ -281,7 +290,7 @@ function costedNote(rows) {
 // ----- tooltip -----
 const tip = $("tooltip");
 function showTip(e, r) {
-  tip.innerHTML = `<strong>${esc(r.shortName)}</strong>
+  tip.innerHTML = `<strong class="tip-title">${iconHtml(r.key, "small")}${esc(r.shortName)}</strong>
     <div class="row"><span>Profit / craft</span><span>${kinah(r.profit, { sign: true })}</span></div>
     <div class="row"><span>Margin</span><span>${pct(r.marginPct)}</span></div>
     <div class="row"><span>Sold / day${r.salesSource === "estimate" ? " (est.)" : ""}</span><span>${rate(r.perDay)}</span></div>
@@ -428,6 +437,15 @@ function placeLabels(labels, minY, maxY, gap = 14) {
   return labels;
 }
 
+// Item icon from aion2.exchange's icon set, framed in the item's rarity color. Cosmetic: hidden if it fails to load.
+function iconHtml(key, size = "") {
+  const ic = state.market?.icons?.[key];
+  if (!ic) return "";
+  const [file, color, rarity] = ic;
+  const style = /^#[0-9a-f]{6}$/i.test(color || "") ? ` style="--rarity:${color}"` : "";
+  return `<img class="item-icon ${size}" src="${API}/item-icons/${encodeURIComponent(file)}.webp" alt=""${style} title="${esc(rarity || "")}" loading="lazy" decoding="async" onerror="this.remove()">`;
+}
+
 function costTitle(r) {
   const d = r.costDetail;
   if (!d) return r.cost == null ? "No crafting cost known" : "aion2.exchange crafting model: expected cost per item at mastery 100, cheapest path";
@@ -456,7 +474,7 @@ const COLUMNS = [
       const href = `${API}/${craftPage ? "crafts" : "items"}/${r.key}`;
       const title = craftPage ? "Cost breakdown and history on aion2.exchange" : "Price and listing history on aion2.exchange";
       const tier = craftPage ? "" : `${esc(r.tier)} · `;
-      return `<a href="${href}" target="_blank" rel="noopener" title="${title}">${esc(r.shortName)}</a><span class="meta">${tier}${esc(r.skill)} · ${esc(r.category)}</span>`;
+      return `<span class="item-cell">${iconHtml(r.key)}<span><a href="${href}" target="_blank" rel="noopener" title="${title}">${esc(r.shortName)}</a><span class="meta">${tier}${esc(r.skill)} · ${esc(r.category)}</span></span></span>`;
     } },
   { key: "verdict", label: "Verdict", sortVal: (r) => VERDICT_ORDER[r.verdict.id],
     fmt: (r) => `<span class="pill ${r.verdict.tone}">${esc(r.verdict.label)}</span>` },
