@@ -1,6 +1,6 @@
 // Pure profitability math. No DOM here, so it can be unit-tested with node.
 
-export const SALES_WINDOW_DAYS = 28; // /api/items units_sold covers the last 28 days
+export const SALES_WINDOW_DAYS = 28; // official /api/items units_sold covers the last 28 days
 
 export const DEFAULT_SETTINGS = {
   priceBasis: "conservative", // conservative | listing | sold
@@ -9,10 +9,96 @@ export const DEFAULT_SETTINGS = {
   listingFeePct: 2,           // fee charged on the listing price when you list, in percent
   sharePct: 25,               // share of daily sales you expect to capture
   minSalesPerDay: 0.5,        // below this the market is "thin"
-  maxSupplyDays: 14,        // above this the market is "oversupplied"
+  maxSupplyDays: 14,          // above this the market is "oversupplied"
+};
+
+// Listing-history sales estimator settings.
+export const ESTIMATOR = {
+  windowDays: 7,       // estimate over the last 7 days of snapshots
+  expiryHours: 72,     // listings expire after 3 days on the exchange
+  expiryTolMin: 90,    // a removal within ±90 min of a listing's 72h mark counts as an expiry
+  minDays: 1,          // need at least a day of history to report a rate
+  // Hourly snapshots miss listings that are posted and bought between two snapshots.
+  // Checked against the game's own daily sales on an EU server (26 item-days, Oct 2026):
+  // the raw count caught 122 of 179 sales, so raw counts are scaled up by ~1.5.
+  captureAdjust: 1.5,
 };
 
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+/**
+ * Estimate sales for one item from its snapshot history.
+ *
+ * history: [[epochMinutes, listings, cheapestPrice], ...] sorted, only snapshots where the item was listed.
+ * grid:    sorted epochMinutes of every market snapshot (an item missing from one had 0 listings).
+ *
+ * Between two snapshots:
+ *  - listings that disappear are removals; removals that land ~72h after a listing appeared are expiries,
+ *    the rest are counted as sales (cancellations are indistinguishable and get counted too);
+ *  - if the count stays flat but the cheapest price rises, the cheapest listing sold and was replaced: one sale.
+ * Each sale is priced at the cheapest listing just before it disappeared.
+ */
+export function estimateSales(history, grid, opts = ESTIMATOR) {
+  const o = { ...ESTIMATOR, ...opts };
+  if (!history?.length || !grid?.length) return null;
+  const byT = new Map(history.map((p) => [p[0], p]));
+  const first = history[0][0];
+  const timeline = grid.filter((t) => t >= first).map((t) => {
+    const p = byT.get(t);
+    return p ? { t, n: p[1], low: p[2] } : { t, n: 0, low: null };
+  });
+  if (timeline.length < 2) return null;
+
+  const end = timeline[timeline.length - 1].t;
+  const start = Math.max(first, end - o.windowDays * 1440);
+  const expiries = []; // predicted expiry times (epoch minutes) of listings we saw appear
+  let sales = 0, cheapestSold = 0, priceSum = 0, priceN = 0;
+
+  for (let i = 1; i < timeline.length; i++) {
+    const a = timeline[i - 1], b = timeline[i];
+    const d = b.n - a.n;
+    const cheapestGone = a.low != null && (b.low == null || b.low > a.low);
+    let s = 0, sLow = 0;
+    if (d > 0) {
+      for (let k = 0; k < d; k++) expiries.push(b.t + o.expiryHours * 60);
+    } else if (d < 0) {
+      let expired = 0;
+      for (let j = 0; j < expiries.length && expired < -d; j++) {
+        if (Math.abs(expiries[j] - b.t) <= o.expiryTolMin) { expiries.splice(j, 1); j--; expired++; }
+      }
+      s = -d - expired;
+      sLow = cheapestGone && s > 0 ? 1 : 0;
+    } else if (cheapestGone && a.n > 0) {
+      s = sLow = 1;
+    }
+    if (b.t > start && s > 0) {
+      sales += s;
+      cheapestSold += sLow;
+      priceSum += a.low * s;
+      priceN += s;
+    }
+  }
+
+  const days = (end - start) / 1440;
+  const enough = days >= o.minDays;
+  const observedPerDay = enough ? sales / days : null;
+  return {
+    days,
+    sales,
+    cheapestSold,
+    observedPerDay,
+    perDay: observedPerDay == null ? null : observedPerDay * o.captureAdjust,
+    lowerPerDay: enough ? cheapestSold / days : null,
+    avgSalePrice: priceN ? priceSum / priceN : null,
+  };
+}
+
+/** All snapshot times seen across a server's items: the market-wide snapshot schedule. */
+export function snapshotGrid(histories) {
+  const set = new Set();
+  for (const h of Object.values(histories || {})) for (const p of h) set.add(p[0]);
+  return [...set].sort((a, b) => a - b);
+}
 
 /** Pick the sell price for one craft according to the chosen basis. */
 export function sellPrice(listing, soldAvg, basis) {
@@ -24,15 +110,21 @@ export function sellPrice(listing, soldAvg, basis) {
 }
 
 /**
- * Join one craft target with its item stats and compute every metric the dashboard shows.
- * target: a row from /api/crafts targets; item: the matching row from /api/items (or undefined).
+ * Join one craft target with its item stats and sales estimate, and compute every metric the dashboard shows.
+ * target: a row from /api/crafts targets; item: the matching /api/items row; est: estimateSales() result.
+ * Official game statistics win where they exist; otherwise the listing-history estimate is used.
  */
-export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS) {
+export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = null) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
   const listing = num(item?.price) ?? num(target.market_price);
   const listings = num(item?.listings) ?? num(target.listings) ?? 0;
-  const soldAvg = num(item?.sold_avg_price);
   const sold28 = num(item?.units_sold);
+  const officialAvg = num(item?.sold_avg_price);
+
+  const salesSource = sold28 != null ? "official" : est?.perDay != null ? "estimate" : null;
+  const perDay = sold28 != null ? sold28 / SALES_WINDOW_DAYS : est?.perDay ?? null;
+  const soldAvg = officialAvg ?? num(est?.avgSalePrice);
+  const priceSource = officialAvg != null ? "official" : soldAvg != null ? "estimate" : null;
 
   const cost = s.costBasis === "market" ? num(target.cost_market) ?? num(target.cost) : num(target.cost);
   const price = sellPrice(listing, soldAvg, s.priceBasis);
@@ -41,7 +133,6 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS) {
   const profit = net == null || cost == null ? null : net - cost;
   const marginPct = profit == null || !cost ? null : (profit / cost) * 100;
 
-  const perDay = sold28 == null ? null : sold28 / SALES_WINDOW_DAYS;
   const supplyDays = perDay == null ? null : perDay > 0 ? listings / perDay : listings > 0 ? Infinity : 0;
   const dailyPool = profit == null || perDay == null ? null : profit * perDay;
   const yourDaily = dailyPool == null ? null : dailyPool * (s.sharePct / 100);
@@ -55,6 +146,7 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS) {
     profile: target.profile_label,
     cost, listing, soldAvg, price, net, profit, marginPct,
     listings, sold28, perDay, supplyDays, dailyPool, yourDaily,
+    salesSource, priceSource, est,
     missingInputs: num(target.missing) ?? 0,
     verdict: verdictFor({ profit, perDay, supplyDays, missing: num(target.missing) ?? 0 }, s),
   };
@@ -74,8 +166,14 @@ export function verdictFor({ profit, perDay, supplyDays, missing }, s = DEFAULT_
 /** Analyze a whole server's market and sort best-first by expected daily profit. */
 export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
   const items = new Map((market.items || []).map((i) => [i.item_key, i]));
+  const histories = market.history || {};
+  const grid = snapshotGrid(histories);
   return (market.targets || [])
-    .map((t) => analyzeCraft(t, items.get(t.target_key), settings))
+    .map((t) => {
+      const h = histories[String(t.target_key)];
+      const est = h ? estimateSales(h, grid) : null;
+      return analyzeCraft(t, items.get(t.target_key), settings, est);
+    })
     .sort(byRank);
 }
 

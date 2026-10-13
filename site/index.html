@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Aion 2 Crafting Profit</title>
-  <meta name="description" content="Which Artisan's Splendent crafts make money on your Aion 2 server, ranked by profit and how fast they actually sell. Data from aion2.exchange.">
+  <meta name="description" content="Which Artisan's Splendent crafts make money on Aion 2 Siel (Elyos, NA West), ranked by profit and how fast they actually sell. Data from aion2.exchange.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -14,9 +14,9 @@
   <header class="top">
     <div class="wrap top-inner">
       <div>
-        <p class="eyebrow">Aion 2 · Artisan's Splendent tier</p>
+        <p class="eyebrow">Aion 2 · Artisan's Splendent tier · <span id="serverName">Siel · Elyos · North America West</span></p>
         <h1>Crafting profit</h1>
-        <p class="lede">Which crafts make money on your server, ranked by profit per craft <em>and</em> how fast they actually sell.</p>
+        <p class="lede">Which crafts make money on Siel, ranked by profit per craft <em>and</em> how fast they actually sell.</p>
       </div>
       <div class="freshness" id="freshness" aria-live="polite">Loading…</div>
     </div>
@@ -24,10 +24,6 @@
 
   <main class="wrap">
     <section class="controls" aria-label="Filters and assumptions">
-      <label class="field">
-        <span>Server</span>
-        <select id="server"></select>
-      </label>
       <div class="field">
         <span>Skill</span>
         <div class="chips" id="skills" role="group" aria-label="Skill"></div>
@@ -35,9 +31,9 @@
       <div class="field">
         <span>Sell price</span>
         <div class="seg" id="priceBasis" role="radiogroup" aria-label="Sell price basis">
-          <button data-v="conservative" title="Lower of the cheapest listing and the 28-day average sale">Conservative</button>
+          <button data-v="conservative" title="Lower of the cheapest listing and the average sale price">Conservative</button>
           <button data-v="listing" title="Cheapest listing right now">Cheapest listing</button>
-          <button data-v="sold" title="Average sale price over 28 days">28-day avg sale</button>
+          <button data-v="sold" title="Average price of listings that sold over the last 7 days">Avg sale price</button>
         </div>
       </div>
       <div class="field">
@@ -78,7 +74,7 @@
       <figure class="panel">
         <figcaption>
           <h2>Margin vs. how fast it sells</h2>
-          <p>Top right is where you want to be. Dashed lines mark break-even and the slow-seller threshold; crafts with no sales in 28 days are left out.</p>
+          <p>Top right is where you want to be. Dashed lines mark break-even and the slow-seller threshold; crafts with no sales in the last 7 days are left out.</p>
         </figcaption>
         <div class="chart" id="scatter"></div>
       </figure>
@@ -101,9 +97,9 @@
       <h2>How this is calculated</h2>
       <ul>
         <li><strong>Cost per craft</strong> comes from aion2.exchange's crafting model: expected value over many crafts at mastery 100, with each material priced at the cheapest of buying it, converting Odyle, or crafting it from cheaper inputs. "Buy everything" uses the site's all-market cost instead.</li>
-        <li><strong>Sell price</strong>: "Conservative" takes the lower of the cheapest current listing and the 28-day average sale, so a single overpriced listing can't inflate the margin.</li>
+        <li><strong>Sell price</strong>: "Conservative" takes the lower of the cheapest current listing and the average sale price, so a single overpriced listing can't inflate the margin. The average sale price is the price of each listing just before it sold, over the last 7 days.</li>
         <li><strong>Profit per craft</strong> = sell price × (1 − sales tax − listing fee) − cost. Defaults are the exchange's 10% sales tax and ~2% listing fee. This assumes the item sells on its first listing; every relist costs another listing fee.</li>
-        <li><strong>Sold per day</strong> = units sold in the last 28 days ÷ 28, from the game's own trade statistics. <strong>Days of supply</strong> = current listings ÷ sold per day.</li>
+        <li><strong>Sold per day</strong> is estimated from hourly listing snapshots, because the game publishes no sales statistics for NA servers. Over the last 7 days, listings that disappear count as sales, except those that vanish 72 hours after appearing (expired). A snapshot where the count holds but the cheapest price jumps counts as one sale (the cheapest sold and was replaced). Hourly snapshots miss items listed and bought within the same hour, so the count is scaled up by 1.5×; on an EU server with official stats, the raw count caught about two-thirds of real sales. Cancelled listings look like sales and can't be separated. Hover a number to see the raw count. <strong>Days of supply</strong> = current listings ÷ sold per day.</li>
         <li><strong>Daily profit pool</strong> = profit per craft × sold per day; <strong>your daily</strong> scales that by the share of sales you expect to win. Crafts are ranked by the pool.</li>
         <li>Verdicts: <em>Craft it</em> = profitable, at least 0.5 sold/day, and under 14 days of supply. <em>Slow seller</em> and <em>Oversupplied</em> are profitable on paper but hard to move.</li>
       </ul>
