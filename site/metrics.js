@@ -169,7 +169,7 @@ export function verdictFor({ profit, perDay, supplyDays, missing, noCost }, s = 
 
 /** Analyze a whole server's market and sort best-first by expected daily profit. */
 /**
- * Crafting cost from a recipe file (recipes/true_dragon.json, recipes/artisan.json).
+ * Crafting cost from a recipe file (recipes/true_dragon.json).
  *
  * One craft attempt = 1 Artisan's Splendent item of the same slot + materials (+ gold fee).
  * The Artisan's Splendent input costs the cheaper of buying it and crafting it (the site's model),
@@ -181,7 +181,7 @@ export function verdictFor({ profit, perDay, supplyDays, missing, noCost }, s = 
 export function trueDragonCost(recipe, product_key, ctx, settings = DEFAULT_SETTINGS) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
   // The base input is either a tracked item (Artisan's Splendent, for True Dragon) or an
-  // untracked one with its own craft cost and price (Expert's Splendent, for the blue Artisan's gear).
+  // untracked one listed in market.inputs with its own craft_cost and price.
   const baseTarget = ctx.targets.get(recipe.base_key);
   const baseInput = ctx.inputs?.get(recipe.base_key);
   const baseListing = num(ctx.items.get(recipe.base_key)?.price) ?? num(baseTarget?.market_price) ?? num(baseInput?.price);
@@ -226,7 +226,7 @@ export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
   };
   const recipeFor = new Map();
   // A recipe costs its product (one attempt) and its combo result (÷ combo chance). Only items without a cost of
-  // their own use it, so the blue recipes' combo results (Artisan's Splendent) keep the site's model.
+  // their own use it, so anything the site's model already costs keeps that cost.
   for (const r of market.recipes || []) {
     recipeFor.set(r.product_key, r);
     if (!recipeFor.has(r.combo_key)) recipeFor.set(r.combo_key, r);
