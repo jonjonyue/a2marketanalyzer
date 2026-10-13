@@ -48,8 +48,12 @@
         </div>
       </div>
       <label class="field small">
-        <span>Exchange fee %</span>
+        <span>Sales tax %</span>
         <input id="tax" type="number" min="0" max="50" step="0.5" inputmode="decimal">
+      </label>
+      <label class="field small">
+        <span>Listing fee %</span>
+        <input id="listFee" type="number" min="0" max="50" step="0.5" inputmode="decimal">
       </label>
       <label class="field small">
         <span>Your share of sales %</span>
@@ -98,7 +102,7 @@
       <ul>
         <li><strong>Cost per craft</strong> comes from aion2.exchange's crafting model: expected value over many crafts at mastery 100, with each material priced at the cheapest of buying it, converting Odyle, or crafting it from cheaper inputs. "Buy everything" uses the site's all-market cost instead.</li>
         <li><strong>Sell price</strong>: "Conservative" takes the lower of the cheapest current listing and the 28-day average sale, so a single overpriced listing can't inflate the margin.</li>
-        <li><strong>Profit per craft</strong> = sell price × (1 − exchange fee) − cost. Set the fee to whatever the exchange charges.</li>
+        <li><strong>Profit per craft</strong> = sell price × (1 − sales tax − listing fee) − cost. Defaults are the exchange's 10% sales tax and ~2% listing fee. This assumes the item sells on its first listing; every relist costs another listing fee.</li>
         <li><strong>Sold per day</strong> = units sold in the last 28 days ÷ 28, from the game's own trade statistics. <strong>Days of supply</strong> = current listings ÷ sold per day.</li>
         <li><strong>Daily profit pool</strong> = profit per craft × sold per day; <strong>your daily</strong> scales that by the share of sales you expect to win. Crafts are ranked by the pool.</li>
         <li>Verdicts: <em>Craft it</em> = profitable, at least 0.5 sold/day, and under 14 days of supply. <em>Slow seller</em> and <em>Oversupplied</em> are profitable on paper but hard to move.</li>

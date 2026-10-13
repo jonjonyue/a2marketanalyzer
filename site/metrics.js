@@ -5,7 +5,8 @@ export const SALES_WINDOW_DAYS = 28; // /api/items units_sold covers the last 28
 export const DEFAULT_SETTINGS = {
   priceBasis: "conservative", // conservative | listing | sold
   costBasis: "cheapest",      // cheapest (site's cheapest-path cost) | market (buy every input)
-  taxPct: 0,                  // exchange fee taken from the sale, in percent
+  salesTaxPct: 10,            // exchange tax taken from the sale price, in percent
+  listingFeePct: 2,           // fee charged on the listing price when you list, in percent
   sharePct: 25,               // share of daily sales you expect to capture
   minSalesPerDay: 0.5,        // below this the market is "thin"
   maxSupplyDays: 14,        // above this the market is "oversupplied"
@@ -35,7 +36,8 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS) {
 
   const cost = s.costBasis === "market" ? num(target.cost_market) ?? num(target.cost) : num(target.cost);
   const price = sellPrice(listing, soldAvg, s.priceBasis);
-  const net = price == null ? null : price * (1 - s.taxPct / 100);
+  // Both fees scale with the price you list at, so one listing that sells keeps price × (1 − tax − fee).
+  const net = price == null ? null : price * (1 - (s.salesTaxPct + s.listingFeePct) / 100);
   const profit = net == null || cost == null ? null : net - cost;
   const marginPct = profit == null || !cost ? null : (profit / cost) * 100;
 

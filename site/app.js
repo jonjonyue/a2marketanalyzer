@@ -47,7 +47,8 @@ function readUrl() {
     skill: SKILLS.includes(p.get("skill")) ? p.get("skill") : "All",
     priceBasis: ["conservative", "listing", "sold"].includes(p.get("price")) ? p.get("price") : DEFAULT_SETTINGS.priceBasis,
     costBasis: ["cheapest", "market"].includes(p.get("cost")) ? p.get("cost") : DEFAULT_SETTINGS.costBasis,
-    taxPct: Math.min(50, Math.max(0, n("fee", DEFAULT_SETTINGS.taxPct))),
+    salesTaxPct: Math.min(50, Math.max(0, n("tax", DEFAULT_SETTINGS.salesTaxPct))),
+    listingFeePct: Math.min(50, Math.max(0, n("listfee", DEFAULT_SETTINGS.listingFeePct))),
     sharePct: Math.min(100, Math.max(1, n("share", DEFAULT_SETTINGS.sharePct))),
     hideLoss: p.get("hideLoss") === "1",
     sort: p.get("sort") || "rank",
@@ -61,7 +62,8 @@ function writeUrl() {
   if (u.skill !== "All") p.set("skill", u.skill);
   if (u.priceBasis !== DEFAULT_SETTINGS.priceBasis) p.set("price", u.priceBasis);
   if (u.costBasis !== DEFAULT_SETTINGS.costBasis) p.set("cost", u.costBasis);
-  if (u.taxPct !== DEFAULT_SETTINGS.taxPct) p.set("fee", u.taxPct);
+  if (u.salesTaxPct !== DEFAULT_SETTINGS.salesTaxPct) p.set("tax", u.salesTaxPct);
+  if (u.listingFeePct !== DEFAULT_SETTINGS.listingFeePct) p.set("listfee", u.listingFeePct);
   if (u.sharePct !== DEFAULT_SETTINGS.sharePct) p.set("share", u.sharePct);
   if (u.hideLoss) p.set("hideLoss", "1");
   if (u.sort !== "rank") { p.set("sort", u.sort); p.set("dir", u.dir); }
@@ -199,7 +201,8 @@ function buildControls() {
       state.ui[key] = Math.min(hi, Math.max(lo, v)); writeUrl(); render();
     });
   };
-  num("tax", "taxPct", 0, 50);
+  num("tax", "salesTaxPct", 0, 50);
+  num("listFee", "listingFeePct", 0, 50);
   num("share", "sharePct", 1, 100);
 
   $("hideLoss").checked = state.ui.hideLoss;
@@ -446,7 +449,7 @@ function renderTable(rows) {
   }).join("")}</tr>`).join("") || `<tr><td colspan="${COLUMNS.length}" class="dim">No crafts match these filters.</td></tr>`;
 
   const basis = { conservative: "lower of cheapest listing and 28-day average sale", listing: "cheapest current listing", sold: "28-day average sale" }[state.ui.priceBasis];
-  $("tableNote").textContent = `${rows.length} crafts · sell price = ${basis}${state.ui.taxPct ? `, minus ${state.ui.taxPct}% fee` : ""}`;
+  $("tableNote").textContent = `${rows.length} crafts · sell price = ${basis}${state.ui.salesTaxPct + state.ui.listingFeePct ? `, minus ${state.ui.salesTaxPct}% tax and ${state.ui.listingFeePct}% listing fee` : ""}`;
 }
 
 init();
