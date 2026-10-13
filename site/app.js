@@ -463,7 +463,7 @@ function extLink(r, style = "button") {
 }
 
 const matLink = (key, name) => `<a href="${API}/items/${key}" target="_blank" rel="noopener" title="Open on aion2.exchange">${esc(name)}</a>`;
-const METHOD = { buy: "Bought", convert: "Converted", craft: "Crafted" };
+const METHOD = { buy: "Bought", convert: "Converted", morph: "Converted", craft: "Crafted" };
 function methodLabel(m) {
   const base = METHOD[m.method] || (m.method ? String(m.method) : "—");
   const via = (Array.isArray(m.via) ? m.via : [])
