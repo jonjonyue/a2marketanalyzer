@@ -29,7 +29,7 @@ GitHub Action (hourly) ──► aion2.exchange /api/servers, /api/crafts, /api/
 
 Verdicts: **Craft it** = profitable, ≥ 0.5 sold/day, ≤ 14 days of supply. Thresholds live in `site/metrics.js` (`DEFAULT_SETTINGS`).
 
-Click an item to expand its recipe: each input with its market price and crafted price (the one used is highlighted), and for Artisan's/Expert's Splendent every step of the chain plus a craft-or-buy comparison per tier. The ↗ button opens the item on aion2.exchange.
+Click an item to expand its recipe, laid out like the game's: every input (including the gear it consumes) with its market price and crafted price, the one used highlighted, and the cost per attempt. Each crafted input has a nested "How … is made" recipe, all the way down (True Dragon → Artisan's Splendent → Expert's Splendent → Splendent), with the success and combo maths that turn a per-attempt cost into a per-item cost. The ↗ button opens the item on aion2.exchange.
 
 Every control (tier, skill, price basis, tax, listing fee, share, sort, expanded item) is stored in the URL, so a copied link reproduces the exact view.
 

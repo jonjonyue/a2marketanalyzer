@@ -257,3 +257,12 @@ table.recipe.ladder { max-width: 620px; }
   table.recipe { display: block; overflow-x: auto; }
   table.recipe th, table.recipe td { padding: 5px 6px; white-space: nowrap; }
 }
+
+/* nested recipe cards */
+.recipe-card { display: grid; gap: 4px; }
+details.sub { margin: 6px 0 2px; padding-left: 14px; border-left: 2px solid var(--border); }
+details.sub > summary { cursor: pointer; font-weight: 600; font-size: 13px; padding: 6px 0; color: var(--text-2); list-style: none; }
+details.sub > summary::-webkit-details-marker { display: none; }
+details.sub > summary::before { content: "▸ "; color: var(--muted); }
+details.sub[open] > summary::before { content: "▾ "; }
+details.sub > summary:hover { color: var(--accent); }

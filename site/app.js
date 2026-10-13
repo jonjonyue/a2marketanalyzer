@@ -472,75 +472,94 @@ function methodLabel(m) {
   return via.length ? `${base} via ${esc(via.join(", "))}` : base;
 }
 
-// The site's cost chain for an Artisan's Splendent item (steps 1..3) or Expert's Splendent (steps 1..2).
-function chainFor(r) {
+// ---------- recipes, laid out the way the game (and questlog.gg) shows them ----------
+// Each Artisan's Splendent item has aion2.exchange's cost chain: step 1 makes the Splendent item, step 2 the
+// Expert's Splendent (consuming 1 Splendent per attempt), step 3 the Artisan's Splendent (consuming 1 Expert's).
+function chainOf(key) {
   const chains = state.market?.chains || {};
-  if (r.tier === "Artisan's Splendent") return { chain: chains[r.key], upto: Infinity, scale: 1 };
-  if (r.tier === "Expert's Splendent") {
-    const chain = chains[r.key - 9999];
-    if (!chain) return null;
-    const i = chain.steps.findIndex((s) => s.result_key === r.key);
-    if (i < 0) return null;
-    // The site's attempts are per Artisan's Splendent; per Expert's Splendent divide by how many the next step uses.
-    const next = chain.steps[i + 1];
-    return { chain, upto: chain.steps[i].step_no, scale: next?.attempts ? 1 / next.attempts : 1 };
+  for (const [k, c] of Object.entries(chains)) {
+    const i = (c.steps || []).findIndex((s) => s.result_key === key);
+    if (i >= 0) return { chain: c, index: i };
   }
   return null;
+}
+
+const tierOf = (chain, key) => (chain.tiers || []).find((x) => x.item_key === key) || {};
+const asPct = (v) => `${(v * 100).toFixed(Math.abs(v * 100 - Math.round(v * 100)) > 0.05 ? 1 : 0)}%`; // 25%, 96.8%
+
+function priceCells({ market, crafted, used }) {
+  return `<td class="${used === "market" ? "used" : ""}">${kinah(market)}</td>` +
+    `<td class="${used === "crafted" ? "used" : ""}">${crafted == null ? "—" : kinah(crafted)}</td>`;
+}
+
+function recipeTable(rows, perAttempt) {
+  return `<table class="recipe"><thead><tr><th>Input</th><th>Qty</th><th>Market price</th><th>Crafted price</th><th>Used</th><th>Cost</th></tr></thead>` +
+    `<tbody>${rows.join("")}</tbody><tfoot><tr><td colspan="5">Per craft attempt</td><td>${kinah(perAttempt)}</td></tr></tfoot></table>`;
+}
+
+// One card: the recipe that makes `steps[index]`'s result, with a nested card for the gear it consumes.
+function stepCard(chain, index, depth = 0) {
+  const s = chain.steps[index];
+  const prevStep = index > 0 ? chain.steps[index - 1] : null;
+  const prev = prevStep ? tierOf(chain, prevStep.result_key) : null;
+  const rows = [];
+  let perAttempt = 0;
+  if (prevStep) {
+    perAttempt += prev.cost ?? 0;
+    rows.push(`<tr><td>${matLink(prevStep.result_key, prevStep.result_name)}</td><td>1</td>` +
+      priceCells({ market: prev.market_price, crafted: prev.cost, used: "crafted" }) +
+      `<td>Crafted <span class="muted">(below)</span></td><td>${kinah(prev.cost)}</td></tr>`);
+  }
+  for (const m of s.materials || []) {
+    const cost = (m.unit_price ?? 0) * m.per_attempt;
+    perAttempt += cost;
+    const bought = !m.method || m.method === "buy";
+    rows.push(`<tr><td>${matLink(m.material_key, m.name)}</td><td>${m.per_attempt}</td>` +
+      priceCells({ market: m.listing_price, crafted: bought ? null : m.unit_price, used: bought ? "market" : "crafted" }) +
+      `<td>${methodLabel(m)}</td><td>${kinah(cost)}</td></tr>`);
+  }
+  const rate = (s.success_rate ?? 1) * (s.combo_probability ?? 1);
+  const itemCost = tierOf(chain, s.result_key).cost ?? perAttempt / rate;
+  const sum = `<p class="detail-sum">A craft succeeds ${asPct(s.success_rate ?? 1)} of the time and only the ` +
+    `${asPct(s.combo_probability ?? 1)} combo makes <strong>${esc(s.result_name)}</strong>, so one costs ` +
+    `${kinah(perAttempt)} ÷ (${asPct(s.success_rate ?? 1)} × ${asPct(s.combo_probability ?? 1)}) = <strong>${kinah(itemCost)}</strong>` +
+    ` (about ${(1 / rate).toFixed(1)} attempts each).</p>`;
+  const sub = prevStep
+    ? `<details class="sub"${depth < 1 ? " open" : ""}><summary>How ${esc(prevStep.result_name)} is made</summary>${stepCard(chain, index - 1, depth + 1)}</details>`
+    : "";
+  return `<div class="recipe-card">${recipeTable(rows, perAttempt)}${sum}${sub}</div>`;
 }
 
 function detailHtml(r) {
   const head = `<div class="detail-head"><div><h3>How ${esc(r.shortName)} is made</h3>` +
     `<p class="muted">${esc(r.skill)} · cost per item ${kinah(r.cost)}${r.listing != null ? ` · cheapest listing ${kinah(r.listing)}` : ""}</p></div>${extLink(r)}</div>`;
-  if (r.costDetail) return head + recipeDetail(r);
-  const c = chainFor(r);
-  if (c?.chain) return head + chainDetail(r, c);
-  return head + `<p class="muted">No recipe breakdown available for this item.</p>`;
+  const note = `<p class="muted small">Highlighted price is the one used. Gear inputs use their crafted cost; materials use the cheapest way to get them ` +
+    `(bought at the cheapest listing, or converted/crafted when that's cheaper). Click a "How … is made" line to open or close a sub-recipe. ` +
+    `Recipes from questlog.gg; Splendent costs from aion2.exchange's model.</p>`;
+  if (r.costDetail) return head + trueDragonCard(r) + note;
+  const c = chainOf(r.key);
+  if (c) return head + stepCard(c.chain, c.index) + note;
+  return head + `<p class="muted">No recipe available for this item.</p>`;
 }
 
-function recipeDetail(r) {
+function trueDragonCard(r) {
   const d = r.costDetail;
-  const baseRow = `<tr><td>${matLink(d.baseKey, d.baseName)}</td><td>1</td>` +
-    `<td class="${d.baseMethod === "buy" ? "used" : ""}">${kinah(d.baseListing)}</td>` +
-    `<td class="${d.baseMethod === "craft" ? "used" : ""}">${kinah(d.baseCraft)}</td>` +
-    `<td>${d.baseMethod === "craft" ? "Crafted" : "Bought"}</td><td>${kinah(d.base)}</td></tr>`;
-  const matRows = d.materials.map((m) => `<tr><td>${matLink(m.key, m.name)}</td><td>${m.qty}</td>` +
-    `<td class="used">${kinah(m.price)}</td><td>—</td><td>Bought</td><td>${m.price == null ? "—" : kinah(m.price * m.qty)}</td></tr>`).join("");
-  const combo = d.factor !== 1
-    ? `<p class="detail-sum">Each attempt makes this item only on the ${Math.round(d.comboProbability * 100)}% combo, so it costs ${kinah(d.attempt)} × ${+d.factor.toFixed(2)} = <strong>${kinah(r.cost)}</strong>.</p>`
-    : `<p class="detail-sum">One craft attempt = <strong>${kinah(d.attempt)}</strong>. ${Math.round(d.comboProbability * 100)}% of attempts make the Splendent version instead.</p>`;
-  return `<table class="recipe"><thead><tr><th>Input</th><th>Qty</th><th>Market price</th><th>Crafted price</th><th>Used</th><th>Cost</th></tr></thead>` +
-    `<tbody>${baseRow}${matRows}</tbody><tfoot><tr><td colspan="5">Per craft attempt</td><td>${kinah(d.attempt)}</td></tr></tfoot></table>` +
-    combo + `<p class="muted small">Highlighted price is the one used. Materials are priced at Siel's cheapest listing; recipe from questlog.gg.</p>`;
-}
-
-function chainDetail(r, { chain, upto, scale }) {
-  const steps = chain.steps.filter((s) => s.step_no <= upto);
-  let total = 0;
-  const blocks = steps.map((s, i) => {
-    const prev = i > 0 ? steps[i - 1].result_name : null;
-    const per = s.attempts * scale;
-    const cost = (s.step_cost ?? 0) * scale;
-    total += cost;
-    const rows = s.materials.map((m) => `<tr><td>${matLink(m.material_key, m.name)}</td><td>${m.per_attempt}</td>` +
-      `<td class="used">${kinah(m.unit_price)}</td><td>${kinah(m.listing_price)}</td><td>${methodLabel(m)}</td>` +
-      `<td>${kinah((m.subtotal ?? m.unit_price * m.per_attempt * s.attempts) * scale)}</td></tr>`).join("");
-    return `<div class="step"><h4>Step ${s.step_no}: ${esc(s.result_name)}</h4>` +
-      `<p class="muted small">${prev ? `Uses 1 ${esc(prev)} per attempt · ` : ""}${per.toFixed(per >= 10 ? 0 : 2)} attempts per item ` +
-      `· ${(s.success_rate * 100).toFixed(1)}% success · ${Math.round((s.combo_probability ?? 0) * 100)}% combo</p>` +
-      `<table class="recipe"><thead><tr><th>Material</th><th>Per attempt</th><th>Unit price</th><th>Listing</th><th>How</th><th>Cost per item</th></tr></thead>` +
-      `<tbody>${rows}</tbody><tfoot><tr><td colspan="5">Step total</td><td>${kinah(cost)}</td></tr></tfoot></table></div>`;
-  }).join("");
-  const tiers = (chain.tiers || []).filter((x) => x.tier <= steps.length);
-  const ladder = tiers.length ? `<table class="recipe ladder"><thead><tr><th>Tier</th><th>Crafted price</th><th>Market price</th><th>Cheaper</th></tr></thead><tbody>` +
-    tiers.map((x) => {
-      const cheaper = x.cost != null && x.market_price != null ? (x.cost <= x.market_price ? "Craft" : "Buy") : "—";
-      return `<tr><td>${matLink(x.item_key, x.name)}</td><td>${kinah(x.cost)}</td><td>${kinah(x.market_price)}</td><td>${cheaper}</td></tr>`;
-    }).join("") + `</tbody></table>` : "";
-  return `<div class="steps">${blocks}</div>` +
-    `<p class="detail-sum">Total across the steps = <strong>${kinah(total)}</strong> per item (the cost shown in the table). ` +
-    `Each step needs about 1 ÷ (success × combo) attempts, because only combo results feed the next step.</p>` +
-    (ladder ? `<h4>Each tier: craft or buy?</h4>${ladder}` : "") +
-    `<p class="muted small">From aion2.exchange's cost model. Unit price is the cheapest way to get each material (highlighted); listing is the cheapest single listing.</p>`;
+  const rows = [`<tr><td>${matLink(d.baseKey, d.baseName)}</td><td>1</td>` +
+    priceCells({ market: d.baseListing, crafted: d.baseCraft, used: d.baseMethod === "craft" ? "crafted" : "market" }) +
+    `<td>${d.baseMethod === "craft" ? "Crafted <span class=\"muted\">(below)</span>" : "Bought"}</td><td>${kinah(d.base)}</td></tr>`];
+  for (const m of d.materials) {
+    rows.push(`<tr><td>${matLink(m.key, m.name)}</td><td>${m.qty}</td>` + priceCells({ market: m.price, crafted: null, used: "market" }) +
+      `<td>Bought</td><td>${m.price == null ? "—" : kinah(m.price * m.qty)}</td></tr>`);
+  }
+  const combo = Math.round(d.comboProbability * 100);
+  const sum = d.factor !== 1
+    ? `<p class="detail-sum">This item only comes from the ${combo}% combo on the True Dragon craft, so it costs ${kinah(d.attempt)} × ${+d.factor.toFixed(2)} = <strong>${kinah(r.cost)}</strong>.</p>`
+    : `<p class="detail-sum">Every attempt makes a True Dragon item, so it costs one attempt: <strong>${kinah(d.attempt)}</strong>. ${combo}% of attempts make the Splendent version instead.</p>`;
+  const base = chainOf(d.baseKey);
+  const sub = base
+    ? `<details class="sub" open><summary>How ${esc(d.baseName)} is made</summary>${stepCard(base.chain, base.index, 1)}</details>`
+    : "";
+  return `<div class="recipe-card">${recipeTable(rows, d.attempt)}${sum}${sub}</div>`;
 }
 
 function costTitle(r) {
