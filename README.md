@@ -37,6 +37,7 @@ Every control (tier, skill, price basis, tax, listing fee, share, sort) is store
 
 - **One craft attempt** = Artisan's Splendent input + materials. The input costs the cheaper of crafting it (aion2.exchange's model) and buying it; under "buy everything" it's bought. Materials are priced at Siel's cheapest listing.
 - **True Dragon** = one attempt. **Splendent True Dragon** = one attempt ÷ 0.25 = 4×, with the plain True Dragon results of the other attempts not credited (the same convention aion2.exchange uses for Artisan's Splendent).
+- The direct Splendent True Dragon recipes that craft from True Dragon gear (item IDs ending `096`) are left out on purpose: they're transfer crafts, so the result is bound to the player and can't be sold. The 25% combo is the only way to make a sellable Splendent True Dragon.
 - Not modelled yet: craft failure rates (aion2.exchange's model has ~93–97% success on the Artisan's steps), buying materials in bulk beyond the cheapest listing, and crafting the Horn/Leather/Scale intermediates yourself (they need NPC-bound tools whose price isn't on the exchange).
 
 Recipes change only with game patches; regenerate the file if a patch changes them.
