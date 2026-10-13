@@ -32,6 +32,14 @@ jobs:
       - name: Fetch market snapshot from aion2.exchange
         run: python scripts/fetch_snapshot.py --out site/data/snapshot.json
 
+      # GitHub Pages lets browsers cache files for 10 minutes; versioned URLs make a deploy show up immediately.
+      - name: Cache-bust script and style URLs
+        run: |
+          v="${GITHUB_SHA::8}"
+          sed -i "s|href=\"styles.css\"|href=\"styles.css?v=$v\"|; s|src=\"app.js\"|src=\"app.js?v=$v\"|" site/index.html
+          sed -i "s|from \"./metrics.js\"|from \"./metrics.js?v=$v\"|" site/app.js
+          grep -q "app.js?v=$v" site/index.html && grep -q "metrics.js?v=$v" site/app.js
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
