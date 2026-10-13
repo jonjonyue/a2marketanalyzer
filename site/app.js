@@ -1,15 +1,15 @@
-import { analyzeMarket, DEFAULT_SETTINGS, byRank } from "./metrics.js";
+import { analyzeMarket, DEFAULT_SETTINGS, ESTIMATOR, byRank } from "./metrics.js";
 
 const API = "https://aion2.exchange";
 const SNAPSHOT_URL = "data/snapshot.json";
-const DEFAULT_SERVER = 11201; // Siel · Elyos, North America West
+const SERVER_ID = 11201; // the dashboard covers Siel · Elyos, North America West only
+const HISTORY_DAYS = 10;
 const SKILLS = ["All", "Blacksmithing", "Tailoring", "Jewelcrafting", "Alchemy"];
 
 const $ = (id) => document.getElementById(id);
 const state = {
   mode: null,          // "live" | "snapshot"
   servers: [],
-  defaultServer: null,
   snapshot: null,
   market: null,        // { captured_at, targets, items }
   rows: [],
@@ -44,7 +44,7 @@ function readUrl() {
   const p = new URLSearchParams(location.search);
   const n = (k, d) => (p.has(k) && Number.isFinite(+p.get(k)) ? +p.get(k) : d);
   return {
-    server: p.has("server") ? +p.get("server") : null,
+    server: SERVER_ID,
     skill: SKILLS.includes(p.get("skill")) ? p.get("skill") : "All",
     priceBasis: ["conservative", "listing", "sold"].includes(p.get("price")) ? p.get("price") : DEFAULT_SETTINGS.priceBasis,
     costBasis: ["cheapest", "market"].includes(p.get("cost")) ? p.get("cost") : DEFAULT_SETTINGS.costBasis,
@@ -59,7 +59,6 @@ function readUrl() {
 function writeUrl() {
   const u = state.ui;
   const p = new URLSearchParams();
-  if (u.server != null) p.set("server", u.server);
   if (u.skill !== "All") p.set("skill", u.skill);
   if (u.priceBasis !== DEFAULT_SETTINGS.priceBasis) p.set("price", u.priceBasis);
   if (u.costBasis !== DEFAULT_SETTINGS.costBasis) p.set("cost", u.costBasis);
@@ -89,8 +88,7 @@ async function init() {
   try {
     const s = await fetchJson(`${API}/api/servers`, 4000);
     state.mode = "live";
-    state.servers = s.servers.filter((x) => x.has_data);
-    state.defaultServer = s.default;
+    state.servers = s.servers.filter((x) => x.server_id === SERVER_ID);
   } catch {
     // Expected while the API doesn't send CORS headers: use the snapshot the GitHub Action builds.
     try {
@@ -102,13 +100,10 @@ async function init() {
     }
     state.mode = "snapshot";
     state.servers = state.snapshot.servers;
-    state.defaultServer = state.snapshot.default_server;
     if (state.snapshot.model) setModelNote(state.snapshot.model);
   }
-  if (!state.servers.some((s) => s.server_id === state.ui.server)) {
-    const has = (id) => state.servers.some((s) => s.server_id === id);
-    state.ui.server = has(DEFAULT_SERVER) ? DEFAULT_SERVER : has(state.defaultServer) ? state.defaultServer : state.servers[0]?.server_id;
-  }
+  const srv = state.servers[0];
+  if (srv) $("serverName").textContent = `${srv.name} · ${srv.faction} · ${srv.region_name || srv.region}`;
   buildControls();
   await loadMarket();
   if (state.mode === "live") setInterval(loadMarket, 5 * 60 * 1000);
@@ -123,7 +118,13 @@ async function loadMarket() {
       const crafts = await fetchJson(`${API}/api/crafts?server=${sid}`);
       const keys = crafts.targets.map((t) => t.target_key).join(",");
       const items = keys ? await fetchJson(`${API}/api/items?keys=${keys}&limit=100&server=${sid}`) : { items: [] };
-      state.market = { captured_at: crafts.captured_at, targets: crafts.targets, items: items.items };
+      const since = new Date(Date.now() - HISTORY_DAYS * 86400e3).toISOString();
+      const history = {};
+      for (const t of crafts.targets) {
+        const h = await fetchJson(`${API}/api/items/${t.target_key}/prices?bucket=raw&from=${since}&server=${sid}`);
+        history[t.target_key] = (h.points || []).map((p) => [Math.floor(new Date(p.ts).getTime() / 60000), p.listings || 0, p.low]);
+      }
+      state.market = { captured_at: crafts.captured_at, targets: crafts.targets, items: items.items, history };
       if (crafts.model) setModelNote(crafts.model);
     } catch {
       showBanner("Lost connection to aion2.exchange; showing the last data loaded.");
@@ -165,20 +166,6 @@ function showBanner(msg) {
 
 // ---------- controls ----------
 function buildControls() {
-  const sel = $("server");
-  const byRegion = new Map();
-  for (const s of state.servers) {
-    const k = s.region_name || s.region || "Other";
-    if (!byRegion.has(k)) byRegion.set(k, []);
-    byRegion.get(k).push(s);
-  }
-  sel.innerHTML = [...byRegion]
-    .map(([region, list]) => `<optgroup label="${esc(region)}">${list
-      .map((s) => `<option value="${s.server_id}">${esc(s.name)} · ${esc(s.faction)}</option>`).join("")}</optgroup>`)
-    .join("");
-  sel.value = state.ui.server;
-  sel.addEventListener("change", () => { state.ui.server = +sel.value; writeUrl(); loadMarket(); });
-
   $("skills").innerHTML = SKILLS.map((s) => `<button type="button" data-v="${s}">${s}</button>`).join("");
   $("skills").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
@@ -249,7 +236,7 @@ function renderKpis(rows) {
   const median = margins.length ? margins[Math.floor(margins.length / 2)] : null;
   const yours = best?.yourDaily;
   const tiles = [
-    { label: "Best craft right now", value: best && best.dailyPool > 0 ? best.shortName : "Nothing profitable", sub: best && best.dailyPool > 0 ? `${kinah(best.profit)} per craft · ${rate(best.perDay)}/day sold` : "Try another server or price basis" },
+    { label: "Best craft right now", value: best && best.dailyPool > 0 ? best.shortName : "Nothing profitable", sub: best && best.dailyPool > 0 ? `${kinah(best.profit)} per craft · ${rate(best.perDay)}/day sold` : "Try another price basis" },
     { label: "Your expected daily profit", value: yours > 0 ? kinah(yours) : "—", sub: yours > 0 ? `from ${best.shortName} at ${state.ui.sharePct}% share` : "No craft with positive profit and sales" },
     { label: "Worth crafting", value: `${good.length} of ${rows.length}`, sub: "profitable, selling, not oversupplied" },
     { label: "Median margin", value: pct(median), sub: `market-wide daily pool ${kinah(pool)}` },
@@ -263,7 +250,7 @@ function showTip(e, r) {
   tip.innerHTML = `<strong>${esc(r.shortName)}</strong>
     <div class="row"><span>Profit / craft</span><span>${kinah(r.profit, { sign: true })}</span></div>
     <div class="row"><span>Margin</span><span>${pct(r.marginPct)}</span></div>
-    <div class="row"><span>Sold / day</span><span>${rate(r.perDay)}</span></div>
+    <div class="row"><span>Sold / day${r.salesSource === "estimate" ? " (est.)" : ""}</span><span>${rate(r.perDay)}</span></div>
     <div class="row"><span>Listings</span><span>${r.listings}</span></div>
     <div class="row"><span>Daily pool</span><span>${kinah(r.dailyPool)}</span></div>
     <div class="row"><span>Verdict</span><span>${esc(r.verdict.label)}</span></div>`;
@@ -340,7 +327,7 @@ function renderScatter(rows, settings) {
   // Items with zero sales would sit on the x-axis and stretch it; the table still lists them.
   const data = rows.filter((r) => r.marginPct != null && r.perDay != null && r.perDay > 0);
   if (!data.length) {
-    el.innerHTML = `<svg viewBox="0 0 560 120"><text class="empty" x="280" y="64" text-anchor="middle">No sales history on this server for these crafts yet.</text></svg>`;
+    el.innerHTML = `<svg viewBox="0 0 560 120"><text class="empty" x="280" y="64" text-anchor="middle">Not enough listing history yet to estimate sales.</text></svg>`;
     return;
   }
   const W = 560, H = 330, left = 46, right = 16, top = 12, bottom = 40;
@@ -399,6 +386,16 @@ function placeLabels(labels, minY, maxY, gap = 14) {
   return labels;
 }
 
+function salesTitle(r) {
+  if (r.salesSource === "official") return `${r.sold28} sold in 28 days (official game statistics)`;
+  const e = r.est;
+  if (!e) return "No listing history";
+  if (e.perDay == null) return `Only ${e.days.toFixed(1)} days of listing history; need ${ESTIMATOR.minDays}+`;
+  return `Estimated from listing history: ${e.sales} sales seen over ${e.days.toFixed(1)} days ` +
+    `(${rate(e.observedPerDay)}/day), × ${ESTIMATOR.captureAdjust} for sales between hourly snapshots. ` +
+    `At least ${rate(e.lowerPerDay)}/day where the cheapest listing clearly sold.`;
+}
+
 const COLUMNS = [
   { key: "rank", label: "#", cls: "rank", sortVal: (r) => -r.rank, fmt: (r) => r.rank },
   { key: "name", label: "Craft", cls: "name", sortVal: (r) => r.shortName,
@@ -406,10 +403,11 @@ const COLUMNS = [
   { key: "verdict", label: "Verdict", sortVal: (r) => ({ craft: 0, glut: 1, thin: 2, nosales: 3, incomplete: 4, loss: 5, nodata: 6 })[r.verdict.id],
     fmt: (r) => `<span class="pill ${r.verdict.tone}">${esc(r.verdict.label)}</span>` },
   { key: "cost", label: "Cost", fmt: (r) => kinah(r.cost) },
-  { key: "price", label: "Sell price", fmt: (r) => kinah(r.price), title: (r) => `Cheapest listing ${kinah(r.listing)} · 28-day avg sale ${kinah(r.soldAvg)}` },
+  { key: "price", label: "Sell price", fmt: (r) => kinah(r.price),
+    title: (r) => `Cheapest listing ${kinah(r.listing)} · avg sale ${kinah(r.soldAvg)}${r.priceSource === "estimate" ? " (estimated from listings that sold)" : r.priceSource === "official" ? " (28-day official)" : ""}` },
   { key: "profit", label: "Profit / craft", fmt: (r) => kinah(r.profit, { sign: true }), tone: (r) => (r.profit == null ? "dim" : r.profit > 0 ? "pos" : "neg") },
   { key: "marginPct", label: "Margin", fmt: (r) => pct(r.marginPct), tone: (r) => (r.marginPct == null ? "dim" : r.marginPct > 0 ? "pos" : "neg") },
-  { key: "perDay", label: "Sold / day", fmt: (r) => rate(r.perDay), title: (r) => (r.sold28 == null ? "No sales statistics" : `${r.sold28} sold in 28 days`) },
+  { key: "perDay", label: "Sold / day", fmt: (r) => (r.salesSource === "estimate" ? "~" : "") + rate(r.perDay), title: salesTitle },
   { key: "listings", label: "Listings", fmt: (r) => r.listings },
   { key: "supplyDays", label: "Days supply", fmt: (r) => days(r.supplyDays) },
   { key: "dailyPool", label: "Daily pool", fmt: (r) => kinah(r.dailyPool, { sign: true }), tone: (r) => (r.dailyPool == null ? "dim" : r.dailyPool < 0 ? "neg" : "") },
@@ -450,8 +448,8 @@ function renderTable(rows) {
     return `<td class="${[c.cls, tone].filter(Boolean).join(" ")}"${title}>${c.fmt(r)}</td>`;
   }).join("")}</tr>`).join("") || `<tr><td colspan="${COLUMNS.length}" class="dim">No crafts match these filters.</td></tr>`;
 
-  const basis = { conservative: "lower of cheapest listing and 28-day average sale", listing: "cheapest current listing", sold: "28-day average sale" }[state.ui.priceBasis];
-  $("tableNote").textContent = `${rows.length} crafts · sell price = ${basis}${state.ui.salesTaxPct + state.ui.listingFeePct ? `, minus ${state.ui.salesTaxPct}% tax and ${state.ui.listingFeePct}% listing fee` : ""}`;
+  const basis = { conservative: "lower of cheapest listing and average sale price", listing: "cheapest current listing", sold: "average sale price" }[state.ui.priceBasis];
+  $("tableNote").textContent = `${rows.length} crafts · ~ = estimated from listing history · sell price = ${basis}${state.ui.salesTaxPct + state.ui.listingFeePct ? `, minus ${state.ui.salesTaxPct}% tax and ${state.ui.listingFeePct}% listing fee` : ""}`;
 }
 
 init();

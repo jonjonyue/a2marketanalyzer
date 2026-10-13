@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Pull crafting + sales data from the aion2.exchange public API for every server.
+"""Pull crafting, price and listing-history data for Siel (Elyos, NA West) from aion2.exchange.
 
-Writes one JSON snapshot the dashboard reads when it can't call the API directly
-(the API sends no CORS headers, so browsers on another origin can't reach it).
+Writes one JSON snapshot the dashboard reads (the API sends no CORS headers, so browsers on
+another origin can't call it directly). About 21 requests per run.
 
-Usage: python scripts/fetch_snapshot.py [--out site/data/snapshot.json] [--base URL]
+Usage: python scripts/fetch_snapshot.py [--out site/data/snapshot.json] [--base URL] [--server ID]
 Stdlib only, so the GitHub Action needs no installs.
 """
 from __future__ import annotations
@@ -16,10 +16,12 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 DEFAULT_BASE = "https://aion2.exchange"
+DEFAULT_SERVER = 11201  # Siel · Elyos · North America West
+HISTORY_DAYS = 10       # 7-day estimate window + 3 days so expiries of earlier listings can be matched
 USER_AGENT = "a2marketanalyzer-dashboard/1.0 (+https://github.com/jonjonyue/a2marketanalyzer)"
 DELAY_S = 0.25  # be gentle with the site: ~4 requests/second max
 
@@ -56,7 +58,25 @@ def pick(obj: dict, fields: tuple[str, ...]) -> dict:
     return {k: obj.get(k) for k in fields}
 
 
-def fetch_market(base: str, server_id: int) -> dict:
+def epoch_minutes(ts: str) -> int:
+    return int(datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp() // 60)
+
+
+def fetch_history(base: str, server_id: int, item_key: int, since: datetime) -> list[list]:
+    """Every raw snapshot of the item since `since`: [epochMinutes, listings, cheapestPrice]."""
+    resp = get_json(base, f"/api/items/{item_key}/prices", {
+        "bucket": "raw",
+        "from": since.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "server": server_id,
+    })
+    return [
+        [epoch_minutes(p["ts"]), p.get("listings") or 0, p.get("low")]
+        for p in resp.get("points") or []
+        if p.get("ts")
+    ]
+
+
+def fetch_market(base: str, server_id: int) -> tuple[dict, dict | None, list[str]]:
     crafts = get_json(base, "/api/crafts", {"server": server_id})
     targets = crafts.get("targets") or []
     keys = [t["target_key"] for t in targets]
@@ -65,64 +85,60 @@ def fetch_market(base: str, server_id: int) -> dict:
         time.sleep(DELAY_S)
         resp = get_json(base, "/api/items", {"keys": ",".join(map(str, keys)), "limit": 100, "server": server_id})
         items = [pick(i, ITEM_FIELDS) for i in resp.get("items") or []]
-    return {
+
+    since = datetime.now(timezone.utc) - timedelta(days=HISTORY_DAYS)
+    history: dict[str, list] = {}
+    errors: list[str] = []
+    for key in keys:
+        time.sleep(DELAY_S)
+        try:
+            history[str(key)] = fetch_history(base, server_id, key, since)
+        except Exception as err:  # one item's history failing shouldn't sink the run
+            errors.append(f"history {key}: {err}")
+            print(errors[-1], file=sys.stderr)
+
+    market = {
         "captured_at": crafts.get("captured_at"),
         "targets": [pick(t, TARGET_FIELDS) for t in targets],
         "items": items,
+        "history": history,
     }
+    return market, crafts.get("model"), errors
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="site/data/snapshot.json")
     ap.add_argument("--base", default=DEFAULT_BASE)
-    ap.add_argument("--limit", type=int, default=0, help="only fetch the first N servers (for testing)")
+    ap.add_argument("--server", type=int, default=DEFAULT_SERVER)
     args = ap.parse_args()
 
-    servers_resp = get_json(args.base, "/api/servers")
-    servers = [s for s in servers_resp.get("servers", []) if s.get("has_data")]
-    if args.limit:
-        servers = servers[: args.limit]
+    servers = get_json(args.base, "/api/servers").get("servers", [])
+    server = next((s for s in servers if s.get("server_id") == args.server), None)
+    if server is None:
+        print(f"Server {args.server} not found in /api/servers", file=sys.stderr)
+        return 1
 
-    markets: dict[str, dict] = {}
-    errors: dict[str, str] = {}
-    model = None
-    for s in servers:
-        sid = s["server_id"]
-        try:
-            markets[str(sid)] = fetch_market(args.base, sid)
-        except Exception as err:  # keep going; one bad server shouldn't sink the run
-            errors[str(sid)] = str(err)
-            print(f"server {sid}: {err}", file=sys.stderr)
-        time.sleep(DELAY_S)
-
-    # The cost model is the same for every server; grab it once for the methodology note.
-    try:
-        model = get_json(args.base, "/api/crafts", {"server": servers_resp.get("default")}).get("model")
-    except Exception:
-        model = None
-
-    if servers and len(errors) > len(servers) / 2:
-        print(f"Too many failures ({len(errors)}/{len(servers)}); not writing snapshot.", file=sys.stderr)
+    market, model, errors = fetch_market(args.base, args.server)
+    if market["targets"] and len(errors) > len(market["targets"]) / 2:
+        print(f"Too many history failures ({len(errors)}); not writing snapshot.", file=sys.stderr)
         return 1
 
     snapshot = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "source": args.base,
-        "default_server": servers_resp.get("default"),
+        "default_server": args.server,
         "model": model,
-        "servers": [
-            {k: s.get(k) for k in ("server_id", "name", "region", "region_name", "faction")}
-            for s in servers
-            if str(s["server_id"]) in markets
-        ],
-        "markets": markets,
+        "servers": [{k: server.get(k) for k in ("server_id", "name", "region", "region_name", "faction")}],
+        "markets": {str(args.server): market},
         "errors": errors,
     }
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(snapshot, separators=(",", ":")))
-    print(f"Wrote {out} ({out.stat().st_size / 1024:.0f} KB): {len(markets)} servers, {len(errors)} errors")
+    points = sum(len(h) for h in market["history"].values())
+    print(f"Wrote {out} ({out.stat().st_size / 1024:.0f} KB): {len(market['targets'])} crafts, "
+          f"{points} history points, {len(errors)} errors")
     return 0
 
 
