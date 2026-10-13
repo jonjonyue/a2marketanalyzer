@@ -1,0 +1,608 @@
+{
+ "_source": "questlog.gg Aion 2 crafting database (https://questlog.gg/aion-2/en/crafting), Elyos recipes, extracted 2026-10-13",
+ "_notes": "Each True Dragon craft consumes 1 Artisan's Splendent item of the same slot (base_key) plus materials, and has a combo_probability chance to yield the Splendent True Dragon item (combo_key) instead.",
+ "materials": {
+  "610530010": "Artisan's Ultimate Refining Stone",
+  "610710006": "Fine Thick Balaur Horn",
+  "610710009": "Tanned Thick Balaur Leather",
+  "610730022": "Enhanced Thick Balaur Scale",
+  "610511013": "Wrathful Mind",
+  "610620016": "Radiant Orichalcum Ore",
+  "610610016": "Radiant Odyle",
+  "610650017": "Radiant Yggdrasil Log",
+  "610660034": "Radiant Sapphire Gemstone",
+  "610660035": "Radiant Diamond Gemstone",
+  "610660036": "Radiant Ruby Gemstone"
+ },
+ "recipes": [
+  {
+   "recipe_id": 111023001,
+   "product_key": 110130015,
+   "combo_key": 110130017,
+   "combo_probability": 0.25,
+   "skill": "Blacksmithing",
+   "gold_cost": 0,
+   "base_key": 110130013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 4
+    },
+    {
+     "key": 610710006,
+     "qty": 22
+    },
+    {
+     "key": 610511013,
+     "qty": 10
+    },
+    {
+     "key": 610620016,
+     "qty": 9
+    },
+    {
+     "key": 610610016,
+     "qty": 5
+    }
+   ]
+  },
+  {
+   "recipe_id": 111013001,
+   "product_key": 110230015,
+   "combo_key": 110230017,
+   "combo_probability": 0.25,
+   "skill": "Blacksmithing",
+   "gold_cost": 0,
+   "base_key": 110230013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 4
+    },
+    {
+     "key": 610710006,
+     "qty": 22
+    },
+    {
+     "key": 610511013,
+     "qty": 10
+    },
+    {
+     "key": 610620016,
+     "qty": 9
+    },
+    {
+     "key": 610610016,
+     "qty": 5
+    }
+   ]
+  },
+  {
+   "recipe_id": 111033001,
+   "product_key": 110330015,
+   "combo_key": 110330017,
+   "combo_probability": 0.25,
+   "skill": "Blacksmithing",
+   "gold_cost": 0,
+   "base_key": 110330013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 4
+    },
+    {
+     "key": 610710006,
+     "qty": 22
+    },
+    {
+     "key": 610511013,
+     "qty": 10
+    },
+    {
+     "key": 610620016,
+     "qty": 9
+    },
+    {
+     "key": 610610016,
+     "qty": 5
+    }
+   ]
+  },
+  {
+   "recipe_id": 211043001,
+   "product_key": 110430015,
+   "combo_key": 110430017,
+   "combo_probability": 0.25,
+   "skill": "Jewelcrafting",
+   "gold_cost": 0,
+   "base_key": 110430013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 4
+    },
+    {
+     "key": 610730022,
+     "qty": 22
+    },
+    {
+     "key": 610511013,
+     "qty": 10
+    },
+    {
+     "key": 610650017,
+     "qty": 9
+    },
+    {
+     "key": 610610016,
+     "qty": 5
+    }
+   ]
+  },
+  {
+   "recipe_id": 311053001,
+   "product_key": 110530015,
+   "combo_key": 110530017,
+   "combo_probability": 0.25,
+   "skill": "Alchemy",
+   "gold_cost": 0,
+   "base_key": 110530013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 4
+    },
+    {
+     "key": 610730022,
+     "qty": 22
+    },
+    {
+     "key": 610511013,
+     "qty": 10
+    },
+    {
+     "key": 610660036,
+     "qty": 9
+    },
+    {
+     "key": 610610016,
+     "qty": 5
+    }
+   ]
+  },
+  {
+   "recipe_id": 311093001,
+   "product_key": 110630015,
+   "combo_key": 110630017,
+   "combo_probability": 0.25,
+   "skill": "Alchemy",
+   "gold_cost": 0,
+   "base_key": 110630013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 4
+    },
+    {
+     "key": 610730022,
+     "qty": 22
+    },
+    {
+     "key": 610511013,
+     "qty": 10
+    },
+    {
+     "key": 610660034,
+     "qty": 9
+    },
+    {
+     "key": 610610016,
+     "qty": 5
+    }
+   ]
+  },
+  {
+   "recipe_id": 111063001,
+   "product_key": 110730015,
+   "combo_key": 110730017,
+   "combo_probability": 0.25,
+   "skill": "Blacksmithing",
+   "gold_cost": 0,
+   "base_key": 110730013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 4
+    },
+    {
+     "key": 610710006,
+     "qty": 22
+    },
+    {
+     "key": 610511013,
+     "qty": 10
+    },
+    {
+     "key": 610620016,
+     "qty": 9
+    },
+    {
+     "key": 610610016,
+     "qty": 5
+    }
+   ]
+  },
+  {
+   "recipe_id": 211103001,
+   "product_key": 110830015,
+   "combo_key": 110830017,
+   "combo_probability": 0.25,
+   "skill": "Jewelcrafting",
+   "gold_cost": 0,
+   "base_key": 110830013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 4
+    },
+    {
+     "key": 610730022,
+     "qty": 22
+    },
+    {
+     "key": 610511013,
+     "qty": 10
+    },
+    {
+     "key": 610650017,
+     "qty": 9
+    },
+    {
+     "key": 610610016,
+     "qty": 5
+    }
+   ]
+  },
+  {
+   "recipe_id": 111083001,
+   "product_key": 115030015,
+   "combo_key": 115030017,
+   "combo_probability": 0.25,
+   "skill": "Blacksmithing",
+   "gold_cost": 0,
+   "base_key": 115030013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 4
+    },
+    {
+     "key": 610710006,
+     "qty": 22
+    },
+    {
+     "key": 610511013,
+     "qty": 10
+    },
+    {
+     "key": 610620016,
+     "qty": 9
+    },
+    {
+     "key": 610610016,
+     "qty": 5
+    }
+   ]
+  },
+  {
+   "recipe_id": 412013001,
+   "product_key": 210130015,
+   "combo_key": 210130017,
+   "combo_probability": 0.25,
+   "skill": "Tailoring",
+   "gold_cost": 0,
+   "base_key": 210130013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 3
+    },
+    {
+     "key": 610710009,
+     "qty": 15
+    },
+    {
+     "key": 610511013,
+     "qty": 7
+    },
+    {
+     "key": 610620016,
+     "qty": 6
+    },
+    {
+     "key": 610610016,
+     "qty": 3
+    }
+   ]
+  },
+  {
+   "recipe_id": 412023001,
+   "product_key": 210230015,
+   "combo_key": 210230017,
+   "combo_probability": 0.25,
+   "skill": "Tailoring",
+   "gold_cost": 0,
+   "base_key": 210230013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 2
+    },
+    {
+     "key": 610710009,
+     "qty": 11
+    },
+    {
+     "key": 610511013,
+     "qty": 5
+    },
+    {
+     "key": 610620016,
+     "qty": 4
+    },
+    {
+     "key": 610610016,
+     "qty": 2
+    }
+   ]
+  },
+  {
+   "recipe_id": 412033001,
+   "product_key": 210330015,
+   "combo_key": 210330017,
+   "combo_probability": 0.25,
+   "skill": "Tailoring",
+   "gold_cost": 0,
+   "base_key": 210330013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 2
+    },
+    {
+     "key": 610710009,
+     "qty": 9
+    },
+    {
+     "key": 610511013,
+     "qty": 4
+    },
+    {
+     "key": 610620016,
+     "qty": 3
+    },
+    {
+     "key": 610610016,
+     "qty": 2
+    }
+   ]
+  },
+  {
+   "recipe_id": 412043001,
+   "product_key": 210430015,
+   "combo_key": 210430017,
+   "combo_probability": 0.25,
+   "skill": "Tailoring",
+   "gold_cost": 0,
+   "base_key": 210430013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 2
+    },
+    {
+     "key": 610710009,
+     "qty": 9
+    },
+    {
+     "key": 610511013,
+     "qty": 4
+    },
+    {
+     "key": 610620016,
+     "qty": 3
+    },
+    {
+     "key": 610610016,
+     "qty": 2
+    }
+   ]
+  },
+  {
+   "recipe_id": 412053001,
+   "product_key": 210530015,
+   "combo_key": 210530017,
+   "combo_probability": 0.25,
+   "skill": "Tailoring",
+   "gold_cost": 0,
+   "base_key": 210530013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 2
+    },
+    {
+     "key": 610710009,
+     "qty": 7
+    },
+    {
+     "key": 610511013,
+     "qty": 3
+    },
+    {
+     "key": 610620016,
+     "qty": 2
+    },
+    {
+     "key": 610610016,
+     "qty": 2
+    }
+   ]
+  },
+  {
+   "recipe_id": 412063001,
+   "product_key": 210630015,
+   "combo_key": 210630017,
+   "combo_probability": 0.25,
+   "skill": "Tailoring",
+   "gold_cost": 0,
+   "base_key": 210630013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 2
+    },
+    {
+     "key": 610710009,
+     "qty": 9
+    },
+    {
+     "key": 610511013,
+     "qty": 5
+    },
+    {
+     "key": 610620016,
+     "qty": 2
+    },
+    {
+     "key": 610610016,
+     "qty": 2
+    }
+   ]
+  },
+  {
+   "recipe_id": 412073001,
+   "product_key": 210730015,
+   "combo_key": 210730017,
+   "combo_probability": 0.25,
+   "skill": "Tailoring",
+   "gold_cost": 0,
+   "base_key": 210730013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 2
+    },
+    {
+     "key": 610710009,
+     "qty": 7
+    },
+    {
+     "key": 610511013,
+     "qty": 3
+    },
+    {
+     "key": 610620016,
+     "qty": 2
+    },
+    {
+     "key": 610610016,
+     "qty": 2
+    }
+   ]
+  },
+  {
+   "recipe_id": 213013001,
+   "product_key": 310130015,
+   "combo_key": 310130017,
+   "combo_probability": 0.25,
+   "skill": "Jewelcrafting",
+   "gold_cost": 0,
+   "base_key": 310130013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 3
+    },
+    {
+     "key": 610730022,
+     "qty": 14
+    },
+    {
+     "key": 610511013,
+     "qty": 6
+    },
+    {
+     "key": 610660036,
+     "qty": 6
+    },
+    {
+     "key": 610610016,
+     "qty": 2
+    }
+   ]
+  },
+  {
+   "recipe_id": 213023001,
+   "product_key": 310230015,
+   "combo_key": 310230017,
+   "combo_probability": 0.25,
+   "skill": "Jewelcrafting",
+   "gold_cost": 0,
+   "base_key": 310230013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 2
+    },
+    {
+     "key": 610730022,
+     "qty": 11
+    },
+    {
+     "key": 610511013,
+     "qty": 5
+    },
+    {
+     "key": 610660035,
+     "qty": 5
+    },
+    {
+     "key": 610610016,
+     "qty": 2
+    }
+   ]
+  },
+  {
+   "recipe_id": 213033001,
+   "product_key": 310330015,
+   "combo_key": 310330017,
+   "combo_probability": 0.25,
+   "skill": "Jewelcrafting",
+   "gold_cost": 0,
+   "base_key": 310330013,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 2
+    },
+    {
+     "key": 610730022,
+     "qty": 8
+    },
+    {
+     "key": 610511013,
+     "qty": 4
+    },
+    {
+     "key": 610660034,
+     "qty": 3
+    },
+    {
+     "key": 610610016,
+     "qty": 2
+    }
+   ]
+  }
+ ]
+}

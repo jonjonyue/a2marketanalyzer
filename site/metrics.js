@@ -126,7 +126,8 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
   const soldAvg = officialAvg ?? num(est?.avgSalePrice);
   const priceSource = officialAvg != null ? "official" : soldAvg != null ? "estimate" : null;
 
-  const cost = s.costBasis === "market" ? num(target.cost_market) ?? num(target.cost) : num(target.cost);
+  const cost = target.costDetail ? num(target.cost)
+    : s.costBasis === "market" ? num(target.cost_market) ?? num(target.cost) : num(target.cost);
   const price = sellPrice(listing, soldAvg, s.priceBasis);
   // Both fees scale with the price you list at, so one listing that sells keeps price × (1 − tax − fee).
   const net = price == null ? null : price * (1 - (s.salesTaxPct + s.listingFeePct) / 100);
@@ -148,7 +149,7 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
     profile: target.profile_label,
     cost, listing, soldAvg, price, net, profit, marginPct,
     listings, sold28, perDay, supplyDays, dailyPool, yourDaily, turnover,
-    salesSource, priceSource, est,
+    salesSource, priceSource, est, costDetail: target.costDetail || null,
     missingInputs: num(target.missing) ?? 0,
     verdict: verdictFor({ profit, perDay, supplyDays, missing: num(target.missing) ?? 0, noCost: cost == null }, s),
   };
@@ -167,12 +168,66 @@ export function verdictFor({ profit, perDay, supplyDays, missing, noCost }, s = 
 }
 
 /** Analyze a whole server's market and sort best-first by expected daily profit. */
+/**
+ * Crafting cost for the True Dragon tiers, from the recipes in recipes/true_dragon.json.
+ *
+ * One craft attempt = 1 Artisan's Splendent item of the same slot + materials (+ gold fee).
+ * The Artisan's Splendent input costs the cheaper of buying it and crafting it (the site's model),
+ * or its listing under "buy everything". Materials are priced at their cheapest listing.
+ * Every attempt yields a True Dragon item, so its cost is one attempt; the Splendent version only
+ * comes from the combo roll (25%), so it costs one attempt ÷ 0.25 = 4×, with the plain True Dragon
+ * results from the other attempts not credited (same convention as the site's own model).
+ */
+export function trueDragonCost(recipe, product_key, ctx, settings = DEFAULT_SETTINGS) {
+  const s = { ...DEFAULT_SETTINGS, ...settings };
+  const baseTarget = ctx.targets.get(recipe.base_key);
+  const baseListing = num(ctx.items.get(recipe.base_key)?.price) ?? num(baseTarget?.market_price);
+  const baseCraft = num(s.costBasis === "market" ? baseTarget?.cost_market ?? baseTarget?.cost : baseTarget?.cost);
+  let base, baseMethod;
+  if (s.costBasis === "market") { base = baseListing ?? baseCraft; baseMethod = baseListing != null ? "buy" : "craft"; }
+  else if (baseCraft != null && (baseListing == null || baseCraft <= baseListing)) { base = baseCraft; baseMethod = "craft"; }
+  else { base = baseListing; baseMethod = "buy"; }
+
+  let matsCost = 0, missing = base == null ? 1 : 0;
+  const mats = recipe.materials.map((m) => {
+    const mat = ctx.materials.get(m.key);
+    const price = num(mat?.price);
+    if (price == null) missing++;
+    else matsCost += price * m.qty;
+    return { key: m.key, name: mat?.name ?? String(m.key), qty: m.qty, price };
+  });
+  const attempt = (base ?? 0) + matsCost + (num(recipe.gold_cost) ?? 0);
+  const isCombo = product_key === recipe.combo_key;
+  const factor = isCombo ? 1 / recipe.combo_probability : 1;
+  return {
+    cost: missing ? null : attempt * factor,
+    missing,
+    detail: {
+      baseKey: recipe.base_key, baseName: baseTarget?.name ?? String(recipe.base_key), base, baseMethod,
+      baseCraft, baseListing, materials: mats, matsCost, attempt, factor, comboProbability: recipe.combo_probability,
+    },
+  };
+}
+
 export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
   const items = new Map((market.items || []).map((i) => [i.item_key, i]));
   const histories = market.history || {};
   const grid = snapshotGrid(histories);
+  const ctx = {
+    items,
+    targets: new Map((market.targets || []).map((t) => [t.target_key, t])),
+    materials: new Map((market.materials || []).map((m) => [m.item_key, m])),
+  };
+  const recipeFor = new Map();
+  for (const r of market.recipes || []) { recipeFor.set(r.product_key, r); recipeFor.set(r.combo_key, r); }
   return (market.targets || [])
-    .map((t) => {
+    .map((t0) => {
+      let t = t0;
+      const recipe = t.cost == null ? recipeFor.get(t.target_key) : null;
+      if (recipe) {
+        const c = trueDragonCost(recipe, t.target_key, ctx, settings);
+        t = { ...t, cost: c.cost, cost_market: c.cost, missing: c.missing, costDetail: c.detail };
+      }
       const h = histories[String(t.target_key)];
       const est = h ? estimateSales(h, grid) : null;
       return analyzeCraft(t, items.get(t.target_key), settings, est);

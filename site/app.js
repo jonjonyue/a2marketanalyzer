@@ -427,6 +427,16 @@ function placeLabels(labels, minY, maxY, gap = 14) {
   return labels;
 }
 
+function costTitle(r) {
+  const d = r.costDetail;
+  if (!d) return r.cost == null ? "No crafting cost known" : "aion2.exchange crafting model: expected cost per item at mastery 100, cheapest path";
+  const base = `${d.baseName} ${kinah(d.base)} (${d.baseMethod === "craft" ? "crafted" : "bought"}; craft ${kinah(d.baseCraft)}, listing ${kinah(d.baseListing)})`;
+  const mats = d.materials.map((m) => `${m.qty}× ${m.name} @ ${kinah(m.price)}`).join(", ");
+  const per = `= ${kinah(d.attempt)} per craft attempt`;
+  const combo = d.factor !== 1 ? `; ÷ ${Math.round(d.comboProbability * 100)}% combo chance = ${kinah(r.cost)}` : "";
+  return `${base} + materials ${kinah(d.matsCost)} (${mats}) ${per}${combo}`;
+}
+
 function salesTitle(r) {
   if (r.salesSource === "official") return `${r.sold28} sold in 28 days (official game statistics)`;
   const e = r.est;
@@ -449,7 +459,7 @@ const COLUMNS = [
     } },
   { key: "verdict", label: "Verdict", sortVal: (r) => VERDICT_ORDER[r.verdict.id],
     fmt: (r) => `<span class="pill ${r.verdict.tone}">${esc(r.verdict.label)}</span>` },
-  { key: "cost", label: "Cost", fmt: (r) => kinah(r.cost) },
+  { key: "cost", label: "Cost", fmt: (r) => (r.costDetail ? "≈" : "") + kinah(r.cost), title: costTitle },
   { key: "price", label: "Sell price", fmt: (r) => kinah(r.price),
     title: (r) => `Cheapest listing ${kinah(r.listing)} · avg sale ${kinah(r.soldAvg)}${r.priceSource === "estimate" ? " (estimated from listings that sold)" : r.priceSource === "official" ? " (28-day official)" : ""}` },
   { key: "profit", label: "Profit / craft", fmt: (r) => kinah(r.profit, { sign: true }), tone: (r) => (r.profit == null ? "dim" : r.profit > 0 ? "pos" : "neg") },

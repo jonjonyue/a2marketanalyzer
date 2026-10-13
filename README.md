@@ -1,6 +1,6 @@
 # Aion 2 crafting profit dashboard
 
-A shareable dashboard that ranks Artisan's Splendent crafts on **Siel (Elyos, NA West)** by how much money they make **and** how fast they sell, and tracks the True Dragon and Splendent True Dragon versions of each slot (prices and sales; crafting cost to come). All data comes from the public [aion2.exchange](https://aion2.exchange) API.
+A shareable dashboard that ranks Artisan's Splendent crafts on **Siel (Elyos, NA West)** by how much money they make **and** how fast they sell, including the True Dragon and Splendent True Dragon versions of each slot. All data comes from the public [aion2.exchange](https://aion2.exchange) API.
 
 ## How it works
 
@@ -10,7 +10,7 @@ GitHub Action (hourly) ──► aion2.exchange /api/servers, /api/crafts, /api/
         └─► site/data/snapshot.json ──► GitHub Pages ──► dashboard (index.html)
 ```
 
-- `scripts/fetch_snapshot.py` pulls the crafting cost model (`/api/crafts`), current prices (`/api/items?keys=…`) and 10 days of hourly listing snapshots per item (`/api/items/{id}/prices?bucket=raw`) for Siel NAW. True Dragon items are derived from each craft target's key (tier code `13` → `15` True Dragon, `17` Splendent True Dragon); slots never listed on the server are skipped. Stdlib only, about 55 requests per run, rate-limited.
+- `scripts/fetch_snapshot.py` pulls the crafting cost model (`/api/crafts`), current prices (`/api/items?keys=…`) and 10 days of hourly listing snapshots per item (`/api/items/{id}/prices?bucket=raw`) for Siel NAW. True Dragon items are derived from each craft target's key (tier code `13` → `15` True Dragon, `17` Splendent True Dragon); slots never listed on the server are skipped. It also prices the True Dragon recipe materials (`recipes/true_dragon.json`). Stdlib only, about 56 requests per run, rate-limited.
 - `.github/workflows/deploy.yml` runs it hourly (and on every push to `main`) and deploys `site/` to GitHub Pages. The snapshot is deployed, not committed.
 - The page **tries the live API first** and falls back to the snapshot. aion2.exchange doesn't currently send CORS headers, so browsers use the snapshot; if the API ever allows this origin, the page goes live automatically (refreshing every 5 minutes).
 
@@ -18,7 +18,7 @@ GitHub Action (hourly) ──► aion2.exchange /api/servers, /api/crafts, /api/
 
 | Metric | Definition |
 |---|---|
-| Cost / craft | aion2.exchange's expected cost at mastery 100, cheapest path per input (or "buy everything") |
+| Cost / craft | Artisan's Splendent: aion2.exchange's expected cost at mastery 100, cheapest path per input (or "buy everything"). True Dragon: see below |
 | Sell price | Conservative: min(cheapest listing, avg sale price). Also selectable: listing only, or avg sale only |
 | Profit / craft | sell price × (1 − 10% sales tax − 2% listing fee) − cost (both adjustable; assumes it sells on the first listing) |
 | Sold / day | estimated from listing history (below); official 28-day stats are used instead where the game publishes them |
@@ -30,6 +30,16 @@ GitHub Action (hourly) ──► aion2.exchange /api/servers, /api/crafts, /api/
 Verdicts: **Craft it** = profitable, ≥ 0.5 sold/day, ≤ 14 days of supply. Thresholds live in `site/metrics.js` (`DEFAULT_SETTINGS`).
 
 Every control (tier, skill, price basis, tax, listing fee, share, sort) is stored in the URL, so a copied link reproduces the exact view.
+
+## True Dragon crafting costs
+
+`recipes/true_dragon.json` holds the 19 True Dragon recipes (Elyos), taken from the [questlog.gg crafting database](https://questlog.gg/aion-2/en/crafting). Each consumes the Artisan's Splendent item of the same slot plus five materials, and has a 25% combo chance to produce the Splendent True Dragon item instead (`trueDragonCost` in `site/metrics.js`):
+
+- **One craft attempt** = Artisan's Splendent input + materials. The input costs the cheaper of crafting it (aion2.exchange's model) and buying it; under "buy everything" it's bought. Materials are priced at Siel's cheapest listing.
+- **True Dragon** = one attempt. **Splendent True Dragon** = one attempt ÷ 0.25 = 4×, with the plain True Dragon results of the other attempts not credited (the same convention aion2.exchange uses for Artisan's Splendent).
+- Not modelled yet: craft failure rates (aion2.exchange's model has ~93–97% success on the Artisan's steps), buying materials in bulk beyond the cheapest listing, and crafting the Horn/Leather/Scale intermediates yourself (they need NPC-bound tools whose price isn't on the exchange).
+
+Recipes change only with game patches; regenerate the file if a patch changes them.
 
 ## Estimating sales from listing history
 

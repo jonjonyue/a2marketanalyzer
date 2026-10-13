@@ -4,7 +4,8 @@
 Covers the Artisan's Splendent craft targets plus the True Dragon and Splendent True Dragon
 version of each slot (no crafting cost yet). Writes one JSON snapshot the dashboard reads
 (the API sends no CORS headers, so browsers on another origin can't call it directly).
-About 55 requests per run.
+True Dragon crafting costs use the recipes in recipes/true_dragon.json priced at Siel's
+market. About 56 requests per run.
 
 Usage: python scripts/fetch_snapshot.py [--out site/data/snapshot.json] [--base URL] [--server ID]
 Stdlib only, so the GitHub Action needs no installs.
@@ -23,6 +24,7 @@ from pathlib import Path
 
 DEFAULT_BASE = "https://aion2.exchange"
 DEFAULT_SERVER = 11201  # Siel · Elyos · North America West
+RECIPES_FILE = Path(__file__).resolve().parent.parent / "recipes" / "true_dragon.json"
 HISTORY_DAYS = 10       # 7-day estimate window + 3 days so expiries of earlier listings can be matched
 USER_AGENT = "a2marketanalyzer-dashboard/1.0 (+https://github.com/jonjonyue/a2marketanalyzer)"
 DELAY_S = 0.25  # be gentle with the site: ~4 requests/second max
@@ -123,11 +125,25 @@ def fetch_market(base: str, server_id: int) -> tuple[dict, dict | None, list[str
             errors.append(f"history {key}: {err}")
             print(errors[-1], file=sys.stderr)
 
+    # True Dragon recipe materials, priced at the current cheapest listing on this server.
+    recipes = json.loads(RECIPES_FILE.read_text())
+    mat_keys = list(recipes["materials"])
+    time.sleep(DELAY_S)
+    resp = get_json(base, "/api/items", {"keys": ",".join(mat_keys), "limit": 100, "server": server_id}) or {}
+    priced = {str(i["item_key"]): i for i in resp.get("items") or []}
+    materials = [
+        {"item_key": int(k), "name": name, "price": (priced.get(k) or {}).get("price"),
+         "listings": (priced.get(k) or {}).get("listings")}
+        for k, name in recipes["materials"].items()
+    ]
+
     market = {
         "captured_at": crafts.get("captured_at"),
         "targets": targets,
         "items": items,
         "history": history,
+        "recipes": recipes["recipes"],
+        "materials": materials,
     }
     return market, crafts.get("model"), errors
 
