@@ -55,6 +55,7 @@ function readUrl() {
     listingFeePct: Math.min(50, Math.max(0, n("listfee", DEFAULT_SETTINGS.listingFeePct))),
     sharePct: Math.min(100, Math.max(1, n("share", DEFAULT_SETTINGS.sharePct))),
     hideLoss: p.get("hideLoss") === "1",
+    open: p.has("open") ? +p.get("open") : null,
     sort: p.get("sort") || "rank",
     dir: p.get("dir") === "asc" ? "asc" : "desc",
   };
@@ -70,6 +71,7 @@ function writeUrl() {
   if (u.listingFeePct !== DEFAULT_SETTINGS.listingFeePct) p.set("listfee", u.listingFeePct);
   if (u.sharePct !== DEFAULT_SETTINGS.sharePct) p.set("share", u.sharePct);
   if (u.hideLoss) p.set("hideLoss", "1");
+  if (u.open != null) p.set("open", u.open);
   if (u.sort !== "rank") { p.set("sort", u.sort); p.set("dir", u.dir); }
   const qs = p.toString();
   history.replaceState(null, "", qs ? `?${qs}` : location.pathname);
@@ -446,6 +448,101 @@ function iconHtml(key, size = "") {
   return `<img class="item-icon ${size}" src="${API}/item-icons/${encodeURIComponent(file)}.webp" alt=""${style} title="${esc(rarity || "")}" loading="lazy" decoding="async" onerror="this.remove()">`;
 }
 
+// ---------- recipe breakdown (expanded row) ----------
+function itemUrl(key, tier) {
+  // Artisan's Splendent items have a cost-breakdown page; everything else has an item page.
+  return `${API}/${tier === "Artisan's Splendent" ? "crafts" : "items"}/${key}`;
+}
+
+function extLink(r, style = "button") {
+  const url = itemUrl(r.key, r.tier);
+  const label = r.tier === "Artisan's Splendent" ? "crafting page" : "item page";
+  return style === "icon"
+    ? `<a class="ext-link" href="${url}" target="_blank" rel="noopener" title="Open the ${label} on aion2.exchange" aria-label="Open ${esc(r.shortName)} on aion2.exchange">↗</a>`
+    : `<a class="ext-button" href="${url}" target="_blank" rel="noopener">Open ${label} on aion2.exchange ↗</a>`;
+}
+
+const matLink = (key, name) => `<a href="${API}/items/${key}" target="_blank" rel="noopener" title="Open on aion2.exchange">${esc(name)}</a>`;
+const METHOD = { buy: "Bought", convert: "Converted", craft: "Crafted" };
+function methodLabel(m) {
+  const base = METHOD[m.method] || (m.method ? String(m.method) : "—");
+  const via = (Array.isArray(m.via) ? m.via : [])
+    .map((v) => (typeof v === "string" ? v : v?.name || v?.material_name || ""))
+    .filter(Boolean);
+  return via.length ? `${base} via ${esc(via.join(", "))}` : base;
+}
+
+// The site's cost chain for an Artisan's Splendent item (steps 1..3) or Expert's Splendent (steps 1..2).
+function chainFor(r) {
+  const chains = state.market?.chains || {};
+  if (r.tier === "Artisan's Splendent") return { chain: chains[r.key], upto: Infinity, scale: 1 };
+  if (r.tier === "Expert's Splendent") {
+    const chain = chains[r.key - 9999];
+    if (!chain) return null;
+    const i = chain.steps.findIndex((s) => s.result_key === r.key);
+    if (i < 0) return null;
+    // The site's attempts are per Artisan's Splendent; per Expert's Splendent divide by how many the next step uses.
+    const next = chain.steps[i + 1];
+    return { chain, upto: chain.steps[i].step_no, scale: next?.attempts ? 1 / next.attempts : 1 };
+  }
+  return null;
+}
+
+function detailHtml(r) {
+  const head = `<div class="detail-head"><div><h3>How ${esc(r.shortName)} is made</h3>` +
+    `<p class="muted">${esc(r.skill)} · cost per item ${kinah(r.cost)}${r.listing != null ? ` · cheapest listing ${kinah(r.listing)}` : ""}</p></div>${extLink(r)}</div>`;
+  if (r.costDetail) return head + recipeDetail(r);
+  const c = chainFor(r);
+  if (c?.chain) return head + chainDetail(r, c);
+  return head + `<p class="muted">No recipe breakdown available for this item.</p>`;
+}
+
+function recipeDetail(r) {
+  const d = r.costDetail;
+  const baseRow = `<tr><td>${matLink(d.baseKey, d.baseName)}</td><td>1</td>` +
+    `<td class="${d.baseMethod === "buy" ? "used" : ""}">${kinah(d.baseListing)}</td>` +
+    `<td class="${d.baseMethod === "craft" ? "used" : ""}">${kinah(d.baseCraft)}</td>` +
+    `<td>${d.baseMethod === "craft" ? "Crafted" : "Bought"}</td><td>${kinah(d.base)}</td></tr>`;
+  const matRows = d.materials.map((m) => `<tr><td>${matLink(m.key, m.name)}</td><td>${m.qty}</td>` +
+    `<td class="used">${kinah(m.price)}</td><td>—</td><td>Bought</td><td>${m.price == null ? "—" : kinah(m.price * m.qty)}</td></tr>`).join("");
+  const combo = d.factor !== 1
+    ? `<p class="detail-sum">Each attempt makes this item only on the ${Math.round(d.comboProbability * 100)}% combo, so it costs ${kinah(d.attempt)} × ${+d.factor.toFixed(2)} = <strong>${kinah(r.cost)}</strong>.</p>`
+    : `<p class="detail-sum">One craft attempt = <strong>${kinah(d.attempt)}</strong>. ${Math.round(d.comboProbability * 100)}% of attempts make the Splendent version instead.</p>`;
+  return `<table class="recipe"><thead><tr><th>Input</th><th>Qty</th><th>Market price</th><th>Crafted price</th><th>Used</th><th>Cost</th></tr></thead>` +
+    `<tbody>${baseRow}${matRows}</tbody><tfoot><tr><td colspan="5">Per craft attempt</td><td>${kinah(d.attempt)}</td></tr></tfoot></table>` +
+    combo + `<p class="muted small">Highlighted price is the one used. Materials are priced at Siel's cheapest listing; recipe from questlog.gg.</p>`;
+}
+
+function chainDetail(r, { chain, upto, scale }) {
+  const steps = chain.steps.filter((s) => s.step_no <= upto);
+  let total = 0;
+  const blocks = steps.map((s, i) => {
+    const prev = i > 0 ? steps[i - 1].result_name : null;
+    const per = s.attempts * scale;
+    const cost = (s.step_cost ?? 0) * scale;
+    total += cost;
+    const rows = s.materials.map((m) => `<tr><td>${matLink(m.material_key, m.name)}</td><td>${m.per_attempt}</td>` +
+      `<td class="used">${kinah(m.unit_price)}</td><td>${kinah(m.listing_price)}</td><td>${methodLabel(m)}</td>` +
+      `<td>${kinah((m.subtotal ?? m.unit_price * m.per_attempt * s.attempts) * scale)}</td></tr>`).join("");
+    return `<div class="step"><h4>Step ${s.step_no}: ${esc(s.result_name)}</h4>` +
+      `<p class="muted small">${prev ? `Uses 1 ${esc(prev)} per attempt · ` : ""}${per.toFixed(per >= 10 ? 0 : 2)} attempts per item ` +
+      `· ${(s.success_rate * 100).toFixed(1)}% success · ${Math.round((s.combo_probability ?? 0) * 100)}% combo</p>` +
+      `<table class="recipe"><thead><tr><th>Material</th><th>Per attempt</th><th>Unit price</th><th>Listing</th><th>How</th><th>Cost per item</th></tr></thead>` +
+      `<tbody>${rows}</tbody><tfoot><tr><td colspan="5">Step total</td><td>${kinah(cost)}</td></tr></tfoot></table></div>`;
+  }).join("");
+  const tiers = (chain.tiers || []).filter((x) => x.tier <= steps.length);
+  const ladder = tiers.length ? `<table class="recipe ladder"><thead><tr><th>Tier</th><th>Crafted price</th><th>Market price</th><th>Cheaper</th></tr></thead><tbody>` +
+    tiers.map((x) => {
+      const cheaper = x.cost != null && x.market_price != null ? (x.cost <= x.market_price ? "Craft" : "Buy") : "—";
+      return `<tr><td>${matLink(x.item_key, x.name)}</td><td>${kinah(x.cost)}</td><td>${kinah(x.market_price)}</td><td>${cheaper}</td></tr>`;
+    }).join("") + `</tbody></table>` : "";
+  return `<div class="steps">${blocks}</div>` +
+    `<p class="detail-sum">Total across the steps = <strong>${kinah(total)}</strong> per item (the cost shown in the table). ` +
+    `Each step needs about 1 ÷ (success × combo) attempts, because only combo results feed the next step.</p>` +
+    (ladder ? `<h4>Each tier: craft or buy?</h4>${ladder}` : "") +
+    `<p class="muted small">From aion2.exchange's cost model. Unit price is the cheapest way to get each material (highlighted); listing is the cheapest single listing.</p>`;
+}
+
 function costTitle(r) {
   const d = r.costDetail;
   if (!d) return r.cost == null ? "No crafting cost known" : "aion2.exchange crafting model: expected cost per item at mastery 100, cheapest path";
@@ -470,11 +567,12 @@ const COLUMNS = [
   { key: "rank", label: "#", cls: "rank", sortVal: (r) => -r.rank, fmt: (r) => (r.cost == null ? "—" : r.rank) },
   { key: "name", label: "Craft", cls: "name", sortVal: (r) => r.shortName,
     fmt: (r) => {
-      const craftPage = r.tier === "Artisan's Splendent"; // only these have a /crafts page so far
-      const href = `${API}/${craftPage ? "crafts" : "items"}/${r.key}`;
-      const title = craftPage ? "Cost breakdown and history on aion2.exchange" : "Price and listing history on aion2.exchange";
-      const tier = craftPage ? "" : `${esc(r.tier)} · `;
-      return `<span class="item-cell">${iconHtml(r.key)}<span><a href="${href}" target="_blank" rel="noopener" title="${title}">${esc(r.shortName)}</a><span class="meta">${tier}${esc(r.skill)} · ${esc(r.category)}</span></span></span>`;
+      const tier = r.tier === "Artisan's Splendent" ? "" : `${esc(r.tier)} · `;
+      const open = state.ui.open === r.key;
+      return `<span class="item-cell">${iconHtml(r.key)}<span class="item-text">` +
+        `<button type="button" class="item-toggle" data-toggle="${r.key}" aria-expanded="${open}" title="Show the recipe and what goes into the cost">` +
+        `<span class="chev" aria-hidden="true">${open ? "▾" : "▸"}</span>${esc(r.shortName)}</button>` +
+        `<span class="meta">${tier}${esc(r.skill)} · ${esc(r.category)}</span></span>${extLink(r, "icon")}</span>`;
     } },
   { key: "verdict", label: "Verdict", sortVal: (r) => VERDICT_ORDER[r.verdict.id],
     fmt: (r) => `<span class="pill ${r.verdict.tone}">${esc(r.verdict.label)}</span>` },
@@ -520,11 +618,29 @@ function renderTable(rows) {
   };
 
   const topKey = rows.find((r) => r.verdict.id === "craft")?.key;
-  $("table").tBodies[0].innerHTML = sorted.map((r) => `<tr class="${r.key === topKey ? "top-pick" : ""}">${COLUMNS.map((c) => {
-    const tone = c.tone ? c.tone(r) : "";
-    const title = c.title ? ` title="${esc(c.title(r))}"` : "";
-    return `<td class="${[c.cls, tone].filter(Boolean).join(" ")}"${title}>${c.fmt(r)}</td>`;
-  }).join("")}</tr>`).join("") || `<tr><td colspan="${COLUMNS.length}" class="dim">No crafts match these filters.</td></tr>`;
+  const body = $("table").tBodies[0];
+  body.innerHTML = sorted.map((r) => {
+    const open = state.ui.open === r.key;
+    const cls = [r.key === topKey ? "top-pick" : "", "item-row", open ? "open" : ""].filter(Boolean).join(" ");
+    const cells = COLUMNS.map((c) => {
+      const tone = c.tone ? c.tone(r) : "";
+      const title = c.title ? ` title="${esc(c.title(r))}"` : "";
+      return `<td class="${[c.cls, tone].filter(Boolean).join(" ")}"${title}>${c.fmt(r)}</td>`;
+    }).join("");
+    const detail = open ? `<tr class="detail-row"><td colspan="${COLUMNS.length}"><div class="detail-inner">${detailHtml(r)}</div></td></tr>` : "";
+    return `<tr class="${cls}" data-key="${r.key}">${cells}</tr>${detail}`;
+  }).join("") || `<tr><td colspan="${COLUMNS.length}" class="dim">No crafts match these filters.</td></tr>`;
+  // Clicking an item row (anywhere but a link) expands its recipe; clicking it again closes it.
+  body.onclick = (e) => {
+    if (e.target.closest("a, .detail-row")) return;
+    const tr = e.target.closest("tr.item-row");
+    if (!tr) return;
+    const key = +tr.dataset.key;
+    state.ui.open = state.ui.open === key ? null : key;
+    writeUrl();
+    renderTable(state.rows);
+    if (state.ui.open != null) body.querySelector(`[data-toggle="${key}"]`)?.focus({ preventScroll: true });
+  };
 
   const basis = { conservative: "lower of cheapest listing and average sale price", listing: "cheapest current listing", sold: "average sale price" }[state.ui.priceBasis];
   $("tableNote").textContent = `${rows.length} crafts · ~ = estimated from listing history · sell price = ${basis}${state.ui.salesTaxPct + state.ui.listingFeePct ? `, minus ${state.ui.salesTaxPct}% tax and ${state.ui.listingFeePct}% listing fee` : ""}`;

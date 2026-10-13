@@ -10,7 +10,7 @@ GitHub Action (hourly) ──► aion2.exchange /api/servers, /api/crafts, /api/
         └─► site/data/snapshot.json ──► GitHub Pages ──► dashboard (index.html)
 ```
 
-- `scripts/fetch_snapshot.py` pulls the crafting cost model (`/api/crafts`), current prices (`/api/items?keys=…`) and 10 days of hourly listing snapshots per item (`/api/items/{id}/prices?bucket=raw`) for Siel NAW. True Dragon items are derived from each craft target's key (tier code `13` → `15` True Dragon, `17` Splendent True Dragon); slots never listed on the server are skipped. Expert's Splendent items are the craft target's key + 9999 (e.g. `110430013` → `110440012`), with their cost taken from tier 2 of `/api/crafts/{id}`. It also prices the True Dragon recipe materials (`recipes/true_dragon.json`) and reads the site's icon index (`/item-icons/index.json`), so the page can show each item's icon (loaded straight from aion2.exchange) framed in its rarity color. Stdlib only, about 96 requests per run, rate-limited.
+- `scripts/fetch_snapshot.py` pulls the crafting cost model (`/api/crafts`), current prices (`/api/items?keys=…`) and 10 days of hourly listing snapshots per item (`/api/items/{id}/prices?bucket=raw`) for Siel NAW. True Dragon items are derived from each craft target's key (tier code `13` → `15` True Dragon, `17` Splendent True Dragon); slots never listed on the server are skipped. For each craft target it also keeps the site's full cost chain from `/api/crafts/{id}` (every step's materials, method, unit price, attempts, success rate and combo chance), which the dashboard shows when you expand a row. Expert's Splendent items are the craft target's key + 9999 (e.g. `110430013` → `110440012`), with their cost taken from tier 2 of that chain. It also prices the True Dragon recipe materials (`recipes/true_dragon.json`) and reads the site's icon index (`/item-icons/index.json`), so the page can show each item's icon (loaded straight from aion2.exchange) framed in its rarity color. Stdlib only, about 96 requests per run, rate-limited.
 - `.github/workflows/deploy.yml` runs it hourly (and on every push to `main`) and deploys `site/` to GitHub Pages. The snapshot is deployed, not committed.
 - The page **tries the live API first** and falls back to the snapshot. aion2.exchange doesn't currently send CORS headers, so browsers use the snapshot; if the API ever allows this origin, the page goes live automatically (refreshing every 5 minutes).
 
@@ -29,7 +29,9 @@ GitHub Action (hourly) ──► aion2.exchange /api/servers, /api/crafts, /api/
 
 Verdicts: **Craft it** = profitable, ≥ 0.5 sold/day, ≤ 14 days of supply. Thresholds live in `site/metrics.js` (`DEFAULT_SETTINGS`).
 
-Every control (tier, skill, price basis, tax, listing fee, share, sort) is stored in the URL, so a copied link reproduces the exact view.
+Click an item to expand its recipe: each input with its market price and crafted price (the one used is highlighted), and for Artisan's/Expert's Splendent every step of the chain plus a craft-or-buy comparison per tier. The ↗ button opens the item on aion2.exchange.
+
+Every control (tier, skill, price basis, tax, listing fee, share, sort, expanded item) is stored in the URL, so a copied link reproduces the exact view.
 
 ## True Dragon crafting costs
 

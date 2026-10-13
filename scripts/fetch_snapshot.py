@@ -105,6 +105,28 @@ def fetch_market(base: str, server_id: int) -> tuple[dict, dict | None, list[str
         items = [pick(i, ITEM_FIELDS) for i in resp.get("items") or []]
 
     errors: list[str] = []
+    # The site's cost chain for each Artisan's Splendent target: every step's materials, method, unit price,
+    # attempts, success rate and combo chance, plus the cost of each tier (Splendent, Expert's Splendent, ...).
+    # The dashboard shows it as the recipe breakdown, and the Expert's Splendent cost is its tier 2.
+    chains: dict[str, dict] = {}
+    for bt in list(targets):
+        time.sleep(DELAY_S)
+        try:
+            detail = get_json(base, f"/api/crafts/{bt['target_key']}", {"server": server_id}) or {}
+        except Exception as err:
+            errors.append(f"craft detail {bt['target_key']}: {err}")
+            print(errors[-1], file=sys.stderr)
+            continue
+        chains[str(bt["target_key"])] = {
+            "tiers": [pick(x, ("tier", "item_key", "name", "cost", "cost_market", "market_price")) for x in detail.get("tiers") or []],
+            "steps": [{
+                **pick(s, ("step_no", "recipe_id", "result_key", "result_name", "attempts", "success_rate",
+                           "combo_probability", "step_cost")),
+                "materials": [pick(m, ("material_key", "name", "per_attempt", "expected", "unit_price",
+                                       "listing_price", "method", "via", "subtotal")) for m in s.get("materials") or []],
+            } for s in detail.get("steps") or []],
+        }
+
     # Extra tiers share the craft target's slot, skill and category. Only items the site has market data
     # for (ever listed on this server) are included. Expert's Splendent costs come from the site's own model
     # (tier 2 of the Artisan's Splendent chain); True Dragon costs from recipes/true_dragon.json.
@@ -114,14 +136,9 @@ def fetch_market(base: str, server_id: int) -> tuple[dict, dict | None, list[str
         tier, base_t = extra_keys[i["item_key"]]
         cost = cost_market = None
         if tier == EXPERT_TIER:
-            time.sleep(DELAY_S)
-            try:
-                detail = get_json(base, f"/api/crafts/{base_t['target_key']}", {"server": server_id}) or {}
-                tr = next((x for x in detail.get("tiers") or [] if x.get("item_key") == i["item_key"]), {})
-                cost, cost_market = tr.get("cost"), tr.get("cost_market")
-            except Exception as err:
-                errors.append(f"craft detail {base_t['target_key']}: {err}")
-                print(errors[-1], file=sys.stderr)
+            chain = chains.get(str(base_t["target_key"])) or {}
+            tr = next((x for x in chain.get("tiers") or [] if x.get("item_key") == i["item_key"]), {})
+            cost, cost_market = tr.get("cost"), tr.get("cost_market")
         targets.append({
             "target_key": i["item_key"], "name": i.get("name"), "tier": tier,
             "category": base_t["category"], "skill": base_t["skill"], "profile_label": base_t["profile_label"],
@@ -179,6 +196,7 @@ def fetch_market(base: str, server_id: int) -> tuple[dict, dict | None, list[str
         "recipes": td_recipes["recipes"],
         "materials": materials,
         "icons": icons,
+        "chains": chains,
     }
     return market, crafts.get("model"), errors
 
