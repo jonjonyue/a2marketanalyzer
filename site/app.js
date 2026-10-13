@@ -2,6 +2,7 @@ import { analyzeMarket, DEFAULT_SETTINGS, byRank } from "./metrics.js";
 
 const API = "https://aion2.exchange";
 const SNAPSHOT_URL = "data/snapshot.json";
+const DEFAULT_SERVER = 11201; // Siel · Elyos, North America West
 const SKILLS = ["All", "Blacksmithing", "Tailoring", "Jewelcrafting", "Alchemy"];
 
 const $ = (id) => document.getElementById(id);
@@ -105,7 +106,8 @@ async function init() {
     if (state.snapshot.model) setModelNote(state.snapshot.model);
   }
   if (!state.servers.some((s) => s.server_id === state.ui.server)) {
-    state.ui.server = state.servers.some((s) => s.server_id === state.defaultServer) ? state.defaultServer : state.servers[0]?.server_id;
+    const has = (id) => state.servers.some((s) => s.server_id === id);
+    state.ui.server = has(DEFAULT_SERVER) ? DEFAULT_SERVER : has(state.defaultServer) ? state.defaultServer : state.servers[0]?.server_id;
   }
   buildControls();
   await loadMarket();
