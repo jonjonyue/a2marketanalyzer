@@ -1,6 +1,6 @@
 # Aion 2 crafting profit dashboard
 
-A shareable dashboard that ranks Artisan's Splendent crafts on **Siel (Elyos, NA West)** by how much money they make **and** how fast they sell, including the True Dragon and Splendent True Dragon versions of each slot. All data comes from the public [aion2.exchange](https://aion2.exchange) API.
+A shareable dashboard that ranks Artisan's Splendent crafts on **Siel (Elyos, NA West)** by how much money they make **and** how fast they sell, including the blue Artisan's, True Dragon and Splendent True Dragon versions of each slot. All data comes from the public [aion2.exchange](https://aion2.exchange) API.
 
 ## How it works
 
@@ -10,7 +10,7 @@ GitHub Action (hourly) ──► aion2.exchange /api/servers, /api/crafts, /api/
         └─► site/data/snapshot.json ──► GitHub Pages ──► dashboard (index.html)
 ```
 
-- `scripts/fetch_snapshot.py` pulls the crafting cost model (`/api/crafts`), current prices (`/api/items?keys=…`) and 10 days of hourly listing snapshots per item (`/api/items/{id}/prices?bucket=raw`) for Siel NAW. True Dragon items are derived from each craft target's key (tier code `13` → `15` True Dragon, `17` Splendent True Dragon); slots never listed on the server are skipped. It also prices the True Dragon recipe materials (`recipes/true_dragon.json`). Stdlib only, about 56 requests per run, rate-limited.
+- `scripts/fetch_snapshot.py` pulls the crafting cost model (`/api/crafts`), current prices (`/api/items?keys=…`) and 10 days of hourly listing snapshots per item (`/api/items/{id}/prices?bucket=raw`) for Siel NAW. True Dragon items are derived from each craft target's key (tier code `13` → `15` True Dragon, `17` Splendent True Dragon); slots never listed on the server are skipped. Blue Artisan's items come from `recipes/artisan.json`. It also prices the recipe materials and the Expert's Splendent inputs (craft cost from `/api/crafts/{id}`). Stdlib only, about 95 requests per run, rate-limited.
 - `.github/workflows/deploy.yml` runs it hourly (and on every push to `main`) and deploys `site/` to GitHub Pages. The snapshot is deployed, not committed.
 - The page **tries the live API first** and falls back to the snapshot. aion2.exchange doesn't currently send CORS headers, so browsers use the snapshot; if the API ever allows this origin, the page goes live automatically (refreshing every 5 minutes).
 
@@ -18,7 +18,7 @@ GitHub Action (hourly) ──► aion2.exchange /api/servers, /api/crafts, /api/
 
 | Metric | Definition |
 |---|---|
-| Cost / craft | Artisan's Splendent: aion2.exchange's expected cost at mastery 100, cheapest path per input (or "buy everything"). True Dragon: see below |
+| Cost / craft | Artisan's Splendent: aion2.exchange's expected cost at mastery 100, cheapest path per input (or "buy everything"). Artisan's (blue) and True Dragon: see below |
 | Sell price | Conservative: min(cheapest listing, avg sale price). Also selectable: listing only, or avg sale only |
 | Profit / craft | sell price × (1 − 10% sales tax − 2% listing fee) − cost (both adjustable; assumes it sells on the first listing) |
 | Sold / day | estimated from listing history (below); official 28-day stats are used instead where the game publishes them |
@@ -30,6 +30,14 @@ GitHub Action (hourly) ──► aion2.exchange /api/servers, /api/crafts, /api/
 Verdicts: **Craft it** = profitable, ≥ 0.5 sold/day, ≤ 14 days of supply. Thresholds live in `site/metrics.js` (`DEFAULT_SETTINGS`).
 
 Every control (tier, skill, price basis, tax, listing fee, share, sort) is stored in the URL, so a copied link reproduces the exact view.
+
+## Artisan's (blue) crafting costs
+
+`recipes/artisan.json` holds the 19 blue Artisan's gear recipes (Elyos, from questlog.gg). Each consumes the Expert's Splendent item of the same slot plus materials and yields the Artisan's item, or on a 25% combo the Artisan's Splendent item instead. It's the same craft as the last step of aion2.exchange's Artisan's Splendent model.
+
+- **Cost** = one attempt: the Expert's Splendent input (the cheaper of its craft cost, tier 2 of the site's chain, and its listing) plus materials at Siel's cheapest listings.
+- Blue items sell for a small fraction of that, so they show as losses: in practice they're the leftover result of the 75% of attempts that don't combo into Splendent. Their resale value isn't credited back to the Splendent cost.
+- The site's model may find cheaper conversion paths for materials than the cheapest listing used here.
 
 ## True Dragon crafting costs
 

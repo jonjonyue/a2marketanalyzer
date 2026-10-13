@@ -169,7 +169,7 @@ export function verdictFor({ profit, perDay, supplyDays, missing, noCost }, s = 
 
 /** Analyze a whole server's market and sort best-first by expected daily profit. */
 /**
- * Crafting cost for the True Dragon tiers, from the recipes in recipes/true_dragon.json.
+ * Crafting cost from a recipe file (recipes/true_dragon.json, recipes/artisan.json).
  *
  * One craft attempt = 1 Artisan's Splendent item of the same slot + materials (+ gold fee).
  * The Artisan's Splendent input costs the cheaper of buying it and crafting it (the site's model),
@@ -180,9 +180,12 @@ export function verdictFor({ profit, perDay, supplyDays, missing, noCost }, s = 
  */
 export function trueDragonCost(recipe, product_key, ctx, settings = DEFAULT_SETTINGS) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
+  // The base input is either a tracked item (Artisan's Splendent, for True Dragon) or an
+  // untracked one with its own craft cost and price (Expert's Splendent, for the blue Artisan's gear).
   const baseTarget = ctx.targets.get(recipe.base_key);
-  const baseListing = num(ctx.items.get(recipe.base_key)?.price) ?? num(baseTarget?.market_price);
-  const baseCraft = num(s.costBasis === "market" ? baseTarget?.cost_market ?? baseTarget?.cost : baseTarget?.cost);
+  const baseInput = ctx.inputs?.get(recipe.base_key);
+  const baseListing = num(ctx.items.get(recipe.base_key)?.price) ?? num(baseTarget?.market_price) ?? num(baseInput?.price);
+  const baseCraft = num(s.costBasis === "market" ? baseTarget?.cost_market ?? baseTarget?.cost : baseTarget?.cost) ?? num(baseInput?.craft_cost);
   let base, baseMethod;
   if (s.costBasis === "market") { base = baseListing ?? baseCraft; baseMethod = baseListing != null ? "buy" : "craft"; }
   else if (baseCraft != null && (baseListing == null || baseCraft <= baseListing)) { base = baseCraft; baseMethod = "craft"; }
@@ -203,11 +206,13 @@ export function trueDragonCost(recipe, product_key, ctx, settings = DEFAULT_SETT
     cost: missing ? null : attempt * factor,
     missing,
     detail: {
-      baseKey: recipe.base_key, baseName: baseTarget?.name ?? String(recipe.base_key), base, baseMethod,
+      baseKey: recipe.base_key, baseName: baseTarget?.name ?? baseInput?.name ?? String(recipe.base_key), base, baseMethod,
       baseCraft, baseListing, materials: mats, matsCost, attempt, factor, comboProbability: recipe.combo_probability,
     },
   };
 }
+
+export const recipeCost = trueDragonCost;
 
 export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
   const items = new Map((market.items || []).map((i) => [i.item_key, i]));
@@ -217,9 +222,15 @@ export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
     items,
     targets: new Map((market.targets || []).map((t) => [t.target_key, t])),
     materials: new Map((market.materials || []).map((m) => [m.item_key, m])),
+    inputs: new Map((market.inputs || []).map((m) => [m.item_key, m])),
   };
   const recipeFor = new Map();
-  for (const r of market.recipes || []) { recipeFor.set(r.product_key, r); recipeFor.set(r.combo_key, r); }
+  // A recipe costs its product (one attempt) and its combo result (÷ combo chance). Only items without a cost of
+  // their own use it, so the blue recipes' combo results (Artisan's Splendent) keep the site's model.
+  for (const r of market.recipes || []) {
+    recipeFor.set(r.product_key, r);
+    if (!recipeFor.has(r.combo_key)) recipeFor.set(r.combo_key, r);
+  }
   return (market.targets || [])
     .map((t0) => {
       let t = t0;

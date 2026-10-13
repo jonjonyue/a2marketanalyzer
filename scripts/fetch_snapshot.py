@@ -5,7 +5,7 @@ Covers the Artisan's Splendent craft targets plus the True Dragon and Splendent 
 version of each slot (no crafting cost yet). Writes one JSON snapshot the dashboard reads
 (the API sends no CORS headers, so browsers on another origin can't call it directly).
 True Dragon crafting costs use the recipes in recipes/true_dragon.json priced at Siel's
-market. About 56 requests per run.
+market, and the blue Artisan's gear from recipes/artisan.json. About 95 requests per run.
 
 Usage: python scripts/fetch_snapshot.py [--out site/data/snapshot.json] [--base URL] [--server ID]
 Stdlib only, so the GitHub Action needs no installs.
@@ -24,7 +24,9 @@ from pathlib import Path
 
 DEFAULT_BASE = "https://aion2.exchange"
 DEFAULT_SERVER = 11201  # Siel · Elyos · North America West
-RECIPES_FILE = Path(__file__).resolve().parent.parent / "recipes" / "true_dragon.json"
+RECIPES_DIR = Path(__file__).resolve().parent.parent / "recipes"
+TD_RECIPES = RECIPES_DIR / "true_dragon.json"   # True Dragon (combo -> Splendent True Dragon)
+BLUE_RECIPES = RECIPES_DIR / "artisan.json"     # blue Artisan's gear (combo -> Artisan's Splendent)
 HISTORY_DAYS = 10       # 7-day estimate window + 3 days so expiries of earlier listings can be matched
 USER_AGENT = "a2marketanalyzer-dashboard/1.0 (+https://github.com/jonjonyue/a2marketanalyzer)"
 DELAY_S = 0.25  # be gentle with the site: ~4 requests/second max
@@ -93,7 +95,13 @@ def fetch_history(base: str, server_id: int, item_key: int, since: datetime) -> 
 def fetch_market(base: str, server_id: int) -> tuple[dict, dict | None, list[str]]:
     crafts = get_json(base, "/api/crafts", {"server": server_id})
     targets = [dict(pick(t, TARGET_FIELDS), tier=BASE_TIER) for t in crafts.get("targets") or []]
+    by_key = {t["target_key"]: t for t in targets}
     extra_keys = {t["target_key"] + off: (tier, t) for t in targets for tier, off in EXTRA_TIERS}
+    td_recipes = json.loads(TD_RECIPES.read_text())
+    blue_recipes = json.loads(BLUE_RECIPES.read_text())
+    for r in blue_recipes["recipes"]:  # the blue item's slot is the Artisan's Splendent item it can combo into
+        if r["combo_key"] in by_key:
+            extra_keys[r["product_key"]] = (blue_recipes["tier"], by_key[r["combo_key"]])
     keys = [t["target_key"] for t in targets] + list(extra_keys)
     items: list[dict] = []
     if keys:
@@ -101,8 +109,8 @@ def fetch_market(base: str, server_id: int) -> tuple[dict, dict | None, list[str
         resp = get_json(base, "/api/items", {"keys": ",".join(map(str, keys)), "limit": 200, "server": server_id}) or {}
         items = [pick(i, ITEM_FIELDS) for i in resp.get("items") or []]
 
-    # True Dragon tiers: same slot, skill and category as the craft target, no crafting cost yet.
-    # Only slots the site has market data for (ever listed on this server) are included.
+    # Extra tiers share the craft target's slot, skill and category; their cost comes from the recipe files.
+    # Only items the site has market data for (ever listed on this server) are included.
     for i in items:
         if i["item_key"] in extra_keys:
             tier, base_t = extra_keys[i["item_key"]]
@@ -125,25 +133,40 @@ def fetch_market(base: str, server_id: int) -> tuple[dict, dict | None, list[str
             errors.append(f"history {key}: {err}")
             print(errors[-1], file=sys.stderr)
 
-    # True Dragon recipe materials, priced at the current cheapest listing on this server.
-    recipes = json.loads(RECIPES_FILE.read_text())
-    mat_keys = list(recipes["materials"])
+    # Recipe materials and the Expert's Splendent inputs, priced at the cheapest listing on this server.
+    mat_names = {**td_recipes["materials"], **blue_recipes["materials"]}
+    input_names = blue_recipes["inputs"]
     time.sleep(DELAY_S)
-    resp = get_json(base, "/api/items", {"keys": ",".join(mat_keys), "limit": 100, "server": server_id}) or {}
+    resp = get_json(base, "/api/items", {"keys": ",".join([*mat_names, *input_names]), "limit": 200, "server": server_id}) or {}
     priced = {str(i["item_key"]): i for i in resp.get("items") or []}
     materials = [
         {"item_key": int(k), "name": name, "price": (priced.get(k) or {}).get("price"),
          "listings": (priced.get(k) or {}).get("listings")}
-        for k, name in recipes["materials"].items()
+        for k, name in mat_names.items()
     ]
+    # Expert's Splendent craft cost = tier 2 of the site's Artisan's Splendent cost chain.
+    inputs = []
+    for r in blue_recipes["recipes"]:
+        k = str(r["base_key"])
+        craft_cost = None
+        time.sleep(DELAY_S)
+        try:
+            detail = get_json(base, f"/api/crafts/{r['combo_key']}", {"server": server_id}) or {}
+            craft_cost = next((tr.get("cost") for tr in detail.get("tiers") or [] if tr.get("item_key") == r["base_key"]), None)
+        except Exception as err:
+            errors.append(f"craft detail {r['combo_key']}: {err}")
+            print(errors[-1], file=sys.stderr)
+        inputs.append({"item_key": r["base_key"], "name": input_names.get(k), "craft_cost": craft_cost,
+                       "price": (priced.get(k) or {}).get("price"), "listings": (priced.get(k) or {}).get("listings")})
 
     market = {
         "captured_at": crafts.get("captured_at"),
         "targets": targets,
         "items": items,
         "history": history,
-        "recipes": recipes["recipes"],
+        "recipes": td_recipes["recipes"] + blue_recipes["recipes"],
         "materials": materials,
+        "inputs": inputs,
     }
     return market, crafts.get("model"), errors
 

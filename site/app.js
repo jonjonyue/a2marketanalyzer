@@ -5,8 +5,8 @@ const SNAPSHOT_URL = "data/snapshot.json";
 const SERVER_ID = 11201; // the dashboard covers Siel · Elyos, North America West only
 const HISTORY_DAYS = 10;
 const SKILLS = ["All", "Blacksmithing", "Tailoring", "Jewelcrafting", "Alchemy"];
-const TIERS = ["All", "Artisan's Splendent", "True Dragon", "Splendent True Dragon"];
-const TIER_PARAM = { "Artisan's Splendent": "as", "True Dragon": "td", "Splendent True Dragon": "std" };
+const TIERS = ["All", "Artisan's", "Artisan's Splendent", "True Dragon", "Splendent True Dragon"];
+const TIER_PARAM = { "Artisan's": "a", "Artisan's Splendent": "as", "True Dragon": "td", "Splendent True Dragon": "std" };
 
 const $ = (id) => document.getElementById(id);
 const state = {
