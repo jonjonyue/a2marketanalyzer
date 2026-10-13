@@ -1,0 +1,4 @@
+# Built by the GitHub Action on every deploy; never committed.
+site/data/
+__pycache__/
+.DS_Store
