@@ -1,10 +1,12 @@
-import { analyzeMarket, DEFAULT_SETTINGS, ESTIMATOR, byRank } from "./metrics.js";
+import { analyzeMarket, DEFAULT_SETTINGS, ESTIMATOR, VERDICT_ORDER, byRank } from "./metrics.js";
 
 const API = "https://aion2.exchange";
 const SNAPSHOT_URL = "data/snapshot.json";
 const SERVER_ID = 11201; // the dashboard covers Siel · Elyos, North America West only
 const HISTORY_DAYS = 10;
 const SKILLS = ["All", "Blacksmithing", "Tailoring", "Jewelcrafting", "Alchemy"];
+const TIERS = ["All", "Artisan's Splendent", "True Dragon", "Splendent True Dragon"];
+const TIER_PARAM = { "Artisan's Splendent": "as", "True Dragon": "td", "Splendent True Dragon": "std" };
 
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -46,6 +48,7 @@ function readUrl() {
   return {
     server: SERVER_ID,
     skill: SKILLS.includes(p.get("skill")) ? p.get("skill") : "All",
+    tier: Object.keys(TIER_PARAM).find((k) => TIER_PARAM[k] === p.get("tier")) || "All",
     priceBasis: ["conservative", "listing", "sold"].includes(p.get("price")) ? p.get("price") : DEFAULT_SETTINGS.priceBasis,
     costBasis: ["cheapest", "market"].includes(p.get("cost")) ? p.get("cost") : DEFAULT_SETTINGS.costBasis,
     salesTaxPct: Math.min(50, Math.max(0, n("tax", DEFAULT_SETTINGS.salesTaxPct))),
@@ -60,6 +63,7 @@ function writeUrl() {
   const u = state.ui;
   const p = new URLSearchParams();
   if (u.skill !== "All") p.set("skill", u.skill);
+  if (u.tier !== "All") p.set("tier", TIER_PARAM[u.tier]);
   if (u.priceBasis !== DEFAULT_SETTINGS.priceBasis) p.set("price", u.priceBasis);
   if (u.costBasis !== DEFAULT_SETTINGS.costBasis) p.set("cost", u.costBasis);
   if (u.salesTaxPct !== DEFAULT_SETTINGS.salesTaxPct) p.set("tax", u.salesTaxPct);
@@ -166,6 +170,11 @@ function showBanner(msg) {
 
 // ---------- controls ----------
 function buildControls() {
+  $("tiers").innerHTML = TIERS.map((s) => `<button type="button" data-v="${s}">${s}</button>`).join("");
+  $("tiers").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    state.ui.tier = b.dataset.v; syncControls(); writeUrl(); render();
+  });
   $("skills").innerHTML = SKILLS.map((s) => `<button type="button" data-v="${s}">${s}</button>`).join("");
   $("skills").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
@@ -208,6 +217,7 @@ function buildControls() {
 
 function syncControls() {
   $("skills").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === state.ui.skill)));
+  $("tiers").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.v === state.ui.tier)));
   for (const id of ["priceBasis", "costBasis"]) {
     $(id).querySelectorAll("button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.v === state.ui[id])));
   }
@@ -219,6 +229,7 @@ function render() {
   const settings = { ...DEFAULT_SETTINGS, ...state.ui };
   let rows = analyzeMarket(state.market, settings);
   rows.forEach((r, i) => (r.rank = i + 1)); // rank within the whole server, before filters
+  if (state.ui.tier !== "All") rows = rows.filter((r) => r.tier === state.ui.tier);
   if (state.ui.skill !== "All") rows = rows.filter((r) => r.skill === state.ui.skill);
   if (state.ui.hideLoss) rows = rows.filter((r) => !(r.profit != null && r.profit <= 0));
   state.rows = rows;
@@ -228,7 +239,11 @@ function render() {
   renderTable(rows);
 }
 
+// True Dragon tiers have no crafting cost yet; when nothing in view has one, show market size instead of profit.
+const noCostsInView = (rows) => rows.length > 0 && rows.every((r) => r.cost == null);
+
 function renderKpis(rows) {
+  if (noCostsInView(rows)) return renderMarketKpis(rows);
   const good = rows.filter((r) => r.verdict.id === "craft");
   const best = [...rows].sort(byRank)[0];
   const pool = rows.reduce((s, r) => s + Math.max(0, r.dailyPool ?? 0), 0);
@@ -238,10 +253,29 @@ function renderKpis(rows) {
   const tiles = [
     { label: "Best craft right now", value: best && best.dailyPool > 0 ? best.shortName : "Nothing profitable", sub: best && best.dailyPool > 0 ? `${kinah(best.profit)} per craft · ${rate(best.perDay)}/day sold` : "Try another price basis" },
     { label: "Your expected daily profit", value: yours > 0 ? kinah(yours) : "—", sub: yours > 0 ? `from ${best.shortName} at ${state.ui.sharePct}% share` : "No craft with positive profit and sales" },
-    { label: "Worth crafting", value: `${good.length} of ${rows.length}`, sub: "profitable, selling, not oversupplied" },
+    { label: "Worth crafting", value: `${good.length} of ${rows.filter((r) => r.cost != null).length}`, sub: costedNote(rows) },
     { label: "Median margin", value: pct(median), sub: `market-wide daily pool ${kinah(pool)}` },
   ];
   $("kpis").innerHTML = tiles.map((t) => `<div class="kpi"><div class="label">${esc(t.label)}</div><div class="value" title="${esc(t.value)}">${esc(t.value)}</div><div class="sub" title="${esc(t.sub)}">${esc(t.sub)}</div></div>`).join("");
+}
+
+function renderMarketKpis(rows) {
+  const byTurnover = rows.filter((r) => r.turnover != null).sort((a, b) => b.turnover - a.turnover);
+  const fastest = rows.filter((r) => r.perDay != null).sort((a, b) => b.perDay - a.perDay)[0];
+  const total = byTurnover.reduce((s, r) => s + r.turnover, 0);
+  const top = byTurnover[0];
+  const tiles = [
+    { label: "Biggest market", value: top ? top.shortName : "—", sub: top ? `${kinah(top.turnover)} / day after fees` : "No sales estimates yet" },
+    { label: "Fastest seller", value: fastest ? fastest.shortName : "—", sub: fastest ? `~${rate(fastest.perDay)} sold / day` : "No sales estimates yet" },
+    { label: "Total turnover", value: kinah(total), sub: `per day across ${byTurnover.length} items, after fees` },
+    { label: "Crafting cost", value: "TBD", sub: "profit and ranking need a cost model" },
+  ];
+  $("kpis").innerHTML = tiles.map((t) => `<div class="kpi"><div class="label">${esc(t.label)}</div><div class="value" title="${esc(t.value)}">${esc(t.value)}</div><div class="sub" title="${esc(t.sub)}">${esc(t.sub)}</div></div>`).join("");
+}
+
+function costedNote(rows) {
+  const tbd = rows.filter((r) => r.cost == null).length;
+  return tbd ? `of crafts with a known cost; ${tbd} with cost TBD` : "profitable, selling, not oversupplied";
 }
 
 // ----- tooltip -----
@@ -253,6 +287,7 @@ function showTip(e, r) {
     <div class="row"><span>Sold / day${r.salesSource === "estimate" ? " (est.)" : ""}</span><span>${rate(r.perDay)}</span></div>
     <div class="row"><span>Listings</span><span>${r.listings}</span></div>
     <div class="row"><span>Daily pool</span><span>${kinah(r.dailyPool)}</span></div>
+    <div class="row"><span>Turnover / day</span><span>${kinah(r.turnover)}</span></div>
     <div class="row"><span>Verdict</span><span>${esc(r.verdict.label)}</span></div>`;
   tip.hidden = false;
   moveTip(e);
@@ -290,14 +325,20 @@ function niceTicks(max, count = 4) {
 
 function renderBars(rows) {
   const el = $("barChart");
-  const data = rows.filter((r) => r.dailyPool != null && r.dailyPool > 0).slice(0, 10);
+  const turnoverMode = noCostsInView(rows);
+  const metric = turnoverMode ? "turnover" : "dailyPool";
+  $("barTitle").textContent = turnoverMode ? "Turnover per day, whole market" : "Expected daily profit, whole market";
+  $("barNote").textContent = turnoverMode
+    ? "Sell price after fees × units sold per day. Crafting cost isn't known for these tiers yet, so this is market size, not profit."
+    : "Profit per craft × units sold per day. This is the pool every crafter on the server is competing for.";
+  const data = rows.filter((r) => r[metric] != null && r[metric] > 0).sort((a, b) => b[metric] - a[metric]).slice(0, 10);
   if (!data.length) {
-    el.innerHTML = `<svg viewBox="0 0 560 120"><text class="empty" x="280" y="64" text-anchor="middle">No craft is both profitable and selling with these settings.</text></svg>`;
+    el.innerHTML = `<svg viewBox="0 0 560 120"><text class="empty" x="280" y="64" text-anchor="middle">${turnoverMode ? "No sales estimates for these items yet." : "No craft is both profitable and selling with these settings."}</text></svg>`;
     return;
   }
   const W = 560, rowH = 30, left = 150, right = 64, top = 6, bottom = 26;
   const H = top + data.length * rowH + bottom;
-  const ticks = niceTicks(Math.max(...data.map((d) => d.dailyPool)));
+  const ticks = niceTicks(Math.max(...data.map((d) => d[metric])));
   const max = ticks[ticks.length - 1];
   const x = (v) => left + (v / max) * (W - left - right);
   const barH = 16;
@@ -305,16 +346,16 @@ function renderBars(rows) {
     const r = Math.min(4, w / 2);
     return `M${x0},${y0}h${w - r}a${r},${r} 0 0 1 ${r},${r}v${barH - 2 * r}a${r},${r} 0 0 1 ${-r},${r}h${-(w - r)}z`;
   };
-  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Expected daily profit by craft">
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${turnoverMode ? "Turnover per day" : "Expected daily profit"} by craft">
     <g class="grid">${ticks.map((t) => `<line x1="${x(t)}" x2="${x(t)}" y1="${top}" y2="${H - bottom}"/>`).join("")}</g>
     ${ticks.map((t) => `<text class="axis-label" x="${x(t)}" y="${H - 8}" text-anchor="middle">${kinah(t)}</text>`).join("")}
     ${data.map((d, i) => {
       const y = top + i * rowH + (rowH - barH) / 2;
-      const w = Math.max(2, x(d.dailyPool) - left);
+      const w = Math.max(2, x(d[metric]) - left);
       return `<g class="row">
         <text x="${left - 10}" y="${y + barH / 2 + 4}" text-anchor="end">${esc(d.shortName)}</text>
         <path class="bar" d="${bar(left, y, w)}"/>
-        <text class="value-label" x="${left + w + 6}" y="${y + barH / 2 + 4}">${kinah(d.dailyPool)}</text>
+        <text class="value-label" x="${left + w + 6}" y="${y + barH / 2 + 4}">${kinah(d[metric])}</text>
         <rect class="hit" data-i="${i}" tabindex="0" x="0" y="${top + i * rowH}" width="${W}" height="${rowH}"/>
       </g>`;
     }).join("")}
@@ -327,7 +368,7 @@ function renderScatter(rows, settings) {
   // Items with zero sales would sit on the x-axis and stretch it; the table still lists them.
   const data = rows.filter((r) => r.marginPct != null && r.perDay != null && r.perDay > 0);
   if (!data.length) {
-    el.innerHTML = `<svg viewBox="0 0 560 120"><text class="empty" x="280" y="64" text-anchor="middle">Not enough listing history yet to estimate sales.</text></svg>`;
+    el.innerHTML = `<svg viewBox="0 0 560 120"><text class="empty" x="280" y="64" text-anchor="middle">${rows.length && rows.every((r) => r.cost == null) ? "Margins need a crafting cost, which these tiers don't have yet." : "Not enough listing history yet to estimate sales."}</text></svg>`;
     return;
   }
   const W = 560, H = 330, left = 46, right = 16, top = 12, bottom = 40;
@@ -397,10 +438,16 @@ function salesTitle(r) {
 }
 
 const COLUMNS = [
-  { key: "rank", label: "#", cls: "rank", sortVal: (r) => -r.rank, fmt: (r) => r.rank },
+  { key: "rank", label: "#", cls: "rank", sortVal: (r) => -r.rank, fmt: (r) => (r.cost == null ? "—" : r.rank) },
   { key: "name", label: "Craft", cls: "name", sortVal: (r) => r.shortName,
-    fmt: (r) => `<a href="${API}/crafts/${r.key}" target="_blank" rel="noopener" title="Cost breakdown and history on aion2.exchange">${esc(r.shortName)}</a><span class="meta">${esc(r.skill)} · ${esc(r.category)}</span>` },
-  { key: "verdict", label: "Verdict", sortVal: (r) => ({ craft: 0, glut: 1, thin: 2, nosales: 3, incomplete: 4, loss: 5, nodata: 6 })[r.verdict.id],
+    fmt: (r) => {
+      const craftPage = r.tier === "Artisan's Splendent"; // only these have a /crafts page so far
+      const href = `${API}/${craftPage ? "crafts" : "items"}/${r.key}`;
+      const title = craftPage ? "Cost breakdown and history on aion2.exchange" : "Price and listing history on aion2.exchange";
+      const tier = craftPage ? "" : `${esc(r.tier)} · `;
+      return `<a href="${href}" target="_blank" rel="noopener" title="${title}">${esc(r.shortName)}</a><span class="meta">${tier}${esc(r.skill)} · ${esc(r.category)}</span>`;
+    } },
+  { key: "verdict", label: "Verdict", sortVal: (r) => VERDICT_ORDER[r.verdict.id],
     fmt: (r) => `<span class="pill ${r.verdict.tone}">${esc(r.verdict.label)}</span>` },
   { key: "cost", label: "Cost", fmt: (r) => kinah(r.cost) },
   { key: "price", label: "Sell price", fmt: (r) => kinah(r.price),
@@ -411,6 +458,8 @@ const COLUMNS = [
   { key: "listings", label: "Listings", fmt: (r) => r.listings },
   { key: "supplyDays", label: "Days supply", fmt: (r) => days(r.supplyDays) },
   { key: "dailyPool", label: "Daily pool", fmt: (r) => kinah(r.dailyPool, { sign: true }), tone: (r) => (r.dailyPool == null ? "dim" : r.dailyPool < 0 ? "neg" : "") },
+  { key: "turnover", label: "Turnover / day", fmt: (r) => kinah(r.turnover), tone: (r) => (r.turnover == null ? "dim" : ""),
+    title: () => "Sell price after fees × sold per day: the size of the market, before crafting cost" },
   { key: "yourDaily", label: "Your daily", fmt: (r) => kinah(r.yourDaily, { sign: true }), tone: (r) => (r.yourDaily == null ? "dim" : r.yourDaily < 0 ? "neg" : "") },
 ];
 

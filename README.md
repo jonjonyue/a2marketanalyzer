@@ -1,6 +1,6 @@
 # Aion 2 crafting profit dashboard
 
-A shareable dashboard that ranks Artisan's Splendent crafts on **Siel (Elyos, NA West)** by how much money they make **and** how fast they sell. All data comes from the public [aion2.exchange](https://aion2.exchange) API.
+A shareable dashboard that ranks Artisan's Splendent crafts on **Siel (Elyos, NA West)** by how much money they make **and** how fast they sell, and tracks the True Dragon and Splendent True Dragon versions of each slot (prices and sales; crafting cost to come). All data comes from the public [aion2.exchange](https://aion2.exchange) API.
 
 ## How it works
 
@@ -10,7 +10,7 @@ GitHub Action (hourly) ──► aion2.exchange /api/servers, /api/crafts, /api/
         └─► site/data/snapshot.json ──► GitHub Pages ──► dashboard (index.html)
 ```
 
-- `scripts/fetch_snapshot.py` pulls the crafting cost model (`/api/crafts`), current prices (`/api/items?keys=…`) and 10 days of hourly listing snapshots per craft (`/api/items/{id}/prices?bucket=raw`) for Siel NAW. Stdlib only, about 21 requests per run, rate-limited.
+- `scripts/fetch_snapshot.py` pulls the crafting cost model (`/api/crafts`), current prices (`/api/items?keys=…`) and 10 days of hourly listing snapshots per item (`/api/items/{id}/prices?bucket=raw`) for Siel NAW. True Dragon items are derived from each craft target's key (tier code `13` → `15` True Dragon, `17` Splendent True Dragon); slots never listed on the server are skipped. Stdlib only, about 55 requests per run, rate-limited.
 - `.github/workflows/deploy.yml` runs it hourly (and on every push to `main`) and deploys `site/` to GitHub Pages. The snapshot is deployed, not committed.
 - The page **tries the live API first** and falls back to the snapshot. aion2.exchange doesn't currently send CORS headers, so browsers use the snapshot; if the API ever allows this origin, the page goes live automatically (refreshing every 5 minutes).
 
@@ -25,10 +25,11 @@ GitHub Action (hourly) ──► aion2.exchange /api/servers, /api/crafts, /api/
 | Days of supply | current listings ÷ sold per day |
 | Daily pool | profit / craft × sold / day; the ranking metric |
 | Your daily | daily pool × your expected share of sales |
+| Turnover / day | sell price after fees × sold / day: market size, available even without a crafting cost |
 
 Verdicts: **Craft it** = profitable, ≥ 0.5 sold/day, ≤ 14 days of supply. Thresholds live in `site/metrics.js` (`DEFAULT_SETTINGS`).
 
-Every control (server, skill, price basis, tax, listing fee, share, sort) is stored in the URL, so a copied link reproduces the exact view.
+Every control (tier, skill, price basis, tax, listing fee, share, sort) is stored in the URL, so a copied link reproduces the exact view.
 
 ## Estimating sales from listing history
 

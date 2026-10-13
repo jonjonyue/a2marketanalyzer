@@ -135,26 +135,29 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
 
   const supplyDays = perDay == null ? null : perDay > 0 ? listings / perDay : listings > 0 ? Infinity : 0;
   const dailyPool = profit == null || perDay == null ? null : profit * perDay;
+  const turnover = net == null || perDay == null ? null : net * perDay; // market size after fees, cost aside
   const yourDaily = dailyPool == null ? null : dailyPool * (s.sharePct / 100);
 
   return {
     key: target.target_key,
     name: target.name,
     shortName: String(target.name || "").replace(/^Artisan's Splendent /, ""),
+    tier: target.tier || "Artisan's Splendent",
     category: target.category,
     skill: target.skill,
     profile: target.profile_label,
     cost, listing, soldAvg, price, net, profit, marginPct,
-    listings, sold28, perDay, supplyDays, dailyPool, yourDaily,
+    listings, sold28, perDay, supplyDays, dailyPool, yourDaily, turnover,
     salesSource, priceSource, est,
     missingInputs: num(target.missing) ?? 0,
-    verdict: verdictFor({ profit, perDay, supplyDays, missing: num(target.missing) ?? 0 }, s),
+    verdict: verdictFor({ profit, perDay, supplyDays, missing: num(target.missing) ?? 0, noCost: cost == null }, s),
   };
 }
 
 /** One label per craft so the table reads at a glance. */
-export function verdictFor({ profit, perDay, supplyDays, missing }, s = DEFAULT_SETTINGS) {
+export function verdictFor({ profit, perDay, supplyDays, missing, noCost }, s = DEFAULT_SETTINGS) {
   if (missing > 0) return { id: "incomplete", label: "Cost incomplete", tone: "warning" };
+  if (noCost) return { id: "nocost", label: "Cost TBD", tone: "neutral" };
   if (profit == null) return { id: "nodata", label: "No price", tone: "neutral" };
   if (profit <= 0) return { id: "loss", label: "Loss", tone: "critical" };
   if (perDay == null) return { id: "nosales", label: "No sales data", tone: "neutral" };
@@ -177,7 +180,7 @@ export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
     .sort(byRank);
 }
 
-const VERDICT_ORDER = { craft: 0, glut: 1, thin: 2, nosales: 3, incomplete: 4, loss: 5, nodata: 6 };
+export const VERDICT_ORDER = { craft: 0, glut: 1, thin: 2, nosales: 3, nocost: 4, incomplete: 5, loss: 6, nodata: 7 };
 
 export function byRank(a, b) {
   const pa = a.dailyPool ?? -Infinity;
@@ -186,5 +189,7 @@ export function byRank(a, b) {
   const va = VERDICT_ORDER[a.verdict.id];
   const vb = VERDICT_ORDER[b.verdict.id];
   if (va !== vb) return va - vb;
-  return (b.profit ?? -Infinity) - (a.profit ?? -Infinity);
+  const pr = (b.profit ?? -Infinity) - (a.profit ?? -Infinity);
+  if (pr) return pr;
+  return (b.turnover ?? -Infinity) - (a.turnover ?? -Infinity);
 }

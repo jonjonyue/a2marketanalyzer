@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Pull crafting, price and listing-history data for Siel (Elyos, NA West) from aion2.exchange.
 
-Writes one JSON snapshot the dashboard reads (the API sends no CORS headers, so browsers on
-another origin can't call it directly). About 21 requests per run.
+Covers the Artisan's Splendent craft targets plus the True Dragon and Splendent True Dragon
+version of each slot (no crafting cost yet). Writes one JSON snapshot the dashboard reads
+(the API sends no CORS headers, so browsers on another origin can't call it directly).
+About 55 requests per run.
 
 Usage: python scripts/fetch_snapshot.py [--out site/data/snapshot.json] [--base URL] [--server ID]
 Stdlib only, so the GitHub Action needs no installs.
@@ -31,8 +33,13 @@ TARGET_FIELDS = (
     "cost", "cost_market", "carried", "missing",
     "market_price", "listings", "margin", "margin_pct",
 )
+# Item keys share a slot prefix and end in a tier code: Artisan's Splendent 13, True Dragon 15,
+# Splendent True Dragon 17 (e.g. 110430013 / 110430015 / 110430017 are the three Bows).
+EXTRA_TIERS = (("True Dragon", 2), ("Splendent True Dragon", 4))
+BASE_TIER = "Artisan's Splendent"
+
 ITEM_FIELDS = (
-    "item_key", "price", "listings", "units_sold",
+    "item_key", "name", "price", "listings", "units_sold",
     "sold_avg_price", "sold_min_price", "sold_max_price",
     "stats_registered", "change_pct",
 )
@@ -48,6 +55,11 @@ def get_json(base: str, path: str, params: dict | None = None, retries: int = 3)
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
                 return json.load(resp)
+        except urllib.error.HTTPError as err:
+            if err.code == 404:  # e.g. an item that has never been listed: nothing to retry
+                return None
+            last_err = err
+            time.sleep(2 ** attempt)
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as err:
             last_err = err
             time.sleep(2 ** attempt)
@@ -68,7 +80,7 @@ def fetch_history(base: str, server_id: int, item_key: int, since: datetime) -> 
         "bucket": "raw",
         "from": since.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "server": server_id,
-    })
+    }) or {}
     return [
         [epoch_minutes(p["ts"]), p.get("listings") or 0, p.get("low")]
         for p in resp.get("points") or []
@@ -78,13 +90,27 @@ def fetch_history(base: str, server_id: int, item_key: int, since: datetime) -> 
 
 def fetch_market(base: str, server_id: int) -> tuple[dict, dict | None, list[str]]:
     crafts = get_json(base, "/api/crafts", {"server": server_id})
-    targets = crafts.get("targets") or []
-    keys = [t["target_key"] for t in targets]
+    targets = [dict(pick(t, TARGET_FIELDS), tier=BASE_TIER) for t in crafts.get("targets") or []]
+    extra_keys = {t["target_key"] + off: (tier, t) for t in targets for tier, off in EXTRA_TIERS}
+    keys = [t["target_key"] for t in targets] + list(extra_keys)
     items: list[dict] = []
     if keys:
         time.sleep(DELAY_S)
-        resp = get_json(base, "/api/items", {"keys": ",".join(map(str, keys)), "limit": 100, "server": server_id})
+        resp = get_json(base, "/api/items", {"keys": ",".join(map(str, keys)), "limit": 200, "server": server_id}) or {}
         items = [pick(i, ITEM_FIELDS) for i in resp.get("items") or []]
+
+    # True Dragon tiers: same slot, skill and category as the craft target, no crafting cost yet.
+    # Only slots the site has market data for (ever listed on this server) are included.
+    for i in items:
+        if i["item_key"] in extra_keys:
+            tier, base_t = extra_keys[i["item_key"]]
+            targets.append({
+                "target_key": i["item_key"], "name": i.get("name"), "tier": tier,
+                "category": base_t["category"], "skill": base_t["skill"], "profile_label": base_t["profile_label"],
+                "cost": None, "cost_market": None, "carried": None, "missing": 0,
+                "market_price": i.get("price"), "listings": i.get("listings"), "margin": None, "margin_pct": None,
+            })
+    keys = [t["target_key"] for t in targets]
 
     since = datetime.now(timezone.utc) - timedelta(days=HISTORY_DAYS)
     history: dict[str, list] = {}
@@ -99,7 +125,7 @@ def fetch_market(base: str, server_id: int) -> tuple[dict, dict | None, list[str
 
     market = {
         "captured_at": crafts.get("captured_at"),
-        "targets": [pick(t, TARGET_FIELDS) for t in targets],
+        "targets": targets,
         "items": items,
         "history": history,
     }
