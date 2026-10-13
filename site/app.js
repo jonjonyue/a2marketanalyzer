@@ -336,7 +336,7 @@ function renderBars(rows) {
     el.innerHTML = `<svg viewBox="0 0 560 120"><text class="empty" x="280" y="64" text-anchor="middle">${turnoverMode ? "No sales estimates for these items yet." : "No craft is both profitable and selling with these settings."}</text></svg>`;
     return;
   }
-  const W = 560, rowH = 30, left = 150, right = 64, top = 6, bottom = 26;
+  const W = 640, rowH = 30, left = 250, right = 64, top = 6, bottom = 26; // left fits full item names
   const H = top + data.length * rowH + bottom;
   const ticks = niceTicks(Math.max(...data.map((d) => d[metric])));
   const max = ticks[ticks.length - 1];
@@ -403,7 +403,8 @@ function renderScatter(rows, settings) {
         <circle class="hit" data-i="${i}" tabindex="0" cx="${x(d.marginPct)}" cy="${y(d.perDay)}" r="13"/>`;
     }).join("")}
     ${placeLabels(data.filter((d) => labelled.has(d.key)).map((d) => {
-      const cx = x(d.marginPct), anchor = cx > W - 140 ? "end" : "start";
+      const cx = x(d.marginPct), labelW = d.shortName.length * 6.3; // ~6.3px per character at 11.5px
+      const anchor = cx + 10 + labelW > W - right ? "end" : "start";
       return { cx, cy: y(d.perDay), anchor, text: d.shortName };
     }), top + 8, H - bottom - 4).map((l) => {
       const tx = l.cx + (l.anchor === "end" ? -10 : 10);

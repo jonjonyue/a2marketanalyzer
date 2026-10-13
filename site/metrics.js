@@ -142,7 +142,7 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
   return {
     key: target.target_key,
     name: target.name,
-    shortName: String(target.name || "").replace(/^Artisan's Splendent /, ""),
+    shortName: String(target.name || ""),
     tier: target.tier || "Artisan's Splendent",
     category: target.category,
     skill: target.skill,
