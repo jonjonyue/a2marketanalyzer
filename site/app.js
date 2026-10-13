@@ -399,7 +399,7 @@ function salesTitle(r) {
 const COLUMNS = [
   { key: "rank", label: "#", cls: "rank", sortVal: (r) => -r.rank, fmt: (r) => r.rank },
   { key: "name", label: "Craft", cls: "name", sortVal: (r) => r.shortName,
-    fmt: (r) => `<a href="${API}/items/${r.key}" target="_blank" rel="noopener">${esc(r.shortName)}</a><span class="meta">${esc(r.skill)} · ${esc(r.category)}</span>` },
+    fmt: (r) => `<a href="${API}/crafts/${r.key}" target="_blank" rel="noopener" title="Cost breakdown and history on aion2.exchange">${esc(r.shortName)}</a><span class="meta">${esc(r.skill)} · ${esc(r.category)}</span>` },
   { key: "verdict", label: "Verdict", sortVal: (r) => ({ craft: 0, glut: 1, thin: 2, nosales: 3, incomplete: 4, loss: 5, nodata: 6 })[r.verdict.id],
     fmt: (r) => `<span class="pill ${r.verdict.tone}">${esc(r.verdict.label)}</span>` },
   { key: "cost", label: "Cost", fmt: (r) => kinah(r.cost) },
