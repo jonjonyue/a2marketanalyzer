@@ -32,10 +32,17 @@ export function parseKinah(text) {
   return Math.round(parseFloat(m[1]) * mult);
 }
 
-// Money for one entry. Sales lose tax + listing fee; purchases cost the full price.
+const LISTING_HOURS = 72; // exchange listings last 3 days
+
+// Money for one entry. Purchases cost the full price. A listing costs its listing fee when posted.
+// A sale loses tax + listing fee; a sale from a logged listing has feePct 0 because the listing already paid it.
 export function amounts(e) {
   const gross = e.qty * e.price;
   if (e.side === "buy") return { gross, tax: 0, fee: 0, net: -gross };
+  if (e.side === "list") {
+    const fee = Math.round(gross * e.feePct / 100);
+    return { gross, tax: 0, fee, net: -fee };
+  }
   const tax = Math.round(gross * e.taxPct / 100);
   const fee = Math.round(gross * e.feePct / 100);
   return { gross, tax, fee, net: gross - tax - fee };
@@ -59,9 +66,14 @@ function save() {
   }
 }
 function valid(e) {
-  return e && typeof e.id === "string" && (e.side === "buy" || e.side === "sell") && Number.isFinite(e.qty) && e.qty > 0
+  return e && typeof e.id === "string" && (e.side === "buy" || e.side === "sell" || e.side === "list") && Number.isFinite(e.qty) && e.qty > 0
     && Number.isFinite(e.price) && e.price >= 0 && Number.isFinite(e.ts) && typeof e.name === "string";
 }
+const salesOf = (listing, except = null) => state.entries.filter((x) => x.side === "sell" && x.listingId === listing.id && x.id !== except);
+const soldQty = (listing, except = null) => salesOf(listing, except).reduce((n, x) => n + x.qty, 0);
+const remaining = (listing) => Math.max(0, listing.qty - soldQty(listing));
+const isActive = (e) => e.side === "list" && !e.expired && remaining(e) > 0;
+const listingOf = (sale) => (sale.listingId ? state.entries.find((x) => x.id === sale.listingId) : null);
 const newId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
 
 const stored = load();
@@ -143,6 +155,17 @@ function formProblem(f) {
   if (!Number.isInteger(f.qty) || f.qty < 1) return "Quantity must be a whole number, 1 or more.";
   if (!Number.isFinite(f.price) || f.price < 0) return "Price must be a number, like 1500000, 1.5m or 250k.";
   if (!Number.isFinite(f.ts)) return "Pick a date.";
+  const editing = state.editing && state.entries.find((x) => x.id === state.editing);
+  if (editing?.listingId) {
+    const listing = listingOf(editing);
+    if (f.side !== "sell") return "This sale came from a listing. Delete it instead to undo the sale.";
+    if (listing && f.qty > listing.qty - soldQty(listing, editing.id)) return `Only ${listing.qty - soldQty(listing, editing.id)} left on that listing.`;
+  }
+  if (editing?.side === "list") {
+    const sold = soldQty(editing);
+    if (sold && f.side !== "list") return "This listing has sales logged against it. Delete those first to change its type.";
+    if (f.qty < sold) return `${sold} of this listing are already marked sold, so the quantity can't go below that.`;
+  }
   return null;
 }
 
@@ -156,8 +179,14 @@ function updatePreview() {
     return;
   }
   const a = amounts(f);
+  if (f.side === "list") {
+    const tax = Math.round(a.gross * f.taxPct / 100);
+    $("preview").innerHTML = `<strong class="neg">Listing fee ${full(a.fee)}</strong> (${f.feePct}% of ${full(a.gross)}) paid now · ` +
+      `if it all sells you receive <strong class="pos">${full(a.gross - tax)}</strong> after ${f.taxPct}% tax${priceHint}`;
+    return;
+  }
   $("preview").innerHTML = f.side === "sell"
-    ? `${full(a.gross)} − tax ${full(a.tax)} (${f.taxPct}%) − listing fee ${full(a.fee)} (${f.feePct}%) = <strong class="pos">you receive ${full(a.net)}</strong>${priceHint}`
+    ? `${full(a.gross)} − tax ${full(a.tax)} (${f.taxPct}%)${f.feePct ? ` − listing fee ${full(a.fee)} (${f.feePct}%)` : " (listing fee already paid)"} = <strong class="pos">you receive ${full(a.net)}</strong>${priceHint}`
     : `<strong class="neg">You pay ${full(a.gross)}</strong> <span class="muted">(${f.qty} × ${full(f.price)})</span>${priceHint}`;
 }
 
@@ -176,7 +205,7 @@ function submit(ev) {
     toast("Entry updated.");
   } else {
     state.entries.push({ id: newId(), ...entry });
-    toast(`${f.side === "sell" ? "Sale" : "Purchase"} added: ${f.qty} × ${entry.name}.`);
+    toast(`${{ sell: "Sale", buy: "Purchase", list: "Listing" }[f.side]} added: ${f.qty} × ${entry.name}.`);
   }
   save();
   resetForm({ keepItem: !state.editing });
@@ -220,11 +249,92 @@ function remove(id) {
   const i = state.entries.findIndex((x) => x.id === id);
   if (i < 0) return;
   const [gone] = state.entries.splice(i, 1);
-  if (state.editing === id) resetForm();
+  // Deleting a listing also deletes the sales marked against it.
+  const linked = gone.side === "list" ? state.entries.filter((x) => x.listingId === gone.id) : [];
+  if (linked.length) state.entries = state.entries.filter((x) => x.listingId !== gone.id);
+  if (state.editing === id || linked.some((x) => x.id === state.editing)) resetForm();
   save();
   render();
-  undo = () => { state.entries.push(gone); save(); render(); };
-  toast(`Deleted ${gone.qty} × ${gone.name}.`, "Undo");
+  undo = () => { state.entries.push(gone, ...linked); save(); render(); };
+  toast(`Deleted ${gone.qty} × ${gone.name}${linked.length ? ` and its ${linked.length} sale${linked.length > 1 ? "s" : ""}` : ""}.`, "Undo");
+}
+
+// ---------- listings ----------
+function markSold(id, qty) {
+  const l = state.entries.find((x) => x.id === id);
+  if (!l) return;
+  const left = remaining(l);
+  if (!Number.isInteger(qty) || qty < 1 || qty > left) return toast(`Enter how many sold, 1 to ${left}.`);
+  const sale = { id: newId(), side: "sell", listingId: l.id, name: l.name, key: l.key ?? null, qty, price: l.price,
+    taxPct: l.taxPct, feePct: 0, ts: Date.now(), note: "" };
+  state.entries.push(sale);
+  save();
+  render();
+  undo = () => { state.entries = state.entries.filter((x) => x.id !== sale.id); save(); render(); };
+  const a = amounts(sale);
+  toast(`Sold ${qty} × ${l.name}: +${full(a.net)} after tax.`, "Undo");
+}
+
+function markExpired(id, { relist = false } = {}) {
+  const l = state.entries.find((x) => x.id === id);
+  if (!l) return;
+  const left = remaining(l);
+  l.expired = true;
+  l.expiredTs = Date.now();
+  let fresh = null;
+  if (relist && left > 0) {
+    fresh = { id: newId(), side: "list", name: l.name, key: l.key ?? null, qty: left, price: l.price,
+      taxPct: state.settings.taxPct, feePct: state.settings.feePct, ts: Date.now(), note: l.note || "" };
+    state.entries.push(fresh);
+  }
+  save();
+  render();
+  undo = () => {
+    delete l.expired; delete l.expiredTs;
+    if (fresh) state.entries = state.entries.filter((x) => x.id !== fresh.id);
+    save(); render();
+  };
+  toast(fresh ? `Relisted ${left} × ${l.name}: new listing fee ${full(amounts(fresh).fee)}.` : `Marked ${left} × ${l.name} as expired; the listing fee is lost.`, "Undo");
+}
+
+function timeLeft(l) {
+  const ms = l.ts + LISTING_HOURS * 3600e3 - Date.now();
+  const h = Math.abs(ms) / 3600e3;
+  const txt = h >= 24 ? `${Math.floor(h / 24)}d ${Math.floor(h % 24)}h` : h >= 1 ? `${Math.floor(h)}h` : `${Math.max(1, Math.round(h * 60))}m`;
+  return ms > 0 ? { text: `in ${txt}`, over: false } : { text: `${txt} ago`, over: true };
+}
+
+function renderListings() {
+  const active = state.entries.filter(isActive).sort((a, b) => a.ts - b.ts);
+  const panel = $("listingsPanel");
+  panel.hidden = !active.length;
+  if (!active.length) return;
+  let units = 0, value = 0;
+  const rows = active.map((l) => {
+    const left = remaining(l);
+    const gross = left * l.price;
+    const net = gross - Math.round(gross * l.taxPct / 100);
+    units += left; value += net;
+    const t = timeLeft(l);
+    return `<tr${t.over ? ' class="overdue"' : ""}>
+      <td class="name"><span class="item-cell">${iconHtml(iconFor(l))}<span>${esc(l.name)}</span></span></td>
+      <td class="dim">${esc(new Date(l.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }))}</td>
+      <td class="${t.over ? "warn" : "dim"}" title="Listings last 3 days">${t.over ? "Expired " : "Expires "}${t.text}</td>
+      <td>${left.toLocaleString()}${left < l.qty ? ` <span class="dim">of ${l.qty.toLocaleString()}</span>` : ""}</td>
+      <td title="${full(l.price)}">${kinah(l.price)}</td>
+      <td class="pos" title="${full(net)} after ${l.taxPct}% tax">${kinah(net)}</td>
+      <td class="listing-actions">
+        <label class="sr-only" for="sold-${esc(l.id)}">Quantity sold</label>
+        <input type="number" id="sold-${esc(l.id)}" class="sold-qty" min="1" max="${left}" step="1" value="${left}" inputmode="numeric">
+        <button type="button" class="mini-btn good" data-sold="${esc(l.id)}">Mark sold</button>
+        <button type="button" class="mini-btn" data-expire="${esc(l.id)}" title="It didn't sell: close the listing (the listing fee is lost)">Expired</button>
+        <button type="button" class="mini-btn" data-relist="${esc(l.id)}" title="Close it as expired and post the unsold units again, paying a new listing fee">Relist</button>
+      </td>
+    </tr>`;
+  }).join("");
+  $("listingsNote").textContent = `${units.toLocaleString()} unit${units === 1 ? "" : "s"} on the market, worth ${kinah(value)} after tax if they all sell.`;
+  $("listings").querySelector("thead").innerHTML = `<tr><th>Item</th><th>Listed</th><th>Status</th><th>Left</th><th>Price each</th><th>If sold</th><th><span class="sr-only">Actions</span></th></tr>`;
+  $("listings").querySelector("tbody").innerHTML = rows;
 }
 
 // ---------- totals ----------
@@ -238,13 +348,14 @@ function inPeriod(e) {
 }
 
 function totals(entries) {
-  const t = { received: 0, spent: 0, tax: 0, fee: 0, sold: 0, bought: 0 };
+  const t = { received: 0, spent: 0, tax: 0, fee: 0, sold: 0, bought: 0, listingFees: 0, profit: 0 };
   for (const e of entries) {
     const a = amounts(e);
+    t.profit += a.net;
     if (e.side === "sell") { t.received += a.net; t.tax += a.tax; t.fee += a.fee; t.sold += e.qty; }
+    else if (e.side === "list") { t.fee += a.fee; t.listingFees += a.fee; }
     else { t.spent += a.gross; t.bought += e.qty; }
   }
-  t.profit = t.received - t.spent;
   return t;
 }
 
@@ -259,13 +370,16 @@ function byItem(entries) {
     const t = totals(g.list);
     const buys = g.list.filter((e) => e.side === "buy"), sells = g.list.filter((e) => e.side === "sell");
     const avg = (list) => (list.length ? list.reduce((s, e) => s + e.qty * e.price, 0) / list.reduce((s, e) => s + e.qty, 0) : null);
-    return { ...g, ...t, avgBuy: avg(buys), avgSell: avg(sells), onHand: t.bought - t.sold, last: Math.max(...g.list.map((e) => e.ts)) };
+    // Units still listed are counted from every active listing, not just this period's.
+    const listed = state.entries.filter((e) => isActive(e) && e.name.toLowerCase() === g.name.toLowerCase()).reduce((n, e) => n + remaining(e), 0);
+    return { ...g, ...t, avgBuy: avg(buys), avgSell: avg(sells), listed, onHand: t.bought - t.sold - listed, last: Math.max(...g.list.map((e) => e.ts)) };
   }).sort((a, b) => b.profit - a.profit);
 }
 
 // ---------- render ----------
 function render() {
   const entries = state.entries.filter(inPeriod);
+  renderListings();
   renderKpis(entries);
   renderByItem(entries);
   renderTransactions(entries);
@@ -285,7 +399,7 @@ function renderKpis(entries) {
 
 function renderByItem(entries) {
   const rows = byItem(entries);
-  $("byItem").querySelector("thead").innerHTML = `<tr><th>Item</th><th>Bought</th><th>Avg buy</th><th>Spent</th><th>Sold</th><th>Avg sell</th><th>Received</th><th>Profit</th><th>On hand</th></tr>`;
+  $("byItem").querySelector("thead").innerHTML = `<tr><th>Item</th><th>Bought</th><th>Avg buy</th><th>Spent</th><th>Sold</th><th>Avg sell</th><th>Received</th><th>Profit</th><th>Listed</th><th>On hand</th></tr>`;
   $("byItem").querySelector("tbody").innerHTML = rows.length
     ? rows.map((r) => `<tr>
         <td class="name"><span class="item-cell">${iconHtml(r.icon, "")}<span class="item-text"><strong>${esc(r.name)}</strong></span></span></td>
@@ -296,9 +410,23 @@ function renderByItem(entries) {
         <td>${kinah(r.avgSell)}</td>
         <td>${r.received ? kinah(r.received) : "—"}</td>
         <td class="${signClass(r.profit)}" title="${full(r.profit)}">${kinah(r.profit, { sign: true })}</td>
-        <td class="${r.onHand < 0 ? "dim" : ""}">${r.onHand.toLocaleString()}</td>
+        <td>${r.listed ? r.listed.toLocaleString() : "—"}</td>
+        <td title="${r.onHand < 0 ? "More sold or listed than bought here (crafted or bought before you started logging)" : ""}">${r.onHand < 0 || !r.bought ? "—" : r.onHand.toLocaleString()}</td>
       </tr>`).join("")
-    : `<tr><td colspan="9" class="empty-row">${state.entries.length ? "No transactions in this period." : "Nothing logged yet. Add your first purchase or sale above."}</td></tr>`;
+    : `<tr><td colspan="10" class="empty-row">${state.entries.length ? "No transactions in this period." : "Nothing logged yet. Add your first purchase or sale above."}</td></tr>`;
+}
+
+function typeCell(e) {
+  if (e.side === "buy") return `<span class="pill neutral bought">Bought</span>`;
+  if (e.side === "sell") return `<span class="pill good sold">Sold</span>${e.listingId ? `<span class="type-sub">from listing</span>` : ""}`;
+  const sold = soldQty(e), left = e.qty - sold;
+  const sub = left <= 0 ? "all sold" : e.expired ? `expired · ${left} unsold` : sold ? `${left} of ${e.qty} left` : "on the market";
+  return `<span class="pill listed${isActive(e) ? "" : " closed"}">Listed</span><span class="type-sub">${sub}</span>`;
+}
+function deductTitle(e, a) {
+  if (e.side === "buy") return "No tax on purchases";
+  if (e.side === "list") return `Listing fee ${full(a.fee)} (${e.feePct}%), paid when listed`;
+  return e.listingId ? `Tax ${full(a.tax)} (${e.taxPct}%); listing fee was paid on the listing` : `Tax ${full(a.tax)} (${e.taxPct}%) + listing fee ${full(a.fee)} (${e.feePct}%)`;
 }
 
 const TX_COLS = [
@@ -322,11 +450,11 @@ function renderTransactions(entries) {
       return `<tr${e.id === state.editing ? ' class="editing"' : ""}>
         <td class="dim">${esc(fmtDate(e.ts))}</td>
         <td class="name"><span class="item-cell">${iconHtml(iconFor(e))}<span>${esc(e.name)}</span></span></td>
-        <td><span class="pill ${e.side === "sell" ? "good sold" : "neutral bought"}">${e.side === "sell" ? "Sold" : "Bought"}</span></td>
+        <td>${typeCell(e)}</td>
         <td>${e.qty.toLocaleString()}</td>
         <td title="${full(e.price)}">${kinah(e.price)}</td>
         <td title="${full(a.gross)}">${kinah(a.gross)}</td>
-        <td title="${e.side === "sell" ? `Tax ${full(a.tax)} (${e.taxPct}%) + listing fee ${full(a.fee)} (${e.feePct}%)` : "No tax on purchases"}">${e.side === "sell" ? kinah(a.tax + a.fee) : "—"}</td>
+        <td title="${deductTitle(e, a)}">${e.side === "buy" ? "—" : kinah(a.tax + a.fee)}</td>
         <td class="${signClass(a.net)}" title="${full(a.net)}">${kinah(a.net, { sign: true })}</td>
         <td class="note-cell">${esc(e.note || "")}</td>
         <td class="actions"><button type="button" class="icon-btn" data-edit="${esc(e.id)}" title="Edit" aria-label="Edit ${esc(e.name)}">✎</button><button type="button" class="icon-btn danger" data-del="${esc(e.id)}" title="Delete" aria-label="Delete ${esc(e.name)}">✕</button></td>
@@ -353,7 +481,7 @@ function exportCsv() {
   const lines = [["date", "item", "item_key", "type", "qty", "price_each", "total", "tax", "listing_fee", "kinah_change", "note"].join(",")];
   for (const e of [...state.entries].sort((a, b) => a.ts - b.ts)) {
     const a = amounts(e);
-    lines.push([new Date(e.ts).toISOString(), q(e.name), e.key ?? "", e.side === "sell" ? "sold" : "bought", e.qty, e.price, a.gross, a.tax, a.fee, a.net, q(e.note)].join(","));
+    lines.push([new Date(e.ts).toISOString(), q(e.name), e.key ?? "", { sell: "sold", buy: "bought", list: "listed" }[e.side], e.qty, e.price, a.gross, a.tax, a.fee, a.net, q(e.note)].join(","));
   }
   download(`aion2-ledger-${stamp()}.csv`, lines.join("\n"), "text/csv");
 }
@@ -366,6 +494,8 @@ async function importJson(file) {
       id: e.id, ts: e.ts, side: e.side, name: shortenName(e.name), key: e.key ?? null, qty: e.qty, price: e.price,
       taxPct: Number.isFinite(e.taxPct) ? e.taxPct : DEFAULTS.taxPct, feePct: Number.isFinite(e.feePct) ? e.feePct : DEFAULTS.feePct,
       note: typeof e.note === "string" ? e.note : "",
+      ...(typeof e.listingId === "string" ? { listingId: e.listingId } : {}),
+      ...(e.expired ? { expired: true, expiredTs: e.expiredTs } : {}),
     }));
     state.entries.push(...added);
     save();
@@ -427,6 +557,19 @@ function init() {
     const del = ev.target.closest("[data-del]");
     if (del) remove(del.dataset.del);
   });
+  $("listings").addEventListener("click", (ev) => {
+    const sold = ev.target.closest("[data-sold]");
+    if (sold) return markSold(sold.dataset.sold, Number($(`sold-${sold.dataset.sold}`).value));
+    const exp = ev.target.closest("[data-expire]");
+    if (exp) return markExpired(exp.dataset.expire);
+    const re = ev.target.closest("[data-relist]");
+    if (re) return markExpired(re.dataset.relist, { relist: true });
+  });
+  $("listings").addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && ev.target.classList.contains("sold-qty")) markSold(ev.target.id.slice(5), Number(ev.target.value));
+  });
+  // Refresh the "expires in" times every minute.
+  setInterval(renderListings, 60e3);
   $("exportJson").addEventListener("click", exportJson);
   $("exportCsv").addEventListener("click", exportCsv);
   $("importFile").addEventListener("change", (ev) => { const f = ev.target.files[0]; if (f) importJson(f); ev.target.value = ""; });

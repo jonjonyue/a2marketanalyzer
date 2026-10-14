@@ -381,3 +381,23 @@ button.ext-button, label.ext-button { cursor: pointer; }
 .wip-banner strong { display: block; font-size: 22px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; line-height: 1.2; }
 .wip-banner p { margin: 2px 0 0; font-size: 14px; font-weight: 500; }
 @media (max-width: 560px) { .wip-banner strong { font-size: 18px; } .wip-icon { width: 36px; height: 36px; font-size: 20px; } }
+
+/* listings in the profit calculator */
+.side-seg[data-side="list"] button[aria-checked="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.pill.listed { background: var(--accent-soft); color: var(--accent); }
+.pill.listed::before { content: "⇢"; }
+.pill.listed.closed { background: var(--neutral-bg); color: var(--muted); }
+.type-sub { display: block; margin-top: 2px; font: 11.5px Inter, system-ui, sans-serif; color: var(--muted); }
+.ledger-table td.warn { color: var(--warning); font-weight: 600; }
+.ledger-table td.dim .dim, .ledger-table td .dim { color: var(--muted); }
+.listing-actions { white-space: nowrap; }
+.listing-actions .sold-qty { width: 64px; height: 30px; padding: 4px 8px; font: inherit; font-size: 12.5px; }
+.mini-btn {
+  font: 600 12.5px Inter, system-ui, sans-serif; height: 30px; padding: 0 10px; margin-left: 4px; cursor: pointer;
+  color: var(--text-2); background: var(--surface); border: 1px solid var(--border); border-radius: 7px;
+}
+.mini-btn:hover { border-color: var(--accent); color: var(--accent); }
+.mini-btn.good { background: var(--good); border-color: var(--good); color: #fff; }
+.mini-btn.good:hover { opacity: .9; color: #fff; }
+.listings-table tr.overdue td { background: var(--warning-bg); }
+table.listings-table { min-width: 940px; }

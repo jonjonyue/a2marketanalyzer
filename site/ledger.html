@@ -51,8 +51,9 @@
       <div class="form-grid">
         <div class="field">
           <span>Type</span>
-          <div class="seg side-seg" id="side" role="radiogroup" aria-label="Bought or sold">
+          <div class="seg side-seg" id="side" role="radiogroup" aria-label="Bought, listed or sold">
             <button type="button" data-v="buy" role="radio">Bought</button>
+            <button type="button" data-v="list" role="radio">Listed</button>
             <button type="button" data-v="sell" role="radio">Sold</button>
           </div>
         </div>
@@ -86,6 +87,16 @@
       <p class="form-error" id="formError" role="alert" hidden></p>
     </form>
 
+    <section class="panel table-panel" id="listingsPanel" hidden>
+      <div class="table-head">
+        <h2>Active listings</h2>
+        <p class="muted" id="listingsNote"></p>
+      </div>
+      <div class="table-scroll">
+        <table class="ledger-table listings-table" id="listings"><thead></thead><tbody></tbody></table>
+      </div>
+    </section>
+
     <section class="controls ledger-controls" aria-label="Period and fees">
       <div class="field">
         <span>Period</span>
@@ -107,7 +118,7 @@
     <section class="panel table-panel">
       <div class="table-head">
         <h2>By item</h2>
-        <p class="muted">Profit = kinah received from sales − kinah spent buying. "On hand" is bought − sold in this period.</p>
+        <p class="muted">Profit = kinah received from sales − kinah spent buying − listing fees. "Listed" is what is on the market now; "On hand" is bought − sold − listed.</p>
       </div>
       <div class="table-scroll">
         <table class="ledger-table" id="byItem"><thead></thead><tbody></tbody></table>
@@ -141,7 +152,8 @@
       <ul>
         <li><strong>Sold</strong>: you receive price × quantity, minus the sales tax (default 10%) and the listing fee (default 2%). Enter the price you listed it at; the deductions are worked out per entry and rounded to the nearest kinah.</li>
         <li><strong>Bought</strong>: you pay price × quantity. The buyer pays no tax on the exchange.</li>
-        <li><strong>Profit</strong> = everything received from sales − everything spent buying, within the selected period. Items you bought but haven't sold yet count against you until you sell them; "On hand" shows how many are still unsold.</li>
+        <li><strong>Listed</strong>: posting a listing costs the listing fee (default 2% of price × quantity) right away, whether or not it sells. It then shows under Active listings, where you can mark some or all of it sold (each sale deducts only the sales tax, since the fee was already paid), mark it expired (the fee is lost), or relist the unsold units (a new listing with a new fee). Listings expire after 3 days. Use <em>Sold</em> directly for sales you didn't log as a listing; those deduct both tax and fee.</li>
+        <li><strong>Profit</strong> = everything received from sales − everything spent buying − listing fees paid, within the selected period. Items you bought but haven't sold yet count against you until you sell them; "On hand" shows how many are still unsold.</li>
         <li>Prices accept shorthand: <code>250k</code>, <code>1.5m</code>, <code>2b</code>, or plain numbers with commas.</li>
       </ul>
     </section>
