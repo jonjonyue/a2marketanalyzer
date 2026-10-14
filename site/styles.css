@@ -277,3 +277,99 @@ details.sub > summary:hover { color: var(--accent); }
 .prof select { height: 34px; }
 .prof input { width: 64px; }
 @media (max-width: 560px) { .prof { width: 100%; } .prof select { flex: 1; } }
+
+/* top navigation (shared by both pages) */
+.nav { position: sticky; top: 0; z-index: 20; background: var(--text); color: var(--bg); }
+.nav-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 52px; }
+.brand { color: var(--bg); text-decoration: none; font-weight: 700; font-size: 15px; letter-spacing: -0.01em; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.brand-mark { color: var(--accent); font-size: 13px; }
+.nav-links { display: flex; gap: 4px; height: 100%; }
+.nav-links a {
+  display: inline-flex; align-items: center; padding: 0 14px; color: var(--bg); opacity: .68; text-decoration: none;
+  font-weight: 600; font-size: 13.5px; border-bottom: 2px solid transparent; white-space: nowrap;
+}
+.nav-links a:hover { opacity: 1; }
+.nav-links a[aria-current="page"] { opacity: 1; border-bottom-color: var(--accent); }
+.nav-links a:focus-visible, .brand:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (max-width: 560px) {
+  .brand { font-size: 14px; }
+  .nav-links a { padding: 0 9px; font-size: 13px; }
+}
+
+/* profit calculator */
+.entry-form { margin-top: 20px; }
+.form-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.form-grid { display: grid; grid-template-columns: auto minmax(220px, 2fr) 90px minmax(130px, 1fr) 190px minmax(140px, 1fr) auto; gap: 12px; align-items: end; }
+.form-grid input[type="text"], .form-grid input[type="datetime-local"], .form-grid input[type="number"] {
+  font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; height: 34px; width: 100%; min-width: 0;
+}
+.item-input { position: relative; }
+.item-input-icon { position: absolute; left: 6px; top: 50%; transform: translateY(-50%); line-height: 0; pointer-events: none; }
+.item-input-icon .item-icon.small { margin: 0; vertical-align: 0; }
+.item-input-icon:not(:empty) + input { padding-left: 34px; }
+.opt { font-style: normal; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.add-btn { margin-left: 0; min-width: 84px; }
+.side-seg[data-side="sell"] button[aria-checked="true"] { background: var(--good-bg); color: var(--good); border-color: var(--good); }
+.side-seg[data-side="buy"] button[aria-checked="true"] { background: var(--critical-bg); color: var(--critical); border-color: var(--critical); }
+.preview { margin: 12px 0 0; min-height: 21px; font-family: var(--mono); font-size: 12.5px; color: var(--text-2); }
+.preview .muted { font-family: Inter, system-ui, sans-serif; }
+.pos { color: var(--good); }
+.neg { color: var(--critical); }
+.form-error { margin: 8px 0 0; color: var(--critical); font-weight: 600; font-size: 13px; }
+.text-btn { all: unset; cursor: pointer; color: var(--accent); font-weight: 600; font-size: 13px; }
+.text-btn:focus-visible { outline: 2px solid var(--accent); }
+.text-btn[hidden] { display: none; }
+.ledger-controls .fee-note { margin: 0 0 8px auto; font-size: 12px; max-width: 34ch; }
+.kpi .value.pos { color: var(--good); }
+.kpi .value.neg { color: var(--critical); }
+table.ledger-table { min-width: 860px; }
+.ledger-table td.name { font-size: 13px; }
+.ledger-table .item-cell { gap: 8px; }
+.ledger-table .item-icon { width: 30px; height: 30px; }
+.ledger-table .item-icon.small { width: 24px; height: 24px; margin: 0; vertical-align: 0; }
+.ledger-table td.note-cell { font-family: inherit; color: var(--muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+.ledger-table th:nth-child(9) { text-align: left; }
+.ledger-table td.empty-row { text-align: center; color: var(--muted); font-family: inherit; padding: 28px 10px; }
+.ledger-table tr.editing td { background: var(--accent-soft); }
+.pill.sold::before { content: "↑"; }
+.pill.bought::before { content: "↓"; }
+td.actions { width: 1%; }
+.icon-btn {
+  font: inherit; font-size: 13px; width: 28px; height: 28px; margin-left: 4px; cursor: pointer;
+  color: var(--muted); background: transparent; border: 1px solid var(--border); border-radius: 6px;
+}
+.icon-btn:hover { color: var(--accent); border-color: var(--accent); }
+.icon-btn.danger:hover { color: var(--critical); border-color: var(--critical); }
+.backup { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.backup p { margin: 2px 0 0; font-size: 12.5px; max-width: 70ch; }
+.backup-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+button.ext-button, label.ext-button { cursor: pointer; }
+.method code { font-family: var(--mono); font-size: 12px; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 30; display: flex; align-items: center; gap: 14px;
+  background: var(--text); color: var(--bg); padding: 10px 14px; border-radius: 10px; font-size: 13.5px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.2); max-width: calc(100vw - 32px);
+}
+.toast[hidden] { display: none; }
+.toast button { all: unset; cursor: pointer; font-weight: 700; color: var(--accent); }
+@media (max-width: 1100px) {
+  .form-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .form-grid > .field:nth-child(1) { grid-column: span 2; }
+  .form-grid > .item-field { grid-column: span 4; }
+  .form-grid > .field:nth-child(3) { grid-column: span 1; }
+  .form-grid > .field:nth-child(4) { grid-column: span 2; }
+  .form-grid > .field:nth-child(5) { grid-column: span 3; }
+  .form-grid > .note-field { grid-column: span 4; }
+  .form-grid > .add-btn { grid-column: span 2; }
+}
+@media (max-width: 560px) {
+  .form-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .form-grid > * { grid-column: span 2 !important; }
+  .form-grid > .field:nth-child(3), .form-grid > .field:nth-child(4) { grid-column: span 1 !important; }
+  .form-grid .field { width: auto; }
+  .side-seg button { flex: 1; }
+  .ledger-controls .fee-note { margin: 0; }
+  .add-btn { width: 100%; }
+}

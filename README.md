@@ -83,6 +83,12 @@ The game publishes no sales statistics for NA servers, so sales are inferred fro
 
 Validation: on EU server 11304, where these items are new enough that the game's daily change in its 28-day total equals that day's sales, the raw count caught 168 of 265 sales over 40 item-days (63%). A 1.5× adjustment would have matched in aggregate (252); the factor is set to 1.2× (202, about −24%) on purpose so the estimates err low. Per item the capture rate ranged from about 50% (Sapphire Ring, a fast seller) to ~100%, so single-item numbers are approximate. Cancelled listings are indistinguishable from sales.
 
+## Profit calculator
+
+`site/ledger.html` (navbar: **Profit Calculator**) is a personal transaction log. Add entries as bought or sold with an item, quantity and the base price per unit (shorthand like `1.5m` or `250k` works); sales have the sales tax and listing fee (10% / 2% by default, adjustable) deducted automatically, and purchases cost the full price. It shows kinah made or lost, money received and spent, tax and fees paid, and a per-item breakdown (average buy/sell, profit, units on hand), filterable by period. Item suggestions and icons come from the dashboard's snapshot; any name can be typed.
+
+Entries are stored in the viewer's browser (`localStorage`, key `a2ledger.v1`), so each person who opens the link has their own private log. Export/import a JSON backup to move it between devices, or export CSV for a spreadsheet.
+
 ## Run locally
 
 ```sh
