@@ -23,6 +23,7 @@ GitHub Action (hourly) ──► aion2.exchange /api/servers, /api/crafts, /api/
 | Profit / craft | sell price × (1 − 10% sales tax − 2% listing fee) − cost (both adjustable; assumes it sells on the first listing) |
 | Sold / day | estimated from listing history (below); official 28-day stats are used instead where the game publishes them |
 | Days of supply | current listings ÷ sold per day |
+| Days to sell | (current listings + 1) ÷ sold per day: how long a listing you post now would wait (shown on hover) |
 | Daily pool | profit / craft × sold / day; the ranking metric |
 | Your daily | daily pool × your expected share of sales |
 | Turnover / day | sell price after fees × sold / day: market size, available even without a crafting cost |
@@ -35,10 +36,10 @@ Verdicts, checked in this order (thresholds in `DEFAULT_SETTINGS` in `site/metri
 | Verdict | Rule |
 |---|---|
 | Loss | profit ≤ 0 |
-| Slow seller | under 0.5 sold/day (`minSalesPerDay`) |
-| Oversupplied | over 14 days of supply (`maxSupplyDays`) |
+| Oversupplied | over 5 days of supply, listings ÷ sold/day (`maxSupplyDays`); listings last 3 days |
+| Slow seller | a new listing would wait over 3 days to sell: (listings + 1) ÷ sold/day > `listingDays`, so it would likely expire first |
 | Low return | under 15% return on capital (`minRoc`) |
-| Top pick | ≥ 50% return on capital, ≥ 1 sold/day, ≤ 7 days of supply (`topRoc`, `topSalesPerDay`, `topSupplyDays`) |
+| Top pick | ≥ 50% return on capital, ≥ 1 sold/day, ≤ 3 days of supply (`topRoc`, `topSalesPerDay`, `topSupplyDays`) |
 | Craft it | everything else that's profitable and selling |
 
 Items that can't be judged yet get a status instead: Needs … (mastery too low), Cost TBD, Cost incomplete, No sales data, No price.

@@ -8,12 +8,13 @@ export const DEFAULT_SETTINGS = {
   salesTaxPct: 10,            // exchange tax taken from the sale price, in percent
   listingFeePct: 2,           // fee charged on the listing price when you list, in percent
   sharePct: 25,               // share of daily sales you expect to capture
-  minSalesPerDay: 0.5,        // below this the market is "thin"
-  maxSupplyDays: 14,          // above this the market is "oversupplied"
+  listingDays: 3,             // listings expire after 3 days
+  maxSupplyDays: 5,           // more days of supply than this (listings ÷ sold/day) is "Oversupplied"
+                              // "Slow seller": a new listing would wait (listings + 1) ÷ sold/day > listingDays to sell
   minRoc: 15,                 // return on capital (%) below this is "Low return"
   topRoc: 50,                 // "Top pick" needs at least this return on capital (%) ...
   topSalesPerDay: 1,          // ... at least this many sold per day ...
-  topSupplyDays: 7,           // ... and at most this many days of supply
+  topSupplyDays: 3,           // ... and at most this many days of supply (sells within one listing period)
   capitalConfidence: 0.9,     // capital needed = enough attempts for this chance of making at least one
   // Crafting mastery per skill on the game's 1-100 scale (1-50 Novice, 51-100 Professional). 75 = Professional 25.
   proficiency: { Blacksmithing: 75, Armorsmithing: 75, Handicrafting: 75, Alchemy: 75 },
@@ -171,6 +172,8 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
   const marginPct = profit == null || !cost ? null : (profit / cost) * 100;
 
   const supplyDays = perDay == null ? null : perDay > 0 ? listings / perDay : listings > 0 ? Infinity : 0;
+  // How long a listing you post now would wait: behind every current listing, at the current sales rate.
+  const daysToSell = perDay == null ? null : perDay > 0 ? (listings + 1) / perDay : Infinity;
   const dailyPool = profit == null || perDay == null ? null : profit * perDay;
   const turnover = net == null || perDay == null ? null : net * perDay; // market size after fees, cost aside
   const yourDaily = dailyPool == null ? null : dailyPool * (s.sharePct / 100);
@@ -193,28 +196,28 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
     skill: target.skill,
     profile: target.profile_label,
     cost, listing, soldAvg, price, net, profit, marginPct,
-    listings, sold28, perDay, supplyDays, dailyPool, yourDaily, turnover,
+    listings, sold28, perDay, supplyDays, daysToSell, dailyPool, yourDaily, turnover,
     capital: entry, roc, attempts90: attemptsFor(target.hitChance, s.capitalConfidence), hitChance: target.hitChance ?? null,
     success: target.success ?? null, recipeLevel: target.recipeLevel ?? null, playerLevel: target.playerLevel ?? null, locked: !!target.locked,
     salesSource, priceSource, est, costDetail: target.costDetail || null,
     missingInputs: num(target.missing) ?? 0,
     verdict: target.locked
       ? { id: "locked", label: `Needs ${masteryLabel(target.recipeLevel)}`, tone: "neutral" }
-      : verdictFor({ profit, perDay, supplyDays, roc, missing: num(target.missing) ?? 0, noCost: cost == null }, s),
+      : verdictFor({ profit, perDay, supplyDays, daysToSell, roc, missing: num(target.missing) ?? 0, noCost: cost == null }, s),
   };
 }
 
 /** One label per craft so the table reads at a glance. */
 // Six verdicts, checked in this order: Loss, Slow seller, Oversupplied, Low return, Top pick, Craft it.
 // Items that can't be judged yet get a status instead (cost incomplete / TBD, no price, no sales data, needs level).
-export function verdictFor({ profit, perDay, supplyDays, roc, missing, noCost }, s = DEFAULT_SETTINGS) {
+export function verdictFor({ profit, perDay, supplyDays, daysToSell, roc, missing, noCost }, s = DEFAULT_SETTINGS) {
   if (missing > 0) return { id: "incomplete", label: "Cost incomplete", tone: "warning" };
   if (noCost) return { id: "nocost", label: "Cost TBD", tone: "neutral" };
   if (profit == null) return { id: "nodata", label: "No price", tone: "neutral" };
   if (profit <= 0) return { id: "loss", label: "Loss", tone: "critical" };
   if (perDay == null) return { id: "nosales", label: "No sales data", tone: "neutral" };
-  if (perDay < s.minSalesPerDay) return { id: "thin", label: "Slow seller", tone: "serious" };
   if (supplyDays > s.maxSupplyDays) return { id: "glut", label: "Oversupplied", tone: "serious" };
+  if (daysToSell == null || daysToSell > s.listingDays) return { id: "thin", label: "Slow seller", tone: "serious" };
   if (roc != null && roc < s.minRoc) return { id: "lowroc", label: "Low return", tone: "warning" };
   if (roc != null && roc >= s.topRoc && perDay >= s.topSalesPerDay && supplyDays <= s.topSupplyDays)
     return { id: "top", label: "Top pick", tone: "best" };

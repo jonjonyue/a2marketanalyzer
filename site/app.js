@@ -301,7 +301,7 @@ function renderKpis(rows) {
   const median = margins.length ? margins[Math.floor(margins.length / 2)] : null;
   const yours = best?.yourDaily;
   // Best return on the capital you have to put up, among crafts that are profitable and actually selling.
-  const bestRoc = rows.filter((r) => r.roc != null && r.roc > 0 && r.perDay != null && r.perDay >= DEFAULT_SETTINGS.minSalesPerDay)
+  const bestRoc = rows.filter((r) => r.roc != null && r.roc > 0 && isWorthCrafting(r.verdict))
     .sort((a, b) => b.roc - a.roc)[0];
   const tiles = [
     { label: "Best craft right now", value: best && best.dailyPool > 0 ? best.shortName : "Nothing profitable", sub: best && best.dailyPool > 0 ? `${kinah(best.profit)} per craft · ${rate(best.perDay)}/day sold` : "Try another price basis" },
@@ -433,7 +433,7 @@ function renderScatter(rows, settings) {
   const maxs = Math.max(10, ...data.map((d) => d.marginPct));
   const span = maxs - mins;
   const x0 = mins - span * 0.05, x1 = maxs + span * 0.05;
-  const yTicks = niceTicks(Math.max(settings.minSalesPerDay * 2, ...data.map((d) => d.perDay)));
+  const yTicks = niceTicks(Math.max(1, ...data.map((d) => d.perDay)));
   const y1 = yTicks[yTicks.length - 1];
   const x = (v) => left + ((v - x0) / (x1 - x0)) * (W - left - right);
   const y = (v) => top + (1 - v / y1) * (H - top - bottom);
@@ -451,7 +451,6 @@ function renderScatter(rows, settings) {
     ${yTicks.map((t) => `<text class="axis-label" x="${left - 8}" y="${y(t) + 4}" text-anchor="end">${rate(t)}</text>`).join("")}
     ${xTicks.map((t) => `<text class="axis-label" x="${x(t)}" y="${H - bottom + 18}" text-anchor="middle">${t}%</text>`).join("")}
     <line class="ref" x1="${x(0)}" x2="${x(0)}" y1="${top}" y2="${H - bottom}"/>
-    <line class="ref" x1="${left}" x2="${W - right}" y1="${y(settings.minSalesPerDay)}" y2="${y(settings.minSalesPerDay)}"/>
     <text class="axis-label" x="${W - right}" y="${H - 6}" text-anchor="end">Margin →</text>
     <text class="axis-label" x="${left}" y="${top - 2}" text-anchor="start" dy="-2">Sold / day ↑</text>
     ${data.map((d, i) => {
@@ -679,7 +678,8 @@ const COLUMNS = [
     tone: (r) => (r.roc == null ? "dim" : r.roc > 0 ? "pos" : "neg") },
   { key: "perDay", label: "Sold / day", fmt: (r) => (r.salesSource === "estimate" ? "~" : "") + rate(r.perDay), title: salesTitle },
   { key: "listings", label: "Listings", fmt: (r) => r.listings },
-  { key: "supplyDays", label: "Days supply", fmt: (r) => days(r.supplyDays) },
+  { key: "supplyDays", label: "Days supply", fmt: (r) => days(r.supplyDays),
+    title: (r) => (r.daysToSell == null ? "No sales estimate" : `Current listings ÷ sold per day. A listing you post now would take about ${days(r.daysToSell)} days to sell (listings + 1 ÷ sold/day); listings expire after 3.`) },
   { key: "dailyPool", label: "Daily pool", fmt: (r) => kinah(r.dailyPool, { sign: true }), tone: (r) => (r.dailyPool == null ? "dim" : r.dailyPool < 0 ? "neg" : "") },
   { key: "turnover", label: "Turnover / day", fmt: (r) => kinah(r.turnover), tone: (r) => (r.turnover == null ? "dim" : ""),
     title: () => "Sell price after fees × sold per day: the size of the market, before crafting cost" },
