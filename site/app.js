@@ -29,7 +29,7 @@ function kinah(v, { sign = false } = {}) {
   return s + Math.round(a);
 }
 const pct = (v) => (v == null || !Number.isFinite(v) ? "—" : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(1) + "%");
-const rate = (v) => (v == null ? "—" : v >= 10 ? v.toFixed(0) : v.toFixed(1));
+const rate = (v) => (v == null ? "—" : v.toFixed(1));
 const days = (v) => (v == null ? "—" : v === Infinity ? "∞" : v >= 100 ? "99+" : v.toFixed(1));
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 function ago(iso) {

@@ -53,9 +53,9 @@ The game publishes no sales statistics for NA servers, so sales are inferred fro
 - Listings that disappear between snapshots count as sales, unless they vanish ~72 h (±90 min) after appearing, which is when listings expire.
 - If the count holds but the cheapest price jumps, the cheapest listing sold and was replaced: one sale.
 - Each sale is priced at the cheapest listing just before it disappeared, which gives the estimated average sale price.
-- Hourly snapshots miss listings posted and bought within the same hour, so the count is multiplied by 1.5 (`ESTIMATOR.captureAdjust`).
+- Hourly snapshots miss listings posted and bought within the same hour, so the count is multiplied by a conservative 1.2 (`ESTIMATOR.captureAdjust`) and rounded to a tenth of a sale per day.
 
-Validation: on EU server 11304, where these items are new enough that the game's daily change in its 28-day total equals that day's sales, the raw count caught 168 of 265 sales over 40 item-days; × 1.5 gives 252 (−5%). Per item the capture rate ranged from about 50% (Sapphire Ring, a fast seller) to ~100%, so single-item numbers are approximate. Cancelled listings are indistinguishable from sales.
+Validation: on EU server 11304, where these items are new enough that the game's daily change in its 28-day total equals that day's sales, the raw count caught 168 of 265 sales over 40 item-days (63%). A 1.5× adjustment would have matched in aggregate (252); the factor is set to 1.2× (202, about −24%) on purpose so the estimates err low. Per item the capture rate ranged from about 50% (Sapphire Ring, a fast seller) to ~100%, so single-item numbers are approximate. Cancelled listings are indistinguishable from sales.
 
 ## Run locally
 

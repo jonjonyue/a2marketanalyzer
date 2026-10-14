@@ -21,8 +21,9 @@ export const ESTIMATOR = {
   minDays: 1,          // need at least a day of history to report a rate
   // Hourly snapshots miss listings that are posted and bought between two snapshots.
   // Checked against the game's own daily sales on an EU server (26 item-days, Oct 2026):
-  // the raw count caught 122 of 179 sales, so raw counts are scaled up by ~1.5.
-  captureAdjust: 1.5,
+  // the raw count caught about two-thirds of sales (168 of 265). The scale-up is set conservatively at 1.2
+  // so estimates lean low rather than overstating demand.
+  captureAdjust: 1.2,
 };
 
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -88,7 +89,8 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
     sales,
     cheapestSold,
     observedPerDay,
-    perDay: observedPerDay == null ? null : observedPerDay * o.captureAdjust,
+    // rounded to a tenth, so everything downstream uses the number the table shows
+    perDay: observedPerDay == null ? null : Math.round(observedPerDay * o.captureAdjust * 10) / 10,
     lowerPerDay: enough ? cheapestSold / days : null,
     avgSalePrice: priceN ? priceSum / priceN : null,
   };
