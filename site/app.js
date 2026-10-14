@@ -1,4 +1,4 @@
-import { analyzeMarket, DEFAULT_SETTINGS, ESTIMATOR, VERDICT_ORDER, byRank, isWorthCrafting, SKILLS as CRAFT_SKILLS, masteryLabel, PROFICIENCY } from "./metrics.js";
+import { analyzeMarket, DEFAULT_SETTINGS, ESTIMATOR, VERDICT_ORDER, byRank, isWorthCrafting, SKILLS as CRAFT_SKILLS, masteryLabel, PROFICIENCY, shortenMarketNames, shortenName } from "./metrics.js";
 
 const API = "https://aion2.exchange";
 const SNAPSHOT_URL = "data/snapshot.json";
@@ -136,7 +136,7 @@ async function init() {
 async function loadMarket() {
   const sid = state.ui.server;
   if (state.mode === "snapshot") {
-    state.market = state.snapshot.markets[String(sid)] || { targets: [], items: [] };
+    state.market = shortenMarketNames(state.snapshot.markets[String(sid)] || { targets: [], items: [] });
   } else {
     try {
       const crafts = await fetchJson(`${API}/api/crafts?server=${sid}`);
@@ -157,7 +157,7 @@ async function loadMarket() {
           if (e && idx.files?.[e[0]]) icons[t.target_key] = [idx.files[e[0]], r?.color, r?.name];
         }
       } catch { /* icons are optional */ }
-      state.market = { captured_at: crafts.captured_at, targets: crafts.targets, items: items.items, history, icons };
+      state.market = shortenMarketNames({ captured_at: crafts.captured_at, targets: crafts.targets, items: items.items, history, icons });
       if (crafts.model) setModelNote(crafts.model);
     } catch {
       showBanner("Lost connection to aion2.exchange; showing the last data loaded.");
@@ -659,7 +659,7 @@ const COLUMNS = [
   { key: "rank", label: "#", cls: "rank", sortVal: (r) => -r.rank, fmt: (r) => (r.cost == null ? "—" : r.rank) },
   { key: "name", label: "Craft", cls: "name", sortVal: (r) => r.shortName,
     fmt: (r) => {
-      const tier = r.tier === "Artisan's Splendent" ? "" : `${esc(r.tier)} · `;
+      const tier = r.tier === "Artisan's Splendent" ? "" : `${esc(shortenName(r.tier))} · `;
       const open = state.ui.open === r.key;
       return `<span class="item-cell">${iconHtml(r.key)}<span class="item-text">` +
         `<button type="button" class="item-toggle" data-toggle="${r.key}" aria-expanded="${open}" title="Show the recipe and what goes into the cost">` +

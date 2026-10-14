@@ -1,3 +1,5 @@
+import { shortenName } from "./metrics.js";
+
 // Profit calculator: a personal log of exchange purchases and sales, kept in this browser (localStorage).
 const API = "https://aion2.exchange";
 const SNAPSHOT_URL = "data/snapshot.json";
@@ -43,7 +45,7 @@ export function amounts(e) {
 function load() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
-    if (raw && Array.isArray(raw.entries)) return { entries: raw.entries.filter(valid), settings: { ...DEFAULTS, ...raw.settings } };
+    if (raw && Array.isArray(raw.entries)) return { entries: raw.entries.filter(valid).map((e) => ({ ...e, name: shortenName(e.name) })), settings: { ...DEFAULTS, ...raw.settings } };
   } catch { /* blocked or corrupt storage: start empty */ }
   return { entries: [], settings: { ...DEFAULTS } };
 }
@@ -80,7 +82,8 @@ async function loadCatalog() {
     const snap = await res.json();
     const market = Object.values(snap.markets || {})[0] || {};
     const icons = market.icons || {};
-    const add = (key, name, price) => {
+    const add = (key, rawName, price) => {
+      const name = shortenName(rawName);
       if (!name) return;
       const k = name.toLowerCase();
       const prev = state.catalog.get(k);
@@ -125,7 +128,7 @@ function localInputValue(ts) {
 }
 
 function readForm() {
-  const name = $("item").value.trim();
+  const name = shortenName($("item").value.trim());
   const qty = Number($("qty").value);
   const price = parseKinah($("price").value);
   const ts = $("when").value ? new Date($("when").value).getTime() : Date.now();
@@ -360,7 +363,7 @@ async function importJson(file) {
     const incoming = (Array.isArray(data) ? data : data.entries || []).filter(valid);
     const have = new Set(state.entries.map((e) => e.id));
     const added = incoming.filter((e) => !have.has(e.id)).map((e) => ({
-      id: e.id, ts: e.ts, side: e.side, name: e.name, key: e.key ?? null, qty: e.qty, price: e.price,
+      id: e.id, ts: e.ts, side: e.side, name: shortenName(e.name), key: e.key ?? null, qty: e.qty, price: e.price,
       taxPct: Number.isFinite(e.taxPct) ? e.taxPct : DEFAULTS.taxPct, feePct: Number.isFinite(e.feePct) ? e.feePct : DEFAULTS.feePct,
       note: typeof e.note === "string" ? e.note : "",
     }));

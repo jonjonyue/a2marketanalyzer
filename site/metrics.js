@@ -419,3 +419,25 @@ export function byRank(a, b) {
   if (pr) return pr;
   return (b.turnover ?? -Infinity) - (a.turnover ?? -Infinity);
 }
+
+// Shorter display names: "Artisan's Splendent Bow" -> "Art Spl Bow", "Expert's Splendent Bow" -> "Exp Spl Bow".
+export function shortenName(name) {
+  return typeof name === "string"
+    ? name.replace(/Artisan['’]s Splendent/g, "Art Spl").replace(/Expert['’]s Splendent/g, "Exp Spl")
+    : name;
+}
+
+// Shorten every item name in a market object in place (targets, items, materials, recipe chains). Tier labels are left alone.
+export function shortenMarketNames(market) {
+  const walk = (v) => {
+    if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === "object") {
+      for (const k of Object.keys(v)) {
+        if ((k === "name" || k === "result_name" || k === "material_name") && typeof v[k] === "string") v[k] = shortenName(v[k]);
+        else if (typeof v[k] === "object") walk(v[k]);
+      }
+    }
+  };
+  if (market) for (const k of ["targets", "items", "materials", "chains", "recipes"]) walk(market[k]);
+  return market;
+}
