@@ -279,17 +279,17 @@ details.sub > summary:hover { color: var(--accent); }
 @media (max-width: 560px) { .prof { width: 100%; } .prof select { flex: 1; } }
 
 /* top navigation (shared by both pages) */
-.nav { position: sticky; top: 0; z-index: 20; background: var(--text); color: var(--bg); }
+.nav { position: sticky; top: 0; z-index: 20; background: #0f1115; color: #f0efec; border-bottom: 1px solid #262a31; }
 .nav-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 52px; }
-.brand { color: var(--bg); text-decoration: none; font-weight: 700; font-size: 15px; letter-spacing: -0.01em; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
-.brand-mark { color: var(--accent); font-size: 13px; }
+.brand { color: #f0efec; text-decoration: none; font-weight: 700; font-size: 15px; letter-spacing: -0.01em; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.brand-mark { color: #3987e5; font-size: 13px; }
 .nav-links { display: flex; gap: 4px; height: 100%; }
 .nav-links a {
-  display: inline-flex; align-items: center; padding: 0 14px; color: var(--bg); opacity: .68; text-decoration: none;
+  display: inline-flex; align-items: center; padding: 0 14px; color: #f0efec; opacity: .68; text-decoration: none;
   font-weight: 600; font-size: 13.5px; border-bottom: 2px solid transparent; white-space: nowrap;
 }
 .nav-links a:hover { opacity: 1; }
-.nav-links a[aria-current="page"] { opacity: 1; border-bottom-color: var(--accent); }
+.nav-links a[aria-current="page"] { opacity: 1; border-bottom-color: #3987e5; }
 .nav-links a:focus-visible, .brand:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 @media (max-width: 560px) {
   .brand { font-size: 14px; }
@@ -373,3 +373,11 @@ button.ext-button, label.ext-button { cursor: pointer; }
   .ledger-controls .fee-note { margin: 0; }
   .add-btn { width: 100%; }
 }
+
+/* work-in-progress banner */
+.wip-banner { background: repeating-linear-gradient(-45deg, #f5b81c 0 22px, #e7a90b 22px 44px); color: #1a1405; border-bottom: 1px solid #c88f00; }
+.wip-inner { display: flex; align-items: center; gap: 14px; padding-top: 18px; padding-bottom: 18px; }
+.wip-icon { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: #1a1405; color: #f5b81c; font-size: 24px; font-weight: 800; }
+.wip-banner strong { display: block; font-size: 22px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; line-height: 1.2; }
+.wip-banner p { margin: 2px 0 0; font-size: 14px; font-weight: 500; }
+@media (max-width: 560px) { .wip-banner strong { font-size: 18px; } .wip-icon { width: 36px; height: 36px; font-size: 20px; } }
