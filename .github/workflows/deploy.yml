@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "17 * * * *" # hourly, off the top of the hour
+    # GitHub drops many scheduled runs on free repos, so ask three times an hour to get roughly hourly refreshes.
+    - cron: "7,27,47 * * * *"
   workflow_dispatch:
 
 permissions:
