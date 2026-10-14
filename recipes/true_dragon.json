@@ -116,7 +116,7 @@
    "product_key": 110430015,
    "combo_key": 110430017,
    "combo_probability": 0.25,
-   "skill": "Jewelcrafting",
+   "skill": "Handicrafting",
    "gold_cost": 0,
    "base_key": 110430013,
    "materials": [
@@ -244,7 +244,7 @@
    "product_key": 110830015,
    "combo_key": 110830017,
    "combo_probability": 0.25,
-   "skill": "Jewelcrafting",
+   "skill": "Handicrafting",
    "gold_cost": 0,
    "base_key": 110830013,
    "materials": [
@@ -308,7 +308,7 @@
    "product_key": 210130015,
    "combo_key": 210130017,
    "combo_probability": 0.25,
-   "skill": "Tailoring",
+   "skill": "Armorsmithing",
    "gold_cost": 0,
    "base_key": 210130013,
    "materials": [
@@ -340,7 +340,7 @@
    "product_key": 210230015,
    "combo_key": 210230017,
    "combo_probability": 0.25,
-   "skill": "Tailoring",
+   "skill": "Armorsmithing",
    "gold_cost": 0,
    "base_key": 210230013,
    "materials": [
@@ -372,7 +372,7 @@
    "product_key": 210330015,
    "combo_key": 210330017,
    "combo_probability": 0.25,
-   "skill": "Tailoring",
+   "skill": "Armorsmithing",
    "gold_cost": 0,
    "base_key": 210330013,
    "materials": [
@@ -404,7 +404,7 @@
    "product_key": 210430015,
    "combo_key": 210430017,
    "combo_probability": 0.25,
-   "skill": "Tailoring",
+   "skill": "Armorsmithing",
    "gold_cost": 0,
    "base_key": 210430013,
    "materials": [
@@ -436,7 +436,7 @@
    "product_key": 210530015,
    "combo_key": 210530017,
    "combo_probability": 0.25,
-   "skill": "Tailoring",
+   "skill": "Armorsmithing",
    "gold_cost": 0,
    "base_key": 210530013,
    "materials": [
@@ -468,7 +468,7 @@
    "product_key": 210630015,
    "combo_key": 210630017,
    "combo_probability": 0.25,
-   "skill": "Tailoring",
+   "skill": "Armorsmithing",
    "gold_cost": 0,
    "base_key": 210630013,
    "materials": [
@@ -500,7 +500,7 @@
    "product_key": 210730015,
    "combo_key": 210730017,
    "combo_probability": 0.25,
-   "skill": "Tailoring",
+   "skill": "Armorsmithing",
    "gold_cost": 0,
    "base_key": 210730013,
    "materials": [
@@ -532,7 +532,7 @@
    "product_key": 310130015,
    "combo_key": 310130017,
    "combo_probability": 0.25,
-   "skill": "Jewelcrafting",
+   "skill": "Handicrafting",
    "gold_cost": 0,
    "base_key": 310130013,
    "materials": [
@@ -564,7 +564,7 @@
    "product_key": 310230015,
    "combo_key": 310230017,
    "combo_probability": 0.25,
-   "skill": "Jewelcrafting",
+   "skill": "Handicrafting",
    "gold_cost": 0,
    "base_key": 310230013,
    "materials": [
@@ -596,7 +596,7 @@
    "product_key": 310330015,
    "combo_key": 310330017,
    "combo_probability": 0.25,
-   "skill": "Jewelcrafting",
+   "skill": "Handicrafting",
    "gold_cost": 0,
    "base_key": 310330013,
    "materials": [

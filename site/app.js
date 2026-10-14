@@ -4,7 +4,10 @@ const API = "https://aion2.exchange";
 const SNAPSHOT_URL = "data/snapshot.json";
 const SERVER_ID = 11201; // the dashboard covers Siel · Elyos, North America West only
 const HISTORY_DAYS = 10;
-const SKILLS = ["All", "Blacksmithing", "Tailoring", "Jewelcrafting", "Alchemy"];
+const SKILLS = ["All", "Blacksmithing", "Armorsmithing", "Handicrafting", "Alchemy"];
+// URL codes per skill; t and j are the old Tailoring / Jewelcrafting codes, kept so older links still work.
+const PROF_CODE = { Blacksmithing: "b", Armorsmithing: "r", Handicrafting: "h", Alchemy: "a" };
+const PROF_LEGACY = { t: "Armorsmithing", j: "Handicrafting" };
 const TIERS = ["All", "Expert's Splendent", "Artisan's Splendent", "True Dragon", "Splendent True Dragon"];
 const TIER_PARAM = { "Expert's Splendent": "es", "Artisan's Splendent": "as", "True Dragon": "td", "Splendent True Dragon": "std" };
 
@@ -61,11 +64,11 @@ function readUrl() {
     dir: p.get("dir") === "asc" ? "asc" : "desc",
   };
 }
-// "b60.t75" -> { Blacksmithing: 60, Tailoring: 75, ... } (others default)
+// "b60.r75" -> { Blacksmithing: 60, Armorsmithing: 75, ... } (others default)
 function readProficiency(v) {
   const out = { ...DEFAULT_SETTINGS.proficiency };
   for (const part of String(v || "").split(".")) {
-    const skill = CRAFT_SKILLS.find((k) => k[0].toLowerCase() === part[0]);
+    const skill = CRAFT_SKILLS.find((k) => PROF_CODE[k] === part[0]) || PROF_LEGACY[part[0]];
     const lvl = parseInt(part.slice(1), 10);
     if (skill && lvl >= 1 && lvl <= 100) out[skill] = lvl;
   }
@@ -85,7 +88,7 @@ function writeUrl() {
   if (u.hideLoss) p.set("hideLoss", "1");
   if (u.open != null) p.set("open", u.open);
   const prof = CRAFT_SKILLS.filter((k) => u.proficiency[k] !== DEFAULT_SETTINGS.proficiency[k])
-    .map((k) => k[0].toLowerCase() + u.proficiency[k]).join(".");
+    .map((k) => PROF_CODE[k] + u.proficiency[k]).join(".");
   if (prof) p.set("prof", prof);
   if (u.sort !== "rank") { p.set("sort", u.sort); p.set("dir", u.dir); }
   const qs = p.toString();

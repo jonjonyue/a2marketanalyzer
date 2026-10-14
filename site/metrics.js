@@ -12,7 +12,7 @@ export const DEFAULT_SETTINGS = {
   maxSupplyDays: 14,          // above this the market is "oversupplied"
   capitalConfidence: 0.9,     // capital needed = enough attempts for this chance of making at least one
   // Crafting mastery per skill on the game's 1-100 scale (1-50 Novice, 51-100 Professional). 75 = Professional 25.
-  proficiency: { Blacksmithing: 75, Tailoring: 75, Jewelcrafting: 75, Alchemy: 75 },
+  proficiency: { Blacksmithing: 75, Armorsmithing: 75, Handicrafting: 75, Alchemy: 75 },
 };
 
 // Listing-history sales estimator settings.
@@ -222,7 +222,10 @@ export const PROFICIENCY = {
   fullDelta: 45,           // ΔL where the cap is reached
   trueDragonCap: 0.9684,   // not in the site's model; assumed equal to the highest known cap (Artisan's step)
 };
-export const SKILLS = ["Blacksmithing", "Tailoring", "Jewelcrafting", "Alchemy"];
+export const SKILLS = ["Blacksmithing", "Armorsmithing", "Handicrafting", "Alchemy"];
+// aion2.exchange (and questlog) name two skills differently from the game; the dashboard uses the game's names.
+export const SKILL_NAMES = { Tailoring: "Armorsmithing", Jewelcrafting: "Handicrafting" };
+export const skillName = (s) => SKILL_NAMES[s] ?? s;
 
 /** Mastery level (1-100) → "Novice 30" / "Professional 25". */
 export function masteryLabel(level) {
@@ -330,6 +333,7 @@ export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
   const items = new Map((market.items || []).map((i) => [i.item_key, i]));
   const histories = market.history || {};
   const grid = snapshotGrid(histories);
+  market = { ...market, targets: (market.targets || []).map((t) => ({ ...t, skill: skillName(t.skill) })) };
 
   // Splendent chains at the player's mastery for that skill (one chain per Artisan's Splendent item).
   const chains = {};
