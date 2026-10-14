@@ -26,6 +26,8 @@ GitHub Action (hourly) ──► aion2.exchange /api/servers, /api/crafts, /api/
 | Daily pool | profit / craft × sold / day; the ranking metric |
 | Your daily | daily pool × your expected share of sales |
 | Turnover / day | sell price after fees × sold / day: market size, available even without a crafting cost |
+| Capital needed | barrier to entry: cost per attempt × attempts needed for a 90% chance of making one (`attemptsFor`). Combo crafts hit with chance success × combo per attempt, so an Artisan's Splendent (~24%) needs 9 attempts' worth, about 2.2× its average cost; True Dragon needs 1 |
+| Return on capital | profit / craft ÷ capital needed: profit per kinah you have to put up |
 
 Verdicts: **Craft it** = profitable, ≥ 0.5 sold/day, ≤ 14 days of supply. Thresholds live in `site/metrics.js` (`DEFAULT_SETTINGS`).
 

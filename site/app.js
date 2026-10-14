@@ -261,11 +261,16 @@ function renderKpis(rows) {
   const margins = rows.map((r) => r.marginPct).filter((v) => v != null).sort((a, b) => a - b);
   const median = margins.length ? margins[Math.floor(margins.length / 2)] : null;
   const yours = best?.yourDaily;
+  // Best return on the capital you have to put up, among crafts that are profitable and actually selling.
+  const bestRoc = rows.filter((r) => r.roc != null && r.roc > 0 && r.perDay != null && r.perDay >= DEFAULT_SETTINGS.minSalesPerDay)
+    .sort((a, b) => b.roc - a.roc)[0];
   const tiles = [
     { label: "Best craft right now", value: best && best.dailyPool > 0 ? best.shortName : "Nothing profitable", sub: best && best.dailyPool > 0 ? `${kinah(best.profit)} per craft · ${rate(best.perDay)}/day sold` : "Try another price basis" },
     { label: "Your expected daily profit", value: yours > 0 ? kinah(yours) : "—", sub: yours > 0 ? `from ${best.shortName} at ${state.ui.sharePct}% share` : "No craft with positive profit and sales" },
     { label: "Worth crafting", value: `${good.length} of ${rows.filter((r) => r.cost != null).length}`, sub: costedNote(rows) },
-    { label: "Median margin", value: pct(median), sub: `market-wide daily pool ${kinah(pool)}` },
+    bestRoc
+      ? { label: "Best return on capital", value: bestRoc.shortName, sub: `${pct(bestRoc.roc)} · ${kinah(bestRoc.profit)} profit on ${kinah(bestRoc.capital)}` }
+      : { label: "Median margin", value: pct(median), sub: `market-wide daily pool ${kinah(pool)}` },
   ];
   $("kpis").innerHTML = tiles.map((t) => `<div class="kpi"><div class="label">${esc(t.label)}</div><div class="value" title="${esc(t.value)}">${esc(t.value)}</div><div class="sub" title="${esc(t.sub)}">${esc(t.sub)}</div></div>`).join("");
 }
@@ -295,6 +300,8 @@ function showTip(e, r) {
   tip.innerHTML = `<strong class="tip-title">${iconHtml(r.key, "small")}${esc(r.shortName)}</strong>
     <div class="row"><span>Profit / craft</span><span>${kinah(r.profit, { sign: true })}</span></div>
     <div class="row"><span>Margin</span><span>${pct(r.marginPct)}</span></div>
+    <div class="row"><span>Capital needed</span><span>${kinah(r.capital)}</span></div>
+    <div class="row"><span>Return on capital</span><span>${pct(r.roc)}</span></div>
     <div class="row"><span>Sold / day${r.salesSource === "estimate" ? " (est.)" : ""}</span><span>${rate(r.perDay)}</span></div>
     <div class="row"><span>Listings</span><span>${r.listings}</span></div>
     <div class="row"><span>Daily pool</span><span>${kinah(r.dailyPool)}</span></div>
@@ -572,6 +579,16 @@ function costTitle(r) {
   return `${base} + materials ${kinah(d.matsCost)} (${mats}) ${per}${combo}`;
 }
 
+function capitalTitle(r) {
+  if (r.capital == null) return "Needs a crafting cost";
+  const n = r.attempts90;
+  if (n == null || n <= 1 || r.hitChance == null || r.hitChance >= 1)
+    return `Every attempt makes one, so the capital needed is one attempt: ${kinah(r.capital)}. Return on capital = profit ÷ that.`;
+  return `Each attempt makes this only ${(r.hitChance * 100).toFixed(1)}% of the time (success × combo), so on average it takes ` +
+    `${(1 / r.hitChance).toFixed(1)} attempts (${kinah(r.cost)}), but you need ${n} attempts' worth (${kinah(r.capital)}) ` +
+    `for a 90% chance of making one. Return on capital = profit ÷ that.`;
+}
+
 function salesTitle(r) {
   if (r.salesSource === "official") return `${r.sold28} sold in 28 days (official game statistics)`;
   const e = r.est;
@@ -599,7 +616,10 @@ const COLUMNS = [
   { key: "price", label: "Sell price", fmt: (r) => kinah(r.price),
     title: (r) => `Cheapest listing ${kinah(r.listing)} · avg sale ${kinah(r.soldAvg)}${r.priceSource === "estimate" ? " (estimated from listings that sold)" : r.priceSource === "official" ? " (28-day official)" : ""}` },
   { key: "profit", label: "Profit / craft", fmt: (r) => kinah(r.profit, { sign: true }), tone: (r) => (r.profit == null ? "dim" : r.profit > 0 ? "pos" : "neg") },
-  { key: "marginPct", label: "Margin", fmt: (r) => pct(r.marginPct), tone: (r) => (r.marginPct == null ? "dim" : r.marginPct > 0 ? "pos" : "neg") },
+  { key: "marginPct", label: "Margin", fmt: (r) => pct(r.marginPct), title: () => "Profit ÷ average cost per item", tone: (r) => (r.marginPct == null ? "dim" : r.marginPct > 0 ? "pos" : "neg") },
+  { key: "capital", label: "Capital needed", fmt: (r) => kinah(r.capital), title: capitalTitle },
+  { key: "roc", label: "Return on capital", fmt: (r) => pct(r.roc), title: capitalTitle,
+    tone: (r) => (r.roc == null ? "dim" : r.roc > 0 ? "pos" : "neg") },
   { key: "perDay", label: "Sold / day", fmt: (r) => (r.salesSource === "estimate" ? "~" : "") + rate(r.perDay), title: salesTitle },
   { key: "listings", label: "Listings", fmt: (r) => r.listings },
   { key: "supplyDays", label: "Days supply", fmt: (r) => days(r.supplyDays) },

@@ -10,6 +10,7 @@ export const DEFAULT_SETTINGS = {
   sharePct: 25,               // share of daily sales you expect to capture
   minSalesPerDay: 0.5,        // below this the market is "thin"
   maxSupplyDays: 14,          // above this the market is "oversupplied"
+  capitalConfidence: 0.9,     // capital needed = enough attempts for this chance of making at least one
 };
 
 // Listing-history sales estimator settings.
@@ -100,6 +101,33 @@ export function snapshotGrid(histories) {
   return [...set].sort((a, b) => a - b);
 }
 
+/** Attempts needed for `confidence` odds of at least one hit when each attempt hits with chance p. */
+export function attemptsFor(p, confidence = 0.9) {
+  if (!(p > 0)) return null;
+  if (p >= 1) return 1;
+  return Math.max(1, Math.ceil(Math.log(1 - confidence) / Math.log(1 - p)));
+}
+
+/** Capital to have ready: cost per attempt × attempts for `confidence` odds of making one. */
+export function capitalNeeded(attemptCost, p, confidence = 0.9) {
+  const n = attemptsFor(p, confidence);
+  return attemptCost == null || n == null ? null : attemptCost * n;
+}
+
+/**
+ * Hit chance of the last craft step for an item in aion2.exchange's cost chain (Artisan's or Expert's
+ * Splendent): success × combo. The item's cost = per-attempt cost ÷ hit.
+ */
+export function chainOdds(chains, key) {
+  for (const c of Object.values(chains || {})) {
+    const step = (c.steps || []).find((s) => s.result_key === key);
+    if (!step) continue;
+    const hit = (step.success_rate ?? 1) * (step.combo_probability ?? 1);
+    return hit > 0 ? { hitChance: hit } : {};
+  }
+  return {};
+}
+
 /** Pick the sell price for one craft according to the chosen basis. */
 export function sellPrice(listing, soldAvg, basis) {
   if (basis === "listing") return listing;
@@ -138,6 +166,13 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
   const dailyPool = profit == null || perDay == null ? null : profit * perDay;
   const turnover = net == null || perDay == null ? null : net * perDay; // market size after fees, cost aside
   const yourDaily = dailyPool == null ? null : dailyPool * (s.sharePct / 100);
+  // Barrier to entry: the kinah to have ready to make one with s.capitalConfidence odds (combo luck included),
+  // and the profit it returns on that capital.
+  // Per-attempt cost: the recipe's own (True Dragon), or the row's cost × hit chance (cost = per-attempt ÷ hit),
+  // so capital always agrees with the cost column, whatever cost basis is selected.
+  const attemptCost = num(target.attemptCost) ?? (cost != null && target.hitChance ? cost * target.hitChance : null);
+  const entry = capitalNeeded(attemptCost, target.hitChance, s.capitalConfidence) ?? cost;
+  const roc = profit == null || !entry ? null : (profit / entry) * 100;
 
   return {
     key: target.target_key,
@@ -149,6 +184,7 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
     profile: target.profile_label,
     cost, listing, soldAvg, price, net, profit, marginPct,
     listings, sold28, perDay, supplyDays, dailyPool, yourDaily, turnover,
+    capital: entry, roc, attempts90: attemptsFor(target.hitChance, s.capitalConfidence), hitChance: target.hitChance ?? null,
     salesSource, priceSource, est, costDetail: target.costDetail || null,
     missingInputs: num(target.missing) ?? 0,
     verdict: verdictFor({ profit, perDay, supplyDays, missing: num(target.missing) ?? 0, noCost: cost == null }, s),
@@ -237,10 +273,12 @@ export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
       const recipe = t.cost == null ? recipeFor.get(t.target_key) : null;
       if (recipe) {
         const c = trueDragonCost(recipe, t.target_key, ctx, settings);
-        t = { ...t, cost: c.cost, cost_market: c.cost, missing: c.missing, costDetail: c.detail };
+        t = { ...t, cost: c.cost, cost_market: c.cost, missing: c.missing, costDetail: c.detail,
+              attemptCost: c.detail.attempt, hitChance: t.target_key === recipe.combo_key ? recipe.combo_probability : 1 };
       }
       const h = histories[String(t.target_key)];
       const est = h ? estimateSales(h, grid) : null;
+      if (t.hitChance == null) t = { ...t, ...chainOdds(market.chains, t.target_key) };
       return analyzeCraft(t, items.get(t.target_key), settings, est);
     })
     .sort(byRank);
