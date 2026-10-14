@@ -30,7 +30,18 @@ GitHub Action (hourly) ──► aion2.exchange /api/servers, /api/crafts, /api/
 | Return on capital | profit / craft ÷ capital needed: profit per kinah you have to put up |
 | Proficiency | per-skill crafting mastery (1–100: Novice 1–50, Professional 1–50; default Professional 25 = 75). Sets every craft's success rate (below) |
 
-Verdicts: **Craft it** = profitable, ≥ 0.5 sold/day, ≤ 14 days of supply. Thresholds live in `site/metrics.js` (`DEFAULT_SETTINGS`).
+Verdicts, checked in this order (thresholds in `DEFAULT_SETTINGS` in `site/metrics.js`):
+
+| Verdict | Rule |
+|---|---|
+| Loss | profit ≤ 0 |
+| Slow seller | under 0.5 sold/day (`minSalesPerDay`) |
+| Oversupplied | over 14 days of supply (`maxSupplyDays`) |
+| Low return | under 15% return on capital (`minRoc`) |
+| Top pick | ≥ 50% return on capital, ≥ 1 sold/day, ≤ 7 days of supply (`topRoc`, `topSalesPerDay`, `topSupplyDays`) |
+| Craft it | everything else that's profitable and selling |
+
+Items that can't be judged yet get a status instead: Needs … (mastery too low), Cost TBD, Cost incomplete, No sales data, No price.
 
 Click an item to expand its recipe, laid out like the game's: every input (including the gear it consumes) with its market price and crafted price, the one used highlighted, and the cost per attempt. Each crafted input has a nested "How … is made" recipe, all the way down (True Dragon → Artisan's Splendent → Expert's Splendent → Splendent), with the success and combo maths that turn a per-attempt cost into a per-item cost. The ↗ button opens the item on aion2.exchange.
 

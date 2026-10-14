@@ -10,6 +10,10 @@ export const DEFAULT_SETTINGS = {
   sharePct: 25,               // share of daily sales you expect to capture
   minSalesPerDay: 0.5,        // below this the market is "thin"
   maxSupplyDays: 14,          // above this the market is "oversupplied"
+  minRoc: 15,                 // return on capital (%) below this is "Low return"
+  topRoc: 50,                 // "Top pick" needs at least this return on capital (%) ...
+  topSalesPerDay: 1,          // ... at least this many sold per day ...
+  topSupplyDays: 7,           // ... and at most this many days of supply
   capitalConfidence: 0.9,     // capital needed = enough attempts for this chance of making at least one
   // Crafting mastery per skill on the game's 1-100 scale (1-50 Novice, 51-100 Professional). 75 = Professional 25.
   proficiency: { Blacksmithing: 75, Armorsmithing: 75, Handicrafting: 75, Alchemy: 75 },
@@ -196,12 +200,14 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
     missingInputs: num(target.missing) ?? 0,
     verdict: target.locked
       ? { id: "locked", label: `Needs ${masteryLabel(target.recipeLevel)}`, tone: "neutral" }
-      : verdictFor({ profit, perDay, supplyDays, missing: num(target.missing) ?? 0, noCost: cost == null }, s),
+      : verdictFor({ profit, perDay, supplyDays, roc, missing: num(target.missing) ?? 0, noCost: cost == null }, s),
   };
 }
 
 /** One label per craft so the table reads at a glance. */
-export function verdictFor({ profit, perDay, supplyDays, missing, noCost }, s = DEFAULT_SETTINGS) {
+// Six verdicts, checked in this order: Loss, Slow seller, Oversupplied, Low return, Top pick, Craft it.
+// Items that can't be judged yet get a status instead (cost incomplete / TBD, no price, no sales data, needs level).
+export function verdictFor({ profit, perDay, supplyDays, roc, missing, noCost }, s = DEFAULT_SETTINGS) {
   if (missing > 0) return { id: "incomplete", label: "Cost incomplete", tone: "warning" };
   if (noCost) return { id: "nocost", label: "Cost TBD", tone: "neutral" };
   if (profit == null) return { id: "nodata", label: "No price", tone: "neutral" };
@@ -209,8 +215,14 @@ export function verdictFor({ profit, perDay, supplyDays, missing, noCost }, s = 
   if (perDay == null) return { id: "nosales", label: "No sales data", tone: "neutral" };
   if (perDay < s.minSalesPerDay) return { id: "thin", label: "Slow seller", tone: "serious" };
   if (supplyDays > s.maxSupplyDays) return { id: "glut", label: "Oversupplied", tone: "serious" };
+  if (roc != null && roc < s.minRoc) return { id: "lowroc", label: "Low return", tone: "warning" };
+  if (roc != null && roc >= s.topRoc && perDay >= s.topSalesPerDay && supplyDays <= s.topSupplyDays)
+    return { id: "top", label: "Top pick", tone: "best" };
   return { id: "craft", label: "Craft it", tone: "good" };
 }
+
+/** Verdicts that mean "worth crafting". */
+export const isWorthCrafting = (v) => v.id === "top" || v.id === "craft";
 
 /** Analyze a whole server's market and sort best-first by expected daily profit. */
 // ---------- crafting proficiency ----------
@@ -391,7 +403,7 @@ export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
   return rows;
 }
 
-export const VERDICT_ORDER = { craft: 0, glut: 1, thin: 2, nosales: 3, nocost: 4, incomplete: 5, loss: 6, locked: 7, nodata: 8 };
+export const VERDICT_ORDER = { top: 0, craft: 1, lowroc: 2, glut: 3, thin: 4, nosales: 5, nocost: 6, incomplete: 7, loss: 8, locked: 9, nodata: 10 };
 
 export function byRank(a, b) {
   const pa = a.dailyPool ?? -Infinity;

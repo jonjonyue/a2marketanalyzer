@@ -1,4 +1,4 @@
-import { analyzeMarket, DEFAULT_SETTINGS, ESTIMATOR, VERDICT_ORDER, byRank, SKILLS as CRAFT_SKILLS, masteryLabel, PROFICIENCY } from "./metrics.js";
+import { analyzeMarket, DEFAULT_SETTINGS, ESTIMATOR, VERDICT_ORDER, byRank, isWorthCrafting, SKILLS as CRAFT_SKILLS, masteryLabel, PROFICIENCY } from "./metrics.js";
 
 const API = "https://aion2.exchange";
 const SNAPSHOT_URL = "data/snapshot.json";
@@ -294,7 +294,7 @@ const noCostsInView = (rows) => rows.length > 0 && rows.every((r) => r.cost == n
 
 function renderKpis(rows) {
   if (noCostsInView(rows)) return renderMarketKpis(rows);
-  const good = rows.filter((r) => r.verdict.id === "craft");
+  const good = rows.filter((r) => isWorthCrafting(r.verdict));
   const best = [...rows].sort(byRank)[0];
   const pool = rows.reduce((s, r) => s + Math.max(0, r.dailyPool ?? 0), 0);
   const margins = rows.map((r) => r.marginPct).filter((v) => v != null).sort((a, b) => a - b);
@@ -455,7 +455,7 @@ function renderScatter(rows, settings) {
     <text class="axis-label" x="${W - right}" y="${H - 6}" text-anchor="end">Margin →</text>
     <text class="axis-label" x="${left}" y="${top - 2}" text-anchor="start" dy="-2">Sold / day ↑</text>
     ${data.map((d, i) => {
-      const good = d.verdict.id === "craft";
+      const good = isWorthCrafting(d.verdict);
       return `<circle class="dot${good ? "" : " dim"}" cx="${x(d.marginPct)}" cy="${y(d.perDay)}" r="${good ? 6 : 5}"/>
         <circle class="hit" data-i="${i}" tabindex="0" cx="${x(d.marginPct)}" cy="${y(d.perDay)}" r="13"/>`;
     }).join("")}
@@ -713,7 +713,7 @@ function renderTable(rows) {
     writeUrl(); renderTable(state.rows);
   };
 
-  const topKey = rows.find((r) => r.verdict.id === "craft")?.key;
+  const topKey = (rows.find((r) => r.verdict.id === "top") || rows.find((r) => r.verdict.id === "craft"))?.key;
   const body = $("table").tBodies[0];
   body.innerHTML = sorted.map((r) => {
     const open = state.ui.open === r.key;

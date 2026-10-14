@@ -166,6 +166,8 @@ tbody tr:hover { background: var(--surface-2); }
 
 .pill { display: inline-flex; align-items: center; gap: 5px; font: 600 12px Inter, system-ui, sans-serif; padding: 3px 8px; border-radius: 999px; }
 .pill::before { font-size: 11px; }
+.pill.best { background: var(--good); color: #fff; }
+.pill.best::before { content: "★"; }
 .pill.good { background: var(--good-bg); color: var(--good); }
 .pill.good::before { content: "✓"; }
 .pill.warning { background: var(--warning-bg); color: var(--warning); }
