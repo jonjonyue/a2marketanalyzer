@@ -266,3 +266,12 @@ details.sub > summary::-webkit-details-marker { display: none; }
 details.sub > summary::before { content: "▸ "; color: var(--muted); }
 details.sub[open] > summary::before { content: "▾ "; }
 details.sub > summary:hover { color: var(--accent); }
+
+/* crafting proficiency inputs */
+.prof-field { flex-basis: 100%; }
+.profs { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.prof { display: flex; align-items: center; gap: 6px; }
+.prof-name { font-size: 13px; color: var(--text-2); min-width: 92px; }
+.prof select { height: 34px; }
+.prof input { width: 64px; }
+@media (max-width: 560px) { .prof { width: 100%; } .prof select { flex: 1; } }

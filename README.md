@@ -28,6 +28,7 @@ GitHub Action (hourly) ──► aion2.exchange /api/servers, /api/crafts, /api/
 | Turnover / day | sell price after fees × sold / day: market size, available even without a crafting cost |
 | Capital needed | barrier to entry: cost per attempt × attempts needed for a 90% chance of making one (`attemptsFor`). Combo crafts hit with chance success × combo per attempt, so an Artisan's Splendent (~24%) needs 9 attempts' worth, about 2.2× its average cost; True Dragon needs 1 |
 | Return on capital | profit / craft ÷ capital needed: profit per kinah you have to put up |
+| Proficiency | per-skill crafting mastery (1–100: Novice 1–50, Professional 1–50; default Professional 25 = 75). Sets every craft's success rate (below) |
 
 Verdicts: **Craft it** = profitable, ≥ 0.5 sold/day, ≤ 14 days of supply. Thresholds live in `site/metrics.js` (`DEFAULT_SETTINGS`).
 
@@ -35,14 +36,27 @@ Click an item to expand its recipe, laid out like the game's: every input (inclu
 
 Every control (tier, skill, price basis, tax, listing fee, share, sort, expanded item) is stored in the URL, so a copied link reproduces the exact view.
 
+## Crafting proficiency
+
+Success rate depends on the proficiency advantage ΔL = your mastery − the recipe's level (`successAt` in `site/metrics.js`, an approximate community formula):
+
+- ΔL < 0: can't craft yet (verdict "Needs …").
+- ΔL = 0: base rate, 74%.
+- 0 < ΔL ≤ 45: base + (cap − base) × ln(ΔL + 1) ÷ ln(46).
+- ΔL > 45: the cap.
+
+Recipe levels come from aion2.exchange's model for the Splendent steps (e.g. weapons 3 / 15 / 30, Boots 10 / 25 / 40) and from questlog.gg for True Dragon (55 or 60, in `recipes/true_dragon.json`). Caps for the Splendent steps are the site's rates at mastery 100 (93.1% / 94.6% / 96.8%); True Dragon's cap isn't published and is assumed to be 96.8% (`PROFICIENCY.trueDragonCap`).
+
+Artisan's and Expert's Splendent costs are recomputed from the site's cost chain at your success rates (`adjustChain`): each step needs 1 ÷ (success × combo) attempts per result, multiplied down the chain. At mastery 100 (and wherever every step is capped) this reproduces the site's costs exactly. True Dragon costs one attempt ÷ success (Splendent True Dragon: ÷ success × 25%). Settings are per skill and kept in the URL (`?prof=b60.t75`).
+
 ## True Dragon crafting costs
 
 `recipes/true_dragon.json` holds the 19 True Dragon recipes (Elyos), taken from the [questlog.gg crafting database](https://questlog.gg/aion-2/en/crafting). Each consumes the Artisan's Splendent item of the same slot plus five materials, and has a 25% combo chance to produce the Splendent True Dragon item instead (`trueDragonCost` in `site/metrics.js`):
 
 - **One craft attempt** = Artisan's Splendent input + materials. The input costs the cheaper of crafting it (aion2.exchange's model) and buying it; under "buy everything" it's bought. Materials are priced at Siel's cheapest listing.
-- **True Dragon** = one attempt. **Splendent True Dragon** = one attempt ÷ 0.25 = 4×, with the plain True Dragon results of the other attempts not credited (the same convention aion2.exchange uses for Artisan's Splendent).
+- **True Dragon** = one attempt ÷ your success rate (see Crafting proficiency). **Splendent True Dragon** = that ÷ 0.25 = 4×, with the plain True Dragon results of the other attempts not credited (the same convention aion2.exchange uses for Artisan's Splendent).
 - The direct Splendent True Dragon recipes that craft from True Dragon gear (item IDs ending `096`) are left out on purpose: they're transfer crafts, so the result is bound to the player and can't be sold. The 25% combo is the only way to make a sellable Splendent True Dragon.
-- Not modelled yet: craft failure rates (aion2.exchange's model has ~93–97% success on the Artisan's steps), buying materials in bulk beyond the cheapest listing, and crafting the Horn/Leather/Scale intermediates yourself (they need NPC-bound tools whose price isn't on the exchange).
+- Not modelled yet: buying materials in bulk beyond the cheapest listing, and crafting the Horn/Leather/Scale intermediates yourself (they need NPC-bound tools whose price isn't on the exchange).
 
 Recipes change only with game patches; regenerate the file if a patch changes them.
 

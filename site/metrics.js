@@ -11,6 +11,8 @@ export const DEFAULT_SETTINGS = {
   minSalesPerDay: 0.5,        // below this the market is "thin"
   maxSupplyDays: 14,          // above this the market is "oversupplied"
   capitalConfidence: 0.9,     // capital needed = enough attempts for this chance of making at least one
+  // Crafting mastery per skill on the game's 1-100 scale (1-50 Novice, 51-100 Professional). 75 = Professional 25.
+  proficiency: { Blacksmithing: 75, Tailoring: 75, Jewelcrafting: 75, Alchemy: 75 },
 };
 
 // Listing-history sales estimator settings.
@@ -173,7 +175,9 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
   // Per-attempt cost: the recipe's own (True Dragon), or the row's cost × hit chance (cost = per-attempt ÷ hit),
   // so capital always agrees with the cost column, whatever cost basis is selected.
   const attemptCost = num(target.attemptCost) ?? (cost != null && target.hitChance ? cost * target.hitChance : null);
-  const entry = capitalNeeded(attemptCost, target.hitChance, s.capitalConfidence) ?? cost;
+  // Never below the average cost: at high hit chances one attempt clears the confidence bar but costs less than average.
+  const needed = capitalNeeded(attemptCost, target.hitChance, s.capitalConfidence);
+  const entry = needed != null && cost != null ? Math.max(needed, cost) : needed ?? cost;
   const roc = profit == null || !entry ? null : (profit / entry) * 100;
 
   return {
@@ -187,9 +191,12 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
     cost, listing, soldAvg, price, net, profit, marginPct,
     listings, sold28, perDay, supplyDays, dailyPool, yourDaily, turnover,
     capital: entry, roc, attempts90: attemptsFor(target.hitChance, s.capitalConfidence), hitChance: target.hitChance ?? null,
+    success: target.success ?? null, recipeLevel: target.recipeLevel ?? null, playerLevel: target.playerLevel ?? null, locked: !!target.locked,
     salesSource, priceSource, est, costDetail: target.costDetail || null,
     missingInputs: num(target.missing) ?? 0,
-    verdict: verdictFor({ profit, perDay, supplyDays, missing: num(target.missing) ?? 0, noCost: cost == null }, s),
+    verdict: target.locked
+      ? { id: "locked", label: `Needs ${masteryLabel(target.recipeLevel)}`, tone: "neutral" }
+      : verdictFor({ profit, perDay, supplyDays, missing: num(target.missing) ?? 0, noCost: cost == null }, s),
   };
 }
 
@@ -206,6 +213,67 @@ export function verdictFor({ profit, perDay, supplyDays, missing, noCost }, s = 
 }
 
 /** Analyze a whole server's market and sort best-first by expected daily profit. */
+// ---------- crafting proficiency ----------
+// Success rate by proficiency advantage ΔL = your mastery − recipe level (approximate community formula):
+//   ΔL < 0: can't craft yet · ΔL = 0: base rate · 0 < ΔL ≤ 45: base + (cap − base) × ln(ΔL + 1) / ln(46) · ΔL > 45: cap.
+// Caps for the Splendent steps come from aion2.exchange's model (its rates at mastery 100, which is past the cap).
+export const PROFICIENCY = {
+  baseRate: 0.74,          // success at ΔL = 0
+  fullDelta: 45,           // ΔL where the cap is reached
+  trueDragonCap: 0.9684,   // not in the site's model; assumed equal to the highest known cap (Artisan's step)
+};
+export const SKILLS = ["Blacksmithing", "Tailoring", "Jewelcrafting", "Alchemy"];
+
+/** Mastery level (1-100) → "Novice 30" / "Professional 25". */
+export function masteryLabel(level) {
+  if (level == null) return "—";
+  return level > 50 ? `Professional ${level - 50}` : `Novice ${level}`;
+}
+
+/** Success chance at `playerLevel` for a recipe of `recipeLevel` whose rate tops out at `cap`. 0 = can't craft yet. */
+export function successAt(playerLevel, recipeLevel, cap, base = PROFICIENCY.baseRate) {
+  if (cap == null) return null;
+  if (playerLevel == null || recipeLevel == null) return cap;
+  const d = playerLevel - recipeLevel;
+  if (d < 0) return 0;
+  if (d >= PROFICIENCY.fullDelta) return cap;
+  if (d === 0) return Math.min(base, cap);
+  return base + (cap - base) * Math.log(d + 1) / Math.log(PROFICIENCY.fullDelta + 1);
+}
+
+/**
+ * aion2.exchange's cost chain for one Artisan's Splendent item, recomputed at a player's mastery: each step's success
+ * from successAt() (the site's rate is the cap), then the expected cost of every tier. Each attempt of step k uses one
+ * result of step k−1; only success × combo results count, so attempts multiply down the chain.
+ * Returns a copy whose steps carry success_rate (yours), cap and level, and whose tiers carry cost (cheapest path)
+ * and cost_market (every material bought at its listing); a tier you can't craft yet has cost null.
+ */
+export function adjustChain(chain, playerLevel) {
+  const steps = (chain.steps || []).map((s) => ({
+    ...s, cap: s.success_rate, player_level: playerLevel,
+    success_rate: successAt(playerLevel, s.mastery_level, s.success_rate),
+  }));
+  const per = (s, key) => (s.materials || []).reduce((a, m) => a + (num(m[key] ?? m.unit_price) ?? 0) * m.per_attempt, 0);
+  const cheap = steps.map((s) => per(s, "unit_price"));
+  const listed = steps.map((s) => per(s, "listing_price"));
+  const costOf = (k, perAttempt) => {
+    let need = 1, total = 0;
+    for (let j = k; j >= 0; j--) {
+      const q = steps[j].success_rate * (steps[j].combo_probability ?? 1);
+      if (!(q > 0)) return null;
+      const attempts = need / q;
+      total += perAttempt[j] * attempts;
+      need = attempts;
+    }
+    return total;
+  };
+  const tiers = (chain.tiers || []).map((x) => {
+    const k = steps.findIndex((s) => s.result_key === x.item_key);
+    return k < 0 ? { ...x } : { ...x, cost: costOf(k, cheap), cost_market: costOf(k, listed) };
+  });
+  return { ...chain, steps, tiers, player_level: playerLevel };
+}
+
 /**
  * Crafting cost from a recipe file (recipes/true_dragon.json).
  *
@@ -239,13 +307,18 @@ export function trueDragonCost(recipe, product_key, ctx, settings = DEFAULT_SETT
   });
   const attempt = (base ?? 0) + matsCost + (num(recipe.gold_cost) ?? 0);
   const isCombo = product_key === recipe.combo_key;
-  const factor = isCombo ? 1 / recipe.combo_probability : 1;
+  const level = s.proficiency?.[ctx.skill] ?? null;
+  const success = successAt(level, recipe.mastery_level, PROFICIENCY.trueDragonCap) ?? 1;
+  const hit = success * (isCombo ? recipe.combo_probability : 1);
+  const factor = hit > 0 ? 1 / hit : null;
   return {
-    cost: missing ? null : attempt * factor,
+    cost: missing || !factor ? null : attempt * factor,
     missing,
+    hit, success, locked: success === 0, recipeLevel: recipe.mastery_level, playerLevel: level,
     detail: {
       baseKey: recipe.base_key, baseName: baseTarget?.name ?? baseInput?.name ?? String(recipe.base_key), base, baseMethod,
       baseCraft, baseListing, materials: mats, matsCost, attempt, factor, comboProbability: recipe.combo_probability,
+      success, isCombo, recipeLevel: recipe.mastery_level, playerLevel: level,
     },
   };
 }
@@ -253,12 +326,38 @@ export function trueDragonCost(recipe, product_key, ctx, settings = DEFAULT_SETT
 export const recipeCost = trueDragonCost;
 
 export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
+  const s = { ...DEFAULT_SETTINGS, ...settings, proficiency: { ...DEFAULT_SETTINGS.proficiency, ...(settings.proficiency || {}) } };
   const items = new Map((market.items || []).map((i) => [i.item_key, i]));
   const histories = market.history || {};
   const grid = snapshotGrid(histories);
+
+  // Splendent chains at the player's mastery for that skill (one chain per Artisan's Splendent item).
+  const chains = {};
+  const stepOf = new Map(); // item key -> { chain, index }
+  for (const t of market.targets || []) {
+    const c = market.chains?.[String(t.target_key)];
+    if (!c?.steps?.length) continue;
+    const adj = adjustChain(c, s.proficiency[t.skill] ?? null);
+    chains[String(t.target_key)] = adj;
+    adj.steps.forEach((st, i) => stepOf.set(st.result_key, { chain: adj, index: i }));
+  }
+  const withChainCost = (t) => {
+    const at = stepOf.get(t.target_key);
+    if (!at) return t;
+    const st = at.chain.steps[at.index];
+    const tier = (at.chain.tiers || []).find((x) => x.item_key === t.target_key) || {};
+    const locked = st.success_rate === 0;
+    return {
+      ...t, cost: tier.cost ?? null, cost_market: tier.cost_market ?? null,
+      hitChance: locked ? null : st.success_rate * (st.combo_probability ?? 1),
+      success: st.success_rate, locked, recipeLevel: st.mastery_level, playerLevel: st.player_level,
+    };
+  };
+  const targets = (market.targets || []).map(withChainCost);
+
   const ctx = {
     items,
-    targets: new Map((market.targets || []).map((t) => [t.target_key, t])),
+    targets: new Map(targets.map((t) => [t.target_key, t])),
     materials: new Map((market.materials || []).map((m) => [m.item_key, m])),
     inputs: new Map((market.inputs || []).map((m) => [m.item_key, m])),
   };
@@ -269,24 +368,26 @@ export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
     recipeFor.set(r.product_key, r);
     if (!recipeFor.has(r.combo_key)) recipeFor.set(r.combo_key, r);
   }
-  return (market.targets || [])
+  const rows = targets
     .map((t0) => {
       let t = t0;
-      const recipe = t.cost == null ? recipeFor.get(t.target_key) : null;
+      const recipe = !stepOf.has(t.target_key) && t.cost == null ? recipeFor.get(t.target_key) : null;
       if (recipe) {
-        const c = trueDragonCost(recipe, t.target_key, ctx, settings);
+        const c = trueDragonCost(recipe, t.target_key, { ...ctx, skill: t.skill }, s);
         t = { ...t, cost: c.cost, cost_market: c.cost, missing: c.missing, costDetail: c.detail,
-              attemptCost: c.detail.attempt, hitChance: t.target_key === recipe.combo_key ? recipe.combo_probability : 1 };
+              attemptCost: c.detail.attempt, hitChance: c.hit > 0 ? c.hit : null,
+              success: c.success, locked: c.locked, recipeLevel: c.recipeLevel, playerLevel: c.playerLevel };
       }
       const h = histories[String(t.target_key)];
       const est = h ? estimateSales(h, grid) : null;
-      if (t.hitChance == null) t = { ...t, ...chainOdds(market.chains, t.target_key) };
-      return analyzeCraft(t, items.get(t.target_key), settings, est);
+      return analyzeCraft(t, items.get(t.target_key), s, est);
     })
     .sort(byRank);
+  rows.chains = chains; // the chains at your mastery, for the recipe panels
+  return rows;
 }
 
-export const VERDICT_ORDER = { craft: 0, glut: 1, thin: 2, nosales: 3, nocost: 4, incomplete: 5, loss: 6, nodata: 7 };
+export const VERDICT_ORDER = { craft: 0, glut: 1, thin: 2, nosales: 3, nocost: 4, incomplete: 5, loss: 6, locked: 7, nodata: 8 };
 
 export function byRank(a, b) {
   const pa = a.dailyPool ?? -Infinity;

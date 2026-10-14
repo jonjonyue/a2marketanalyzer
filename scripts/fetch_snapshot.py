@@ -121,7 +121,7 @@ def fetch_market(base: str, server_id: int) -> tuple[dict, dict | None, list[str
             "tiers": [pick(x, ("tier", "item_key", "name", "cost", "cost_market", "market_price")) for x in detail.get("tiers") or []],
             "steps": [{
                 **pick(s, ("step_no", "recipe_id", "result_key", "result_name", "attempts", "success_rate",
-                           "combo_probability", "step_cost")),
+                           "combo_probability", "step_cost", "mastery_level")),
                 "materials": [pick(m, ("material_key", "name", "per_attempt", "expected", "unit_price",
                                        "listing_price", "method", "via", "subtotal")) for m in s.get("materials") or []],
             } for s in detail.get("steps") or []],

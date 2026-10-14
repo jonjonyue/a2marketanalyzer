@@ -1,4 +1,4 @@
-import { analyzeMarket, DEFAULT_SETTINGS, ESTIMATOR, VERDICT_ORDER, byRank } from "./metrics.js";
+import { analyzeMarket, DEFAULT_SETTINGS, ESTIMATOR, VERDICT_ORDER, byRank, SKILLS as CRAFT_SKILLS, masteryLabel, PROFICIENCY } from "./metrics.js";
 
 const API = "https://aion2.exchange";
 const SNAPSHOT_URL = "data/snapshot.json";
@@ -56,10 +56,22 @@ function readUrl() {
     sharePct: Math.min(100, Math.max(1, n("share", DEFAULT_SETTINGS.sharePct))),
     hideLoss: p.get("hideLoss") === "1",
     open: p.has("open") ? +p.get("open") : null,
+    proficiency: readProficiency(p.get("prof")),
     sort: p.get("sort") || "rank",
     dir: p.get("dir") === "asc" ? "asc" : "desc",
   };
 }
+// "b60.t75" -> { Blacksmithing: 60, Tailoring: 75, ... } (others default)
+function readProficiency(v) {
+  const out = { ...DEFAULT_SETTINGS.proficiency };
+  for (const part of String(v || "").split(".")) {
+    const skill = CRAFT_SKILLS.find((k) => k[0].toLowerCase() === part[0]);
+    const lvl = parseInt(part.slice(1), 10);
+    if (skill && lvl >= 1 && lvl <= 100) out[skill] = lvl;
+  }
+  return out;
+}
+
 function writeUrl() {
   const u = state.ui;
   const p = new URLSearchParams();
@@ -72,6 +84,9 @@ function writeUrl() {
   if (u.sharePct !== DEFAULT_SETTINGS.sharePct) p.set("share", u.sharePct);
   if (u.hideLoss) p.set("hideLoss", "1");
   if (u.open != null) p.set("open", u.open);
+  const prof = CRAFT_SKILLS.filter((k) => u.proficiency[k] !== DEFAULT_SETTINGS.proficiency[k])
+    .map((k) => k[0].toLowerCase() + u.proficiency[k]).join(".");
+  if (prof) p.set("prof", prof);
   if (u.sort !== "rank") { p.set("sort", u.sort); p.set("dir", u.dir); }
   const qs = p.toString();
   history.replaceState(null, "", qs ? `?${qs}` : location.pathname);
@@ -213,6 +228,7 @@ function buildControls() {
   num("tax", "salesTaxPct", 0, 50);
   num("listFee", "listingFeePct", 0, 50);
   num("share", "sharePct", 1, 100);
+  buildProficiency();
 
   $("hideLoss").checked = state.ui.hideLoss;
   $("hideLoss").addEventListener("change", (e) => { state.ui.hideLoss = e.target.checked; writeUrl(); render(); });
@@ -224,6 +240,25 @@ function buildControls() {
     setTimeout(() => (btn.textContent = "Copy share link"), 1800);
   });
   syncControls();
+}
+
+// Crafting proficiency: grade + level per skill; stored as one 1-100 level (51-100 = Professional 1-50).
+function buildProficiency() {
+  const box = $("proficiency");
+  box.innerHTML = CRAFT_SKILLS.map((k) => {
+    const lvl = state.ui.proficiency[k];
+    const pro = lvl > 50;
+    return `<div class="prof" data-skill="${k}"><span class="prof-name">${k}</span>` +
+      `<select aria-label="${k} grade"><option value="novice"${pro ? "" : " selected"}>Novice</option><option value="pro"${pro ? " selected" : ""}>Professional</option></select>` +
+      `<input type="number" min="1" max="50" step="1" inputmode="numeric" aria-label="${k} level" value="${pro ? lvl - 50 : lvl}"></div>`;
+  }).join("");
+  box.addEventListener("input", (e) => {
+    const row = e.target.closest(".prof"); if (!row) return;
+    const lvl = Math.min(50, Math.max(1, parseInt(row.querySelector("input").value, 10) || 1));
+    const level = (row.querySelector("select").value === "pro" ? 50 : 0) + lvl;
+    state.ui.proficiency = { ...state.ui.proficiency, [row.dataset.skill]: level };
+    writeUrl(); render();
+  });
 }
 
 function syncControls() {
@@ -239,6 +274,7 @@ function render() {
   if (!state.market) return;
   const settings = { ...DEFAULT_SETTINGS, ...state.ui };
   let rows = analyzeMarket(state.market, settings);
+  state.viewChains = rows.chains;
   rows.forEach((r, i) => (r.rank = i + 1)); // rank within the whole server, before filters
   if (state.ui.tier !== "All") rows = rows.filter((r) => r.tier === state.ui.tier);
   if (state.ui.skill !== "All") rows = rows.filter((r) => r.skill === state.ui.skill);
@@ -483,7 +519,7 @@ function methodLabel(m) {
 // Each Artisan's Splendent item has aion2.exchange's cost chain: step 1 makes the Splendent item, step 2 the
 // Expert's Splendent (consuming 1 Splendent per attempt), step 3 the Artisan's Splendent (consuming 1 Expert's).
 function chainOf(key) {
-  const chains = state.market?.chains || {};
+  const chains = state.viewChains || state.market?.chains || {};
   for (const [k, c] of Object.entries(chains)) {
     const i = (c.steps || []).findIndex((s) => s.result_key === key);
     if (i >= 0) return { chain: c, index: i };
@@ -527,7 +563,11 @@ function stepCard(chain, index, depth = 0) {
   }
   const rate = (s.success_rate ?? 1) * (s.combo_probability ?? 1);
   const itemCost = tierOf(chain, s.result_key).cost ?? perAttempt / rate;
-  const sum = `<p class="detail-sum">A craft succeeds ${asPct(s.success_rate ?? 1)} of the time and only the ` +
+  if (s.success_rate === 0) {
+    return `<div class="recipe-card">${recipeTable(rows, perAttempt)}<p class="detail-sum">This recipe needs <strong>${masteryLabel(s.mastery_level)}</strong>` +
+      `; you're ${masteryLabel(s.player_level)}, so you can't craft it yet.</p></div>`;
+  }
+  const sum = `<p class="detail-sum">${levelNote(s.player_level, s.mastery_level, s.cap)}A craft succeeds ${asPct(s.success_rate ?? 1)} of the time and only the ` +
     `${asPct(s.combo_probability ?? 1)} combo makes <strong>${esc(s.result_name)}</strong>, so one costs ` +
     `${kinah(perAttempt)} ÷ (${asPct(s.success_rate ?? 1)} × ${asPct(s.combo_probability ?? 1)}) = <strong>${kinah(itemCost)}</strong>` +
     ` (about ${(1 / rate).toFixed(1)} attempts each).</p>`;
@@ -535,6 +575,15 @@ function stepCard(chain, index, depth = 0) {
     ? `<details class="sub"${depth < 1 ? " open" : ""}><summary>How ${esc(prevStep.result_name)} is made</summary>${stepCard(chain, index - 1, depth + 1)}</details>`
     : "";
   return `<div class="recipe-card">${recipeTable(rows, perAttempt)}${sum}${sub}</div>`;
+}
+
+// "At your Professional 25, 35 levels above this recipe (Novice 40): " — explains the success rate used.
+function levelNote(player, recipe, cap) {
+  if (player == null || recipe == null) return "";
+  const d = player - recipe;
+  const capped = d >= PROFICIENCY.fullDelta;
+  return `At your ${masteryLabel(player)}, ${d} level${d === 1 ? "" : "s"} above this recipe (${masteryLabel(recipe)})` +
+    `${capped ? `, you're at the success cap${cap != null ? ` (${asPct(cap)})` : ""}` : ""}. `;
 }
 
 function detailHtml(r) {
@@ -559,9 +608,14 @@ function trueDragonCard(r) {
       `<td>Bought</td><td>${m.price == null ? "—" : kinah(m.price * m.qty)}</td></tr>`);
   }
   const combo = Math.round(d.comboProbability * 100);
-  const sum = d.factor !== 1
-    ? `<p class="detail-sum">This item only comes from the ${combo}% combo on the True Dragon craft, so it costs ${kinah(d.attempt)} × ${+d.factor.toFixed(2)} = <strong>${kinah(r.cost)}</strong>.</p>`
-    : `<p class="detail-sum">Every attempt makes a True Dragon item, so it costs one attempt: <strong>${kinah(d.attempt)}</strong>. ${combo}% of attempts make the Splendent version instead.</p>`;
+  const lv = levelNote(d.playerLevel, d.recipeLevel, PROFICIENCY.trueDragonCap);
+  const sum = d.success === 0
+    ? `<p class="detail-sum">This recipe needs <strong>${masteryLabel(d.recipeLevel)}</strong>; you're ${masteryLabel(d.playerLevel)}, so you can't craft it yet.</p>`
+    : d.isCombo
+      ? `<p class="detail-sum">${lv}A craft succeeds ${asPct(d.success)} of the time and only the ${combo}% combo makes this item, so it costs ` +
+        `${kinah(d.attempt)} ÷ (${asPct(d.success)} × ${combo}%) = <strong>${kinah(r.cost)}</strong>.</p>`
+      : `<p class="detail-sum">${lv}A craft succeeds ${asPct(d.success)} of the time, so one costs ${kinah(d.attempt)} ÷ ${asPct(d.success)} = ` +
+        `<strong>${kinah(r.cost)}</strong>. ${combo}% of successes make the Splendent version instead.</p>`;
   const base = chainOf(d.baseKey);
   const sub = base
     ? `<details class="sub" open><summary>How ${esc(d.baseName)} is made</summary>${stepCard(base.chain, base.index, 1)}</details>`
@@ -571,7 +625,7 @@ function trueDragonCard(r) {
 
 function costTitle(r) {
   const d = r.costDetail;
-  if (!d) return r.cost == null ? "No crafting cost known" : "aion2.exchange crafting model: expected cost per item at mastery 100, cheapest path";
+  if (!d) return r.cost == null ? "No crafting cost known" : `Expected cost per item at your ${masteryLabel(r.playerLevel)} (success ${r.success != null ? asPct(r.success) : "—"}), cheapest path; expand the row for the recipe`;
   const base = `${d.baseName} ${kinah(d.base)} (${d.baseMethod === "craft" ? "crafted" : "bought"}; craft ${kinah(d.baseCraft)}, listing ${kinah(d.baseListing)})`;
   const mats = d.materials.map((m) => `${m.qty}× ${m.name} @ ${kinah(m.price)}`).join(", ");
   const per = `= ${kinah(d.attempt)} per craft attempt`;
@@ -612,7 +666,7 @@ const COLUMNS = [
     } },
   { key: "verdict", label: "Verdict", sortVal: (r) => VERDICT_ORDER[r.verdict.id],
     fmt: (r) => `<span class="pill ${r.verdict.tone}">${esc(r.verdict.label)}</span>` },
-  { key: "cost", label: "Cost", fmt: (r) => (r.costDetail ? "≈" : "") + kinah(r.cost), title: costTitle },
+  { key: "cost", label: "Cost", fmt: (r) => (r.costDetail && r.cost != null ? "≈" : "") + kinah(r.cost), title: costTitle },
   { key: "price", label: "Sell price", fmt: (r) => kinah(r.price),
     title: (r) => `Cheapest listing ${kinah(r.listing)} · avg sale ${kinah(r.soldAvg)}${r.priceSource === "estimate" ? " (estimated from listings that sold)" : r.priceSource === "official" ? " (28-day official)" : ""}` },
   { key: "profit", label: "Profit / craft", fmt: (r) => kinah(r.profit, { sign: true }), tone: (r) => (r.profit == null ? "dim" : r.profit > 0 ? "pos" : "neg") },

@@ -1,6 +1,6 @@
 {
  "_source": "questlog.gg Aion 2 crafting database (https://questlog.gg/aion-2/en/crafting), Elyos recipes, extracted 2026-10-13",
- "_notes": "Each True Dragon craft consumes 1 Artisan's Splendent item of the same slot (base_key) plus materials, and has a combo_probability chance to yield the Splendent True Dragon item (combo_key) instead. Deliberately excluded: the direct Splendent True Dragon recipes that craft from True Dragon gear (e.g. recipe 111023011 -> item 110130096). Those are transfer crafts: the result is bound to the player and can't be sold, and it is a different item ID from the tradeable combo result.",
+ "_notes": "Each True Dragon craft consumes 1 Artisan's Splendent item of the same slot (base_key) plus materials, and has a combo_probability chance to yield the Splendent True Dragon item (combo_key) instead. Deliberately excluded: the direct Splendent True Dragon recipes that craft from True Dragon gear (e.g. recipe 111023011 -> item 110130096). Those are transfer crafts: the result is bound to the player and can't be sold, and it is a different item ID from the tradeable combo result. mastery_level is the recipe's crafting mastery level on the game's 1-100 scale (1-50 Novice, 51-100 Professional).",
  "materials": {
   "610530010": "Artisan's Ultimate Refining Stone",
   "610710006": "Fine Thick Balaur Horn",
@@ -44,7 +44,8 @@
      "key": 610610016,
      "qty": 5
     }
-   ]
+   ],
+   "mastery_level": 55
   },
   {
    "recipe_id": 111013001,
@@ -75,7 +76,8 @@
      "key": 610610016,
      "qty": 5
     }
-   ]
+   ],
+   "mastery_level": 55
   },
   {
    "recipe_id": 111033001,
@@ -106,7 +108,8 @@
      "key": 610610016,
      "qty": 5
     }
-   ]
+   ],
+   "mastery_level": 55
   },
   {
    "recipe_id": 211043001,
@@ -137,7 +140,8 @@
      "key": 610610016,
      "qty": 5
     }
-   ]
+   ],
+   "mastery_level": 55
   },
   {
    "recipe_id": 311053001,
@@ -168,7 +172,8 @@
      "key": 610610016,
      "qty": 5
     }
-   ]
+   ],
+   "mastery_level": 55
   },
   {
    "recipe_id": 311093001,
@@ -199,7 +204,8 @@
      "key": 610610016,
      "qty": 5
     }
-   ]
+   ],
+   "mastery_level": 55
   },
   {
    "recipe_id": 111063001,
@@ -230,7 +236,8 @@
      "key": 610610016,
      "qty": 5
     }
-   ]
+   ],
+   "mastery_level": 55
   },
   {
    "recipe_id": 211103001,
@@ -261,7 +268,8 @@
      "key": 610610016,
      "qty": 5
     }
-   ]
+   ],
+   "mastery_level": 55
   },
   {
    "recipe_id": 111083001,
@@ -292,7 +300,8 @@
      "key": 610610016,
      "qty": 5
     }
-   ]
+   ],
+   "mastery_level": 60
   },
   {
    "recipe_id": 412013001,
@@ -323,7 +332,8 @@
      "key": 610610016,
      "qty": 3
     }
-   ]
+   ],
+   "mastery_level": 55
   },
   {
    "recipe_id": 412023001,
@@ -354,7 +364,8 @@
      "key": 610610016,
      "qty": 2
     }
-   ]
+   ],
+   "mastery_level": 55
   },
   {
    "recipe_id": 412033001,
@@ -385,7 +396,8 @@
      "key": 610610016,
      "qty": 2
     }
-   ]
+   ],
+   "mastery_level": 55
   },
   {
    "recipe_id": 412043001,
@@ -416,7 +428,8 @@
      "key": 610610016,
      "qty": 2
     }
-   ]
+   ],
+   "mastery_level": 55
   },
   {
    "recipe_id": 412053001,
@@ -447,7 +460,8 @@
      "key": 610610016,
      "qty": 2
     }
-   ]
+   ],
+   "mastery_level": 60
   },
   {
    "recipe_id": 412063001,
@@ -478,7 +492,8 @@
      "key": 610610016,
      "qty": 2
     }
-   ]
+   ],
+   "mastery_level": 60
   },
   {
    "recipe_id": 412073001,
@@ -509,7 +524,8 @@
      "key": 610610016,
      "qty": 2
     }
-   ]
+   ],
+   "mastery_level": 60
   },
   {
    "recipe_id": 213013001,
@@ -540,7 +556,8 @@
      "key": 610610016,
      "qty": 2
     }
-   ]
+   ],
+   "mastery_level": 60
   },
   {
    "recipe_id": 213023001,
@@ -571,7 +588,8 @@
      "key": 610610016,
      "qty": 2
     }
-   ]
+   ],
+   "mastery_level": 60
   },
   {
    "recipe_id": 213033001,
@@ -602,7 +620,8 @@
      "key": 610610016,
      "qty": 2
     }
-   ]
+   ],
+   "mastery_level": 55
   }
  ]
 }
