@@ -401,3 +401,9 @@ button.ext-button, label.ext-button { cursor: pointer; }
 .mini-btn.good:hover { opacity: .9; color: #fff; }
 .listings-table tr.overdue td { background: var(--warning-bg); }
 table.listings-table { min-width: 940px; }
+.mat-icon {
+  display: inline-grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 6px;
+  background: var(--warning-bg); color: var(--warning); border: 2px solid var(--warning); font-size: 15px; line-height: 1;
+}
+.mat-icon.small { width: 24px; height: 24px; border-width: 1.5px; border-radius: 4px; font-size: 13px; }
+.item-input-icon .mat-icon.small { width: 22px; height: 22px; }

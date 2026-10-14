@@ -5,6 +5,9 @@ const API = "https://aion2.exchange";
 const SNAPSHOT_URL = "data/snapshot.json";
 const STORE_KEY = "a2ledger.v1";
 const DEFAULTS = { taxPct: 10, feePct: 2 };
+// A catch-all item for crafting materials bought, so their cost counts against profit without logging each one.
+const MATERIALS = "Materials";
+const isMaterials = (name) => String(name || "").trim().toLowerCase() === MATERIALS.toLowerCase();
 const PERIODS = [["all", "All time"], ["30", "30 days"], ["7", "7 days"], ["1", "Today"]];
 
 const $ = (id) => document.getElementById(id);
@@ -110,8 +113,8 @@ async function loadCatalog() {
     }
     // Names already in the log stay suggestable even if the snapshot doesn't have them.
     for (const e of state.entries) if (!state.catalog.has(e.name.toLowerCase())) add(e.key ?? null, e.name, null);
-    const names = [...state.catalog.values()].sort((a, b) => a.name.localeCompare(b.name));
-    $("itemList").innerHTML = names.map((i) => `<option value="${esc(i.name)}">${i.price != null ? `${kinah(i.price)} listed` : ""}</option>`).join("");
+    const names = [...state.catalog.values()].filter((i) => !isMaterials(i.name)).sort((a, b) => a.name.localeCompare(b.name));
+    $("itemList").innerHTML = `<option value="${MATERIALS}">Crafting materials (any)</option>` + names.map((i) => `<option value="${esc(i.name)}">${i.price != null ? `${kinah(i.price)} listed` : ""}</option>`).join("");
     render();
   } catch { /* the item list is a convenience; typing any name still works */ }
 }
@@ -121,6 +124,11 @@ function iconHtml(icon, cls = "small") {
   const [file, color, rarity] = icon;
   const style = /^#[0-9a-f]{6}$/i.test(color || "") ? ` style="--rarity:${color}"` : "";
   return `<img class="item-icon ${cls}" src="${API}/item-icons/${encodeURIComponent(file)}.webp" alt=""${style} title="${esc(rarity || "")}" loading="lazy" decoding="async" onerror="this.remove()">`;
+}
+// Icon markup for a logged entry or item group; Materials gets its own badge.
+function entryIcon(e, cls = "small") {
+  if (isMaterials(e.name)) return `<span class="mat-icon ${cls}" aria-hidden="true">⚒</span>`;
+  return iconHtml(iconFor(e), cls);
 }
 const lookup = (name) => state.catalog.get(String(name || "").trim().toLowerCase());
 const iconFor = (e) => (e.key != null && [...state.catalog.values()].find((c) => c.key === e.key)?.icon) || lookup(e.name)?.icon;
@@ -172,7 +180,7 @@ function formProblem(f) {
 function updatePreview() {
   const f = readForm();
   const item = lookup(f.name);
-  $("itemIcon").innerHTML = iconHtml(item?.icon, "small");
+  $("itemIcon").innerHTML = isMaterials(f.name) ? entryIcon(f) : iconHtml(item?.icon, "small");
   const priceHint = item?.price != null ? ` <span class="muted">· cheapest listing now ${full(item.price)}</span>` : "";
   if (!Number.isFinite(f.price) || !(f.qty >= 1)) {
     $("preview").innerHTML = item ? `<span class="muted">${esc(item.name)}</span>${priceHint}` : "";
@@ -187,7 +195,7 @@ function updatePreview() {
   }
   $("preview").innerHTML = f.side === "sell"
     ? `${full(a.gross)} − tax ${full(a.tax)} (${f.taxPct}%)${f.feePct ? ` − listing fee ${full(a.fee)} (${f.feePct}%)` : " (listing fee already paid)"} = <strong class="pos">you receive ${full(a.net)}</strong>${priceHint}`
-    : `<strong class="neg">You pay ${full(a.gross)}</strong> <span class="muted">(${f.qty} × ${full(f.price)})</span>${priceHint}`;
+    : `<strong class="neg">You pay ${full(a.gross)}</strong> <span class="muted">(${f.qty} × ${full(f.price)})</span>${isMaterials(f.name) ? ` <span class="muted">· counted as crafting materials</span>` : priceHint}`;
 }
 
 function submit(ev) {
@@ -198,14 +206,16 @@ function submit(ev) {
   $("formError").textContent = problem || "";
   if (problem) return;
   const item = lookup(f.name);
-  const entry = { ...f, name: item?.name || f.name, key: item?.key ?? null };
+  const entry = { ...f, name: isMaterials(f.name) ? MATERIALS : item?.name || f.name, key: isMaterials(f.name) ? null : item?.key ?? null };
   if (state.editing) {
     const i = state.entries.findIndex((x) => x.id === state.editing);
     if (i >= 0) state.entries[i] = { ...state.entries[i], ...entry };
     toast("Entry updated.");
   } else {
     state.entries.push({ id: newId(), ...entry });
-    toast(`${{ sell: "Sale", buy: "Purchase", list: "Listing" }[f.side]} added: ${f.qty} × ${entry.name}.`);
+    toast(isMaterials(entry.name) && f.side === "buy"
+      ? `Materials added: ${full(amounts(entry).gross)} spent.`
+      : `${{ sell: "Sale", buy: "Purchase", list: "Listing" }[f.side]} added: ${f.qty} × ${entry.name}.`);
   }
   save();
   resetForm({ keepItem: !state.editing });
@@ -317,7 +327,7 @@ function renderListings() {
     units += left; value += net;
     const t = timeLeft(l);
     return `<tr${t.over ? ' class="overdue"' : ""}>
-      <td class="name"><span class="item-cell">${iconHtml(iconFor(l))}<span>${esc(l.name)}</span></span></td>
+      <td class="name"><span class="item-cell">${entryIcon(l)}<span>${esc(l.name)}</span></span></td>
       <td class="dim">${esc(new Date(l.ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }))}</td>
       <td class="${t.over ? "warn" : "dim"}" title="Listings last 3 days">${t.over ? "Expired " : "Expires "}${t.text}</td>
       <td>${left.toLocaleString()}${left < l.qty ? ` <span class="dim">of ${l.qty.toLocaleString()}</span>` : ""}</td>
@@ -354,7 +364,7 @@ function totals(entries) {
     t.profit += a.net;
     if (e.side === "sell") { t.received += a.net; t.tax += a.tax; t.fee += a.fee; t.sold += e.qty; }
     else if (e.side === "list") { t.fee += a.fee; t.listingFees += a.fee; }
-    else { t.spent += a.gross; t.bought += e.qty; }
+    else { t.spent += a.gross; t.bought += e.qty; if (isMaterials(e.name)) t.materials = (t.materials || 0) + a.gross; }
   }
   return t;
 }
@@ -363,7 +373,7 @@ function byItem(entries) {
   const groups = new Map();
   for (const e of entries) {
     const k = e.name.toLowerCase();
-    if (!groups.has(k)) groups.set(k, { name: e.name, key: e.key, icon: iconFor(e), list: [] });
+    if (!groups.has(k)) groups.set(k, { name: e.name, key: e.key, iconHtml: entryIcon(e, ""), list: [] });
     groups.get(k).list.push(e);
   }
   return [...groups.values()].map((g) => {
@@ -392,7 +402,7 @@ function renderKpis(entries) {
   $("kpis").innerHTML = [
     kpi(t.profit >= 0 ? "Kinah made" : "Kinah lost", kinah(t.profit, { sign: true }), `${full(t.profit)} · ${label}`, signClass(t.profit)),
     kpi("Received from sales", kinah(t.received), `${t.sold.toLocaleString()} sold, after tax and fees`),
-    kpi("Spent buying", kinah(t.spent), `${t.bought.toLocaleString()} bought`),
+    kpi("Spent buying", kinah(t.spent), t.materials ? `${kinah(t.materials)} on crafting materials` : `${t.bought.toLocaleString()} bought`),
     kpi("Tax and fees paid", kinah(t.tax + t.fee), `${kinah(t.tax)} tax · ${kinah(t.fee)} listing fees`),
   ].join("");
 }
@@ -402,7 +412,7 @@ function renderByItem(entries) {
   $("byItem").querySelector("thead").innerHTML = `<tr><th>Item</th><th>Bought</th><th>Avg buy</th><th>Spent</th><th>Sold</th><th>Avg sell</th><th>Received</th><th>Profit</th><th>Listed</th><th>On hand</th></tr>`;
   $("byItem").querySelector("tbody").innerHTML = rows.length
     ? rows.map((r) => `<tr>
-        <td class="name"><span class="item-cell">${iconHtml(r.icon, "")}<span class="item-text"><strong>${esc(r.name)}</strong></span></span></td>
+        <td class="name"><span class="item-cell">${r.iconHtml}<span class="item-text"><strong>${esc(isMaterials(r.name) ? "Crafting materials" : r.name)}</strong>${isMaterials(r.name) ? `<span class="meta">Bought to craft</span>` : ""}</span></span></td>
         <td>${r.bought ? r.bought.toLocaleString() : "—"}</td>
         <td>${kinah(r.avgBuy)}</td>
         <td>${r.spent ? kinah(r.spent) : "—"}</td>
@@ -411,7 +421,7 @@ function renderByItem(entries) {
         <td>${r.received ? kinah(r.received) : "—"}</td>
         <td class="${signClass(r.profit)}" title="${full(r.profit)}">${kinah(r.profit, { sign: true })}</td>
         <td>${r.listed ? r.listed.toLocaleString() : "—"}</td>
-        <td title="${r.onHand < 0 ? "More sold or listed than bought here (crafted or bought before you started logging)" : ""}">${r.onHand < 0 || !r.bought ? "—" : r.onHand.toLocaleString()}</td>
+        <td title="${r.onHand < 0 ? "More sold or listed than bought here (crafted or bought before you started logging)" : ""}">${r.onHand < 0 || !r.bought || isMaterials(r.name) ? "—" : r.onHand.toLocaleString()}</td>
       </tr>`).join("")
     : `<tr><td colspan="10" class="empty-row">${state.entries.length ? "No transactions in this period." : "Nothing logged yet. Add your first purchase or sale above."}</td></tr>`;
 }
@@ -449,7 +459,7 @@ function renderTransactions(entries) {
       const a = amounts(e);
       return `<tr${e.id === state.editing ? ' class="editing"' : ""}>
         <td class="dim">${esc(fmtDate(e.ts))}</td>
-        <td class="name"><span class="item-cell">${iconHtml(iconFor(e))}<span>${esc(e.name)}</span></span></td>
+        <td class="name"><span class="item-cell">${entryIcon(e)}<span>${esc(e.name)}</span></span></td>
         <td>${typeCell(e)}</td>
         <td>${e.qty.toLocaleString()}</td>
         <td title="${full(e.price)}">${kinah(e.price)}</td>
@@ -539,6 +549,7 @@ function init() {
   for (const id of ["item", "qty", "price", "when"]) $(id).addEventListener("input", updatePreview);
   // Picking an item fills in its current cheapest listing if no price has been typed yet.
   $("item").addEventListener("change", () => {
+    if (isMaterials($("item").value)) { $("item").value = MATERIALS; if (state.side !== "buy" && !state.editing) setSide("buy"); return updatePreview(); }
     const item = lookup($("item").value);
     if (item && !$("price").value && item.price != null) $("price").value = item.price;
     updatePreview();
@@ -578,6 +589,7 @@ function init() {
     if (ev.key !== STORE_KEY) return;
     const s = load(); state.entries = s.entries; state.settings = s.settings; render();
   });
+  $("itemList").innerHTML = `<option value="${MATERIALS}">Crafting materials (any)</option>`;
   setSide("sell");
   resetForm();
   render();
