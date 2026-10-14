@@ -88,6 +88,8 @@ const state = {
   editing: null,       // id of the entry being edited
   catalog: new Map(),  // lowercase name -> { key, name, price, icon }
   sort: { key: "ts", dir: -1 },
+  options: [],         // catalog items for the search dropdown, sorted by name
+  menu: { items: [], active: -1 },
 };
 
 // ---------- item catalog from the dashboard's snapshot ----------
@@ -114,7 +116,8 @@ async function loadCatalog() {
     // Names already in the log stay suggestable even if the snapshot doesn't have them.
     for (const e of state.entries) if (!state.catalog.has(e.name.toLowerCase())) add(e.key ?? null, e.name, null);
     const names = [...state.catalog.values()].filter((i) => !isMaterials(i.name)).sort((a, b) => a.name.localeCompare(b.name));
-    $("itemList").innerHTML = `<option value="${MATERIALS}">Crafting materials (any)</option>` + names.map((i) => `<option value="${esc(i.name)}">${i.price != null ? `${kinah(i.price)} listed` : ""}</option>`).join("");
+    state.options = names;
+    if (document.activeElement === $("item")) openMenu();
     render();
   } catch { /* the item list is a convenience; typing any name still works */ }
 }
@@ -132,6 +135,100 @@ function entryIcon(e, cls = "small") {
 }
 const lookup = (name) => state.catalog.get(String(name || "").trim().toLowerCase());
 const iconFor = (e) => (e.key != null && [...state.catalog.values()].find((c) => c.key === e.key)?.icon) || lookup(e.name)?.icon;
+
+// ---------- item search dropdown ----------
+const MAX_RESULTS = 60;
+function matches(query) {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const mat = { name: MATERIALS, label: "Crafting materials (any)", materials: true };
+  if (!words.length) return [mat, ...state.options.slice(0, MAX_RESULTS)];
+  const scored = [];
+  for (const i of state.options) {
+    const n = i.name.toLowerCase();
+    if (!words.every((w) => n.includes(w))) continue;
+    scored.push([n.startsWith(words[0]) ? 0 : n.includes(" " + words[0]) ? 1 : 2, i]);
+  }
+  scored.sort((a, b) => a[0] - b[0] || a[1].name.localeCompare(b[1].name));
+  const out = scored.slice(0, MAX_RESULTS).map(([, i]) => i);
+  if (words.every((w) => "materials crafting".includes(w) || MATERIALS.toLowerCase().startsWith(w))) out.unshift(mat);
+  return out;
+}
+function highlight(name, query) {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return esc(name);
+  const lower = name.toLowerCase();
+  const marks = new Array(name.length).fill(false);
+  for (const w of words) { const i = lower.indexOf(w); if (i >= 0) for (let k = i; k < i + w.length; k++) marks[k] = true; }
+  let html = "", open = false;
+  for (let k = 0; k < name.length; k++) {
+    if (marks[k] !== open) { html += marks[k] ? "<mark>" : "</mark>"; open = marks[k]; }
+    html += esc(name[k]);
+  }
+  return html + (open ? "</mark>" : "");
+}
+function openMenu() {
+  const q = $("item").value.trim();
+  const items = matches(q);
+  state.menu = { items, active: -1 };
+  const menu = $("itemMenu");
+  menu.innerHTML = items.length
+    ? items.map((i, idx) => `<li role="option" id="opt-${idx}" data-idx="${idx}" aria-selected="false">
+        ${i.materials ? `<span class="mat-icon small" aria-hidden="true">⚒</span>` : iconHtml(i.icon, "small") || `<span class="icon-gap"></span>`}
+        <span class="opt-name">${i.materials ? `<strong>${esc(i.name)}</strong> <span class="muted">· ${esc(i.label)}</span>` : highlight(i.name, q)}</span>
+        <span class="opt-price">${i.price != null ? kinah(i.price) : ""}</span>
+      </li>`).join("")
+    : `<li class="combo-empty">No match. "${esc(q)}" will be logged as a new item.</li>`;
+  menu.hidden = false;
+  $("item").setAttribute("aria-expanded", "true");
+}
+function closeMenu() {
+  $("itemMenu").hidden = true;
+  $("item").setAttribute("aria-expanded", "false");
+  $("item").removeAttribute("aria-activedescendant");
+  state.menu.active = -1;
+}
+function moveActive(delta) {
+  const n = state.menu.items.length;
+  if (!n) return;
+  const menu = $("itemMenu");
+  state.menu.active = (state.menu.active + delta + n) % n;
+  for (const li of menu.querySelectorAll("[role=option]")) li.setAttribute("aria-selected", String(Number(li.dataset.idx) === state.menu.active));
+  const el = $(`opt-${state.menu.active}`);
+  el?.scrollIntoView({ block: "nearest" });
+  $("item").setAttribute("aria-activedescendant", `opt-${state.menu.active}`);
+}
+function pickItem(name) {
+  $("item").value = name;
+  closeMenu();
+  if (isMaterials(name)) {
+    if (state.side !== "buy" && !state.editing) setSide("buy");
+  } else {
+    const item = lookup(name);
+    if (item && !$("price").value && item.price != null) $("price").value = item.price;
+  }
+  updatePreview();
+  $(isMaterials(name) || !$("price").value ? "price" : "qty").focus();
+}
+function wireCombo() {
+  const input = $("item"), menu = $("itemMenu");
+  input.addEventListener("focus", openMenu);
+  input.addEventListener("click", () => { if (menu.hidden) openMenu(); });
+  input.addEventListener("input", openMenu);
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key === "ArrowDown") { ev.preventDefault(); if (menu.hidden) openMenu(); moveActive(1); }
+    else if (ev.key === "ArrowUp") { ev.preventDefault(); if (menu.hidden) openMenu(); moveActive(-1); }
+    else if (ev.key === "Enter" && !menu.hidden && state.menu.active >= 0) { ev.preventDefault(); pickItem(state.menu.items[state.menu.active].name); }
+    else if (ev.key === "Escape" && !menu.hidden) { ev.preventDefault(); closeMenu(); }
+    else if (ev.key === "Tab") closeMenu();
+  });
+  // mousedown (not click) so the pick happens before the input loses focus
+  menu.addEventListener("mousedown", (ev) => {
+    const li = ev.target.closest("[role=option]");
+    ev.preventDefault();
+    if (li) pickItem(state.menu.items[Number(li.dataset.idx)].name);
+  });
+  input.addEventListener("blur", () => setTimeout(closeMenu, 0));
+}
 
 // ---------- form ----------
 function setSide(side) {
@@ -549,7 +646,7 @@ function init() {
   for (const id of ["item", "qty", "price", "when"]) $(id).addEventListener("input", updatePreview);
   // Picking an item fills in its current cheapest listing if no price has been typed yet.
   $("item").addEventListener("change", () => {
-    if (isMaterials($("item").value)) { $("item").value = MATERIALS; if (state.side !== "buy" && !state.editing) setSide("buy"); return updatePreview(); }
+    if (isMaterials($("item").value) && $("item").value !== MATERIALS) { $("item").value = MATERIALS; if (state.side !== "buy" && !state.editing) setSide("buy"); return updatePreview(); }
     const item = lookup($("item").value);
     if (item && !$("price").value && item.price != null) $("price").value = item.price;
     updatePreview();
@@ -589,7 +686,7 @@ function init() {
     if (ev.key !== STORE_KEY) return;
     const s = load(); state.entries = s.entries; state.settings = s.settings; render();
   });
-  $("itemList").innerHTML = `<option value="${MATERIALS}">Crafting materials (any)</option>`;
+  wireCombo();
   setSide("sell");
   resetForm();
   render();

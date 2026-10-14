@@ -57,14 +57,16 @@
             <button type="button" data-v="sell" role="radio">Sold</button>
           </div>
         </div>
-        <label class="field item-field">
-          <span>Item</span>
-          <div class="item-input">
+        <div class="field item-field">
+          <label for="item">Item</label>
+          <div class="item-input combo">
             <span class="item-input-icon" id="itemIcon"></span>
-            <input id="item" type="text" list="itemList" placeholder="Search items or type any name" required>
+            <input id="item" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="itemMenu"
+              placeholder="Search items or type any name" spellcheck="false" required>
+            <span class="combo-caret" aria-hidden="true">▾</span>
+            <ul class="combo-menu" id="itemMenu" role="listbox" aria-label="Items" hidden></ul>
           </div>
-          <datalist id="itemList"></datalist>
-        </label>
+        </div>
         <label class="field">
           <span>Quantity</span>
           <input id="qty" type="number" min="1" step="1" value="1" inputmode="numeric" required>

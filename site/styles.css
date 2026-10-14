@@ -407,3 +407,24 @@ table.listings-table { min-width: 940px; }
 }
 .mat-icon.small { width: 24px; height: 24px; border-width: 1.5px; border-radius: 4px; font-size: 13px; }
 .item-input-icon .mat-icon.small { width: 22px; height: 22px; }
+
+/* item search dropdown */
+.field.item-field > label { font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.combo input { padding-right: 28px !important; }
+.combo-caret { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 11px; pointer-events: none; }
+.combo-menu {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 25; margin: 0; padding: 4px; list-style: none;
+  max-height: 320px; overflow-y: auto; min-width: 320px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.14);
+}
+.combo-menu[hidden] { display: none; }
+.combo-menu li[role=option] {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px;
+}
+.combo-menu li[role=option]:hover, .combo-menu li[aria-selected="true"] { background: var(--accent-soft); }
+.combo-menu .item-icon.small, .combo-menu .mat-icon.small { margin: 0; vertical-align: 0; width: 24px; height: 24px; }
+.combo-menu .icon-gap { width: 24px; flex: none; }
+.combo-menu .opt-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.combo-menu .opt-name mark { background: none; color: var(--accent); font-weight: 700; }
+.combo-menu .opt-price { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.combo-menu .combo-empty { padding: 10px; color: var(--muted); font-size: 12.5px; }
