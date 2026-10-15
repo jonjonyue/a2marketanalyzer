@@ -1,4 +1,4 @@
-import { shortenName } from "./metrics.js";
+import { shortenName, parseKinah } from "./metrics.js";
 
 // Profit calculator: a personal log of exchange purchases and sales, kept in this browser (localStorage).
 const API = "https://aion2.exchange";
@@ -26,14 +26,6 @@ function kinah(v, { sign = false } = {}) {
 const full = (v) => (v == null ? "—" : (v < 0 ? "−" : "") + Math.abs(Math.round(v)).toLocaleString("en-US"));
 const signClass = (v) => (v > 0 ? "pos" : v < 0 ? "neg" : "");
 
-// "1.5m" -> 1500000, "250k" -> 250000, "1,234,567" -> 1234567. Returns NaN if it can't be read.
-export function parseKinah(text) {
-  const t = String(text ?? "").trim().toLowerCase().replace(/[,\s_]/g, "");
-  const m = t.match(/^(\d+(?:\.\d+)?|\.\d+)([kmb])?$/);
-  if (!m) return NaN;
-  const mult = { k: 1e3, m: 1e6, b: 1e9 }[m[2]] || 1;
-  return Math.round(parseFloat(m[1]) * mult);
-}
 
 const LISTING_HOURS = 72; // exchange listings last 3 days
 

@@ -31,6 +31,8 @@ GitHub Action (hourly) ──► aion2.exchange /api/servers, /api/crafts, /api/
 | Return on capital | profit / craft ÷ capital needed: profit per kinah you have to put up |
 | Proficiency | per-skill crafting mastery (1–100: Novice 1–50, Professional 1–50; default Professional 25 = 75). Sets every craft's success rate (below) |
 
+**What to craft with your kinah** (`planBudget`): enter your kinah (saved in the browser as `a2dash.budget`, never in links) and the dashboard fills it with crafts worth making (Top pick / Craft it, within the current filters), best return on capital first. Each craft gets up to what the market takes from you in one listing period (sold/day × 3 days × your share, at least 1). n units reserve cost per attempt × the attempts for 90% odds of n successes (`attemptsForN`, binomial), never less than n × the average cost. It reports expected profit, kinah set aside, what's left, and the best craft that didn't fit. Capital needed above your kinah is shown in orange.
+
 Verdicts, checked in this order (thresholds in `DEFAULT_SETTINGS` in `site/metrics.js`):
 
 | Verdict | Rule |

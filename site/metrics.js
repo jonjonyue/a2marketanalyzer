@@ -117,6 +117,22 @@ export function attemptsFor(p, confidence = 0.9) {
   return Math.max(1, Math.ceil(Math.log(1 - confidence) / Math.log(1 - p)));
 }
 
+/** Attempts needed for `confidence` odds of at least `n` hits at hit chance p (binomial tail). */
+export function attemptsForN(p, n = 1, confidence = 0.9) {
+  if (!(p > 0) || !(n >= 1)) return null;
+  if (p >= 1) return n;
+  for (let k = n; k < 5000; k++) {
+    // P(at least n hits in k attempts) = 1 − P(fewer than n hits)
+    let term = Math.pow(1 - p, k), below = 0; // P(0 hits)
+    for (let j = 0; j < n; j++) {
+      below += term;
+      term = term * (k - j) / (j + 1) * p / (1 - p);
+    }
+    if (1 - below >= confidence) return k;
+  }
+  return null;
+}
+
 /** Capital to have ready: cost per attempt × attempts for `confidence` odds of making one. */
 export function capitalNeeded(attemptCost, p, confidence = 0.9) {
   const n = attemptsFor(p, confidence);
@@ -197,7 +213,7 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
     profile: target.profile_label,
     cost, listing, soldAvg, price, net, profit, marginPct,
     listings, sold28, perDay, supplyDays, daysToSell, dailyPool, yourDaily, turnover,
-    capital: entry, roc, attempts90: attemptsFor(target.hitChance, s.capitalConfidence), hitChance: target.hitChance ?? null,
+    capital: entry, roc, attemptCost, attempts90: attemptsFor(target.hitChance, s.capitalConfidence), hitChance: target.hitChance ?? null,
     success: target.success ?? null, recipeLevel: target.recipeLevel ?? null, playerLevel: target.playerLevel ?? null, locked: !!target.locked,
     salesSource, priceSource, est, costDetail: target.costDetail || null, transfer: target.transfer || null,
     missingInputs: num(target.missing) ?? 0,
@@ -478,4 +494,52 @@ export function shortenMarketNames(market) {
   };
   if (market) for (const k of ["targets", "items", "materials", "chains", "recipes"]) walk(market[k]);
   return market;
+}
+
+/**
+ * Where to put a kinah budget. Candidates are crafts worth making (Top pick / Craft it), best return on capital
+ * first. Each gets as many units as the market can take from you in one listing period (sold/day × 3 days × your
+ * share, at least 1) and the budget allows, where n units need cost-per-attempt × the attempts for 90% odds of n
+ * successes (never less than n × the average cost). Returns the picks, totals, and the best craft just out of reach.
+ */
+export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
+  const s = { ...DEFAULT_SETTINGS, ...settings };
+  if (!(budget > 0)) return null;
+  const capitalFor = (r, n) => {
+    const k = r.attemptCost != null && r.hitChance ? attemptsForN(r.hitChance, n, s.capitalConfidence) : null;
+    const lucky = k != null ? r.attemptCost * k : null;
+    return Math.max(lucky ?? 0, n * r.cost);
+  };
+  const candidates = rows
+    .filter((r) => isWorthCrafting(r.verdict) && r.cost > 0 && r.profit > 0 && r.perDay > 0)
+    .sort((a, b) => (b.roc ?? 0) - (a.roc ?? 0));
+  let left = budget;
+  const picks = [];
+  const skipped = [];
+  for (const r of candidates) {
+    const slots = Math.max(1, Math.round(r.perDay * s.listingDays * (s.sharePct / 100)));
+    let n = 0;
+    while (n < slots && capitalFor(r, n + 1) <= left) n++;
+    if (!n) { skipped.push({ row: r, capital: capitalFor(r, 1) }); continue; }
+    const capital = capitalFor(r, n);
+    left -= capital;
+    picks.push({ row: r, units: n, slots, capital, spend: n * r.cost, profit: n * r.profit,
+      daysToSell: r.perDay > 0 ? (r.listings + n) / r.perDay : null });
+  }
+  const capital = picks.reduce((t, p) => t + p.capital, 0);
+  const profit = picks.reduce((t, p) => t + p.profit, 0);
+  const spend = picks.reduce((t, p) => t + p.spend, 0);
+  // The best craft that didn't fit, and what it would take.
+  const nextUp = skipped.sort((a, b) => (b.row.roc ?? 0) - (a.row.roc ?? 0))[0] || null;
+  return { budget, picks, capital, spend, profit, left: budget - capital, roi: capital ? (profit / capital) * 100 : null,
+    nextUp: nextUp && { ...nextUp, short: nextUp.capital - left }, candidates: candidates.length };
+}
+
+// "1.5m" -> 1500000, "250k" -> 250000, "1,234,567" -> 1234567. Returns NaN if it can't be read.
+export function parseKinah(text) {
+  const t = String(text ?? "").trim().toLowerCase().replace(/[,\s_]/g, "");
+  const m = t.match(/^(\d+(?:\.\d+)?|\.\d+)([kmb])?$/);
+  if (!m) return NaN;
+  const mult = { k: 1e3, m: 1e6, b: 1e9 }[m[2]] || 1;
+  return Math.round(parseFloat(m[1]) * mult);
 }

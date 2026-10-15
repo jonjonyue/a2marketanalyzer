@@ -1,10 +1,11 @@
-import { analyzeMarket, DEFAULT_SETTINGS, ESTIMATOR, VERDICT_ORDER, byRank, isWorthCrafting, SKILLS as CRAFT_SKILLS, masteryLabel, PROFICIENCY, shortenMarketNames, shortenName } from "./metrics.js";
+import { analyzeMarket, DEFAULT_SETTINGS, ESTIMATOR, VERDICT_ORDER, byRank, isWorthCrafting, SKILLS as CRAFT_SKILLS, masteryLabel, PROFICIENCY, shortenMarketNames, shortenName, planBudget, parseKinah } from "./metrics.js";
 
 const API = "https://aion2.exchange";
 const SNAPSHOT_URL = "data/snapshot.json";
 const DEFAULT_SERVER = 11201; // Siel · Elyos · North America West
 const SERVER_REGIONS = ["NAE", "NAW"]; // the servers the hourly snapshot covers
 const REGION_SHORT = { NAE: "NA East", NAW: "NA West", EU: "EU", LA: "SA", AS: "Asia" };
+const BUDGET_STORE = "a2dash.budget"; // the viewer's kinah, remembered in this browser (never put in links)
 const SERVER_STORE = "a2dash.server"; // the viewer's last server, remembered in this browser
 const HISTORY_DAYS = 10;
 const SKILLS = ["All", "Blacksmithing", "Armorsmithing", "Handicrafting", "Alchemy"];
@@ -23,6 +24,7 @@ const state = {
   market: null,        // { captured_at, targets, items }
   rows: [],
   ui: readUrl(),
+  budget: savedBudget(),
 };
 
 // ---------- formatting ----------
@@ -79,6 +81,13 @@ function readProficiency(v) {
     if (skill && lvl >= 1 && lvl <= 100) out[skill] = lvl;
   }
   return out;
+}
+
+function savedBudget() {
+  try { const v = parseKinah(localStorage.getItem(BUDGET_STORE)); return v > 0 ? v : null; } catch { return null; }
+}
+function saveBudget(v) {
+  try { v ? localStorage.setItem(BUDGET_STORE, String(v)) : localStorage.removeItem(BUDGET_STORE); } catch { /* not remembered */ }
 }
 
 function savedServer() {
@@ -259,6 +268,17 @@ function showBanner(msg) {
 
 // ---------- controls ----------
 function buildControls() {
+  // Your kinah: shorthand like 250m or 1.2b; remembered in this browser, never put in share links.
+  $("budget").value = state.budget ? kinah(state.budget).replace(/\.0+(?=[KMB])/, "") : "";
+  $("budget").addEventListener("change", () => {
+    const raw = $("budget").value.trim();
+    const v = raw ? parseKinah(raw) : null;
+    if (raw && !(v > 0)) { $("budget").setAttribute("aria-invalid", "true"); return; }
+    $("budget").removeAttribute("aria-invalid");
+    state.budget = v;
+    saveBudget(v);
+    render();
+  });
   // Server picker, grouped by region; the choice is remembered in this browser.
   const regions = [...new Set(state.servers.map((x) => x.region_name || x.region))];
   $("server").innerHTML = regions.map((rn) => `<optgroup label="${esc(rn)}">` +
@@ -359,9 +379,51 @@ function render() {
   if (state.ui.hideLoss) rows = rows.filter((r) => !(r.profit != null && r.profit <= 0));
   state.rows = rows;
   renderKpis(rows);
+  renderPlan(rows, settings);
   renderBars(rows);
   renderScatter(rows, settings);
   renderTable(rows);
+}
+
+// ---------- plan for the viewer's kinah ----------
+function renderPlan(rows, settings) {
+  const box = $("planBody");
+  if (!state.budget) {
+    $("planNote").textContent = "";
+    box.innerHTML = `<p class="muted plan-empty">Enter how much kinah you have above to see what to craft with it.</p>`;
+    return;
+  }
+  const plan = planBudget(rows, state.budget, settings);
+  $("planNote").textContent = `For ${kinah(state.budget)} on ${state.servers.find((x) => x.server_id === state.ui.server)?.name || "this server"}, using the filters above and your proficiency.`;
+  if (!plan.picks.length) {
+    box.innerHTML = plan.nextUp
+      ? `<p class="plan-empty">Nothing worth crafting fits ${kinah(state.budget)} yet. The best option, <strong>${esc(plan.nextUp.row.shortName)}</strong>, needs about <strong>${kinah(plan.nextUp.capital)}</strong> to be 90% sure of making one.</p>`
+      : `<p class="plan-empty muted">No craft in view is currently worth making (Top pick or Craft it). Try other filters or a different server.</p>`;
+    return;
+  }
+  const rowsHtml = plan.picks.map((p) => `<tr>
+      <td class="name"><span class="item-cell">${iconHtml(p.row.key, "small")}<span>${esc(p.row.shortName)}</span></span></td>
+      <td><span class="pill ${p.row.verdict.tone}">${esc(p.row.verdict.label)}</span></td>
+      <td title="The market takes about ${p.slots} from you per 3-day listing (sold/day × 3 × your ${settings.sharePct}% share)">${p.units}${p.units < p.slots ? ` <span class="dim">of ${p.slots}</span>` : ""}</td>
+      <td title="Kinah to set aside for 90% odds of making ${p.units} (combo luck included)">${kinah(p.capital)}</td>
+      <td title="Average spend for ${p.units}">${kinah(p.spend)}</td>
+      <td class="pos">${kinah(p.profit, { sign: true })}</td>
+      <td>${pct(p.row.roc)}</td>
+      <td title="Your last one would wait about this long behind current listings">${days(p.daysToSell)} d</td>
+    </tr>`).join("");
+  const next = plan.nextUp
+    ? `<p class="muted small">Next up: <strong>${esc(plan.nextUp.row.shortName)}</strong> (${pct(plan.nextUp.row.roc)} return) needs ${kinah(plan.nextUp.capital)} set aside, ${kinah(plan.nextUp.short)} more than you have left.</p>`
+    : plan.left > 0 && plan.picks.length === plan.candidates
+      ? `<p class="muted small">That covers every craft worth making right now at the amount the market can take; the remaining ${kinah(plan.left)} has nowhere better to go until listings sell or prices change.</p>`
+      : "";
+  box.innerHTML = `<div class="plan-summary">
+      <div><span class="label">Expected profit</span><strong class="pos">${kinah(plan.profit, { sign: true })}</strong><span class="sub">${pct(plan.roi)} on what you set aside</span></div>
+      <div><span class="label">Set aside</span><strong>${kinah(plan.capital)}</strong><span class="sub">average spend ${kinah(plan.spend)}</span></div>
+      <div><span class="label">Left over</span><strong>${kinah(plan.left)}</strong><span class="sub">${plan.picks.length} of ${plan.candidates} worthwhile crafts</span></div>
+    </div>
+    <div class="table-scroll"><table class="plan-table"><thead><tr><th>Craft</th><th>Verdict</th><th>Make</th><th>Set aside</th><th>Avg spend</th><th>Profit</th><th>Return</th><th>Sells in</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
+    ${next}
+    <p class="muted small">Best return on capital first. "Set aside" covers bad luck on combo crafts (90% odds of making them all); on average you spend less and keep the rest. Each craft is capped at what the market takes from you in one 3-day listing, so the plan doesn't flood it.</p>`;
 }
 
 // True Dragon tiers have no crafting cost yet; when nothing in view has one, show market size instead of profit.
@@ -757,6 +819,8 @@ function salesTitle(r) {
 
 const overTransfer = (r) => r.transfer?.cost != null && r.price != null && r.price > r.transfer.cost;
 
+const overBudget = (r) => state.budget > 0 && r.capital != null && r.capital > state.budget;
+
 const COLUMNS = [
   { key: "rank", label: "#", cls: "rank", sortVal: (r) => -r.rank, fmt: (r) => (r.cost == null ? "—" : r.rank) },
   { key: "name", label: "Craft", cls: "name", sortVal: (r) => r.shortName,
@@ -777,7 +841,8 @@ const COLUMNS = [
       (r.transfer?.cost != null ? `. Transfer craft makes a bound one for ${kinah(r.transfer.cost)}${overTransfer(r) ? ": buyers can make their own for less than this price" : ""}` : "") },
   { key: "profit", label: "Profit / craft", fmt: (r) => kinah(r.profit, { sign: true }), tone: (r) => (r.profit == null ? "dim" : r.profit > 0 ? "pos" : "neg") },
   { key: "marginPct", label: "Margin", fmt: (r) => pct(r.marginPct), title: () => "Profit ÷ average cost per item", tone: (r) => (r.marginPct == null ? "dim" : r.marginPct > 0 ? "pos" : "neg") },
-  { key: "capital", label: "Capital needed", fmt: (r) => kinah(r.capital), title: capitalTitle },
+  { key: "capital", label: "Capital needed", fmt: (r) => kinah(r.capital), title: (r) => capitalTitle(r) + (overBudget(r) ? `. More than your ${kinah(state.budget)}` : ""),
+    tone: (r) => (overBudget(r) ? "over-budget" : "") },
   { key: "roc", label: "Return on capital", fmt: (r) => pct(r.roc), title: capitalTitle,
     tone: (r) => (r.roc == null ? "dim" : r.roc > 0 ? "pos" : "neg") },
   { key: "perDay", label: "Sold / day", fmt: (r) => (r.salesSource === "estimate" ? "~" : "") + rate(r.perDay), title: salesTitle },

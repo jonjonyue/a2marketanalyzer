@@ -447,3 +447,18 @@ details.sub.transfer { margin-top: 14px; border-left-color: var(--warning); }
 /* server picker */
 .server-field select { min-width: 220px; font-weight: 600; }
 @media (max-width: 560px) { .server-field select { min-width: 0; width: 100%; } }
+
+/* kinah budget + plan */
+.budget-field input { width: 150px; font: inherit; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; height: 34px; font-weight: 600; }
+.budget-field input[aria-invalid="true"] { border-color: var(--critical); }
+.plan .plan-empty { margin: 4px 0; }
+.plan-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 4px 0 12px; }
+.plan-summary > div { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; min-width: 0; }
+.plan-summary .label { font-size: 12px; color: var(--muted); }
+.plan-summary strong { font-size: 20px; }
+.plan-summary .sub { font-size: 12px; color: var(--text-2); }
+table.plan-table { min-width: 760px; }
+.plan-table .item-icon.small { vertical-align: 0; margin: 0; }
+.plan-table td.name { font-size: 13px; }
+td.over-budget { color: var(--serious); }
+@media (max-width: 560px) { .plan-summary { grid-template-columns: 1fr; } .budget-field input { width: 100%; } }
