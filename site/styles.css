@@ -428,3 +428,14 @@ table.listings-table { min-width: 940px; }
 .combo-menu .opt-name mark { background: none; color: var(--accent); font-weight: 700; }
 .combo-menu .opt-price { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .combo-menu .combo-empty { padding: 10px; color: var(--muted); font-size: 12.5px; }
+
+/* KPI tiles that show an item name: smaller type, wrap to two lines instead of cutting off */
+.kpi .value.is-name {
+  font-size: 18px; line-height: 1.25; white-space: normal; text-overflow: clip;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  min-height: calc(2 * 1.25em); margin-top: 4px;
+}
+.kpi .sub { white-space: normal; }
+@media (max-width: 560px) {
+  .kpi .value.is-name { font-size: 16px; -webkit-line-clamp: 3; min-height: 0; }
+}

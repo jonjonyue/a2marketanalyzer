@@ -319,14 +319,14 @@ function renderKpis(rows) {
   const bestRoc = rows.filter((r) => r.roc != null && r.roc > 0 && isWorthCrafting(r.verdict))
     .sort((a, b) => b.roc - a.roc)[0];
   const tiles = [
-    { label: "Best craft right now", value: best && best.dailyPool > 0 ? best.shortName : "Nothing profitable", sub: best && best.dailyPool > 0 ? `${kinah(best.profit)} per craft · ${rate(best.perDay)}/day sold` : "Try another price basis" },
+    { label: "Best craft right now", name: best && best.dailyPool > 0, value: best && best.dailyPool > 0 ? best.shortName : "Nothing profitable", sub: best && best.dailyPool > 0 ? `${kinah(best.profit)} per craft · ${rate(best.perDay)}/day sold` : "Try another price basis" },
     { label: "Your expected daily profit", value: yours > 0 ? kinah(yours) : "—", sub: yours > 0 ? `from ${best.shortName} at ${state.ui.sharePct}% share` : "No craft with positive profit and sales" },
     { label: "Worth crafting", value: `${good.length} of ${rows.filter((r) => r.cost != null).length}`, sub: costedNote(rows) },
     bestRoc
-      ? { label: "Best return on capital", value: bestRoc.shortName, sub: `${pct(bestRoc.roc)} · ${kinah(bestRoc.profit)} profit on ${kinah(bestRoc.capital)}` }
+      ? { label: "Best return on capital", name: true, value: bestRoc.shortName, sub: `${pct(bestRoc.roc)} · ${kinah(bestRoc.profit)} profit on ${kinah(bestRoc.capital)}` }
       : { label: "Median margin", value: pct(median), sub: `market-wide daily pool ${kinah(pool)}` },
   ];
-  $("kpis").innerHTML = tiles.map((t) => `<div class="kpi"><div class="label">${esc(t.label)}</div><div class="value" title="${esc(t.value)}">${esc(t.value)}</div><div class="sub" title="${esc(t.sub)}">${esc(t.sub)}</div></div>`).join("");
+  $("kpis").innerHTML = tiles.map((t) => `<div class="kpi"><div class="label">${esc(t.label)}</div><div class="value${t.name ? " is-name" : ""}" title="${esc(t.value)}">${esc(t.value)}</div><div class="sub" title="${esc(t.sub)}">${esc(t.sub)}</div></div>`).join("");
 }
 
 function renderMarketKpis(rows) {
@@ -335,12 +335,12 @@ function renderMarketKpis(rows) {
   const total = byTurnover.reduce((s, r) => s + r.turnover, 0);
   const top = byTurnover[0];
   const tiles = [
-    { label: "Biggest market", value: top ? top.shortName : "—", sub: top ? `${kinah(top.turnover)} / day after fees` : "No sales estimates yet" },
-    { label: "Fastest seller", value: fastest ? fastest.shortName : "—", sub: fastest ? `~${rate(fastest.perDay)} sold / day` : "No sales estimates yet" },
+    { label: "Biggest market", name: !!top, value: top ? top.shortName : "—", sub: top ? `${kinah(top.turnover)} / day after fees` : "No sales estimates yet" },
+    { label: "Fastest seller", name: !!fastest, value: fastest ? fastest.shortName : "—", sub: fastest ? `~${rate(fastest.perDay)} sold / day` : "No sales estimates yet" },
     { label: "Total turnover", value: kinah(total), sub: `per day across ${byTurnover.length} items, after fees` },
     { label: "Crafting cost", value: "TBD", sub: "profit and ranking need a cost model" },
   ];
-  $("kpis").innerHTML = tiles.map((t) => `<div class="kpi"><div class="label">${esc(t.label)}</div><div class="value" title="${esc(t.value)}">${esc(t.value)}</div><div class="sub" title="${esc(t.sub)}">${esc(t.sub)}</div></div>`).join("");
+  $("kpis").innerHTML = tiles.map((t) => `<div class="kpi"><div class="label">${esc(t.label)}</div><div class="value${t.name ? " is-name" : ""}" title="${esc(t.value)}">${esc(t.value)}</div><div class="sub" title="${esc(t.sub)}">${esc(t.sub)}</div></div>`).join("");
 }
 
 function costedNote(rows) {
