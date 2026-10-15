@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pull crafting, price and listing-history data for the North America servers from aion2.exchange.
+"""Pull crafting, price and listing-history data for NA West Siel (Elyos) and Israphel (Asmodian) from aion2.exchange.
 
 Covers the Artisan's Splendent craft targets plus the Expert's Splendent, True Dragon and Splendent True Dragon
 version of each slot (no crafting cost yet). Writes one JSON snapshot the dashboard reads
@@ -10,7 +10,7 @@ market; Expert's Splendent costs from the site's own model. About 96 requests pe
 Writes one file per server (site/data/servers/<id>.json, about 96 requests each) plus an index
 (site/data/snapshot.json) listing the servers and when each was refreshed.
 
-Usage: python scripts/fetch_snapshot.py [--out site/data/snapshot.json] [--base URL] [--regions NAE,NAW] [--server ID]
+Usage: python scripts/fetch_snapshot.py [--out site/data/snapshot.json] [--base URL] [--servers 11201,12201] [--regions NAE,NAW]
 Stdlib only, so the GitHub Action needs no installs.
 """
 from __future__ import annotations
@@ -28,7 +28,7 @@ from pathlib import Path
 
 DEFAULT_BASE = "https://aion2.exchange"
 DEFAULT_SERVER = 11201  # Siel · Elyos · North America West (the page's default)
-DEFAULT_REGIONS = ("NAE", "NAW")  # North America East + West: 28 servers
+DEFAULT_SERVERS = (11201, 12201)  # NA West: Siel (Elyos) and Israphel (Asmodian)
 WORKERS = 3  # servers fetched in parallel; each still waits DELAY_S between its own requests
 RECIPES_DIR = Path(__file__).resolve().parent.parent / "recipes"
 TD_RECIPES = RECIPES_DIR / "true_dragon.json"   # True Dragon (combo -> Splendent True Dragon)
@@ -236,13 +236,17 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="site/data/snapshot.json", help="index file; per-server files go in servers/ next to it")
     ap.add_argument("--base", default=DEFAULT_BASE)
-    ap.add_argument("--regions", default=",".join(DEFAULT_REGIONS), help="comma-separated region codes (NAE, NAW, EU, LA, AS)")
-    ap.add_argument("--server", type=int, help="fetch just this server (for testing)")
+    ap.add_argument("--servers", default=",".join(map(str, DEFAULT_SERVERS)), help="comma-separated server ids")
+    ap.add_argument("--regions", help="fetch every server in these region codes instead (NAE, NAW, EU, LA, AS)")
     args = ap.parse_args()
 
     all_servers = get_json(args.base, "/api/servers").get("servers", [])
-    regions = {r.strip().upper() for r in args.regions.split(",") if r.strip()}
-    servers = [s for s in all_servers if (s.get("server_id") == args.server if args.server else s.get("region") in regions)]
+    if args.regions:
+        regions = {r.strip().upper() for r in args.regions.split(",") if r.strip()}
+        servers = [s for s in all_servers if s.get("region") in regions]
+    else:
+        wanted = [int(x) for x in args.servers.split(",") if x.strip()]
+        servers = sorted((s for s in all_servers if s.get("server_id") in wanted), key=lambda s: wanted.index(s["server_id"]))
     if not servers:
         print("No servers matched", file=sys.stderr)
         return 1

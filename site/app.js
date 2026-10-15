@@ -3,7 +3,7 @@ import { analyzeMarket, DEFAULT_SETTINGS, ESTIMATOR, VERDICT_ORDER, byRank, isWo
 const API = "https://aion2.exchange";
 const SNAPSHOT_URL = "data/snapshot.json";
 const DEFAULT_SERVER = 11201; // Siel · Elyos · North America West
-const SERVER_REGIONS = ["NAE", "NAW"]; // the servers the hourly snapshot covers
+const SERVER_IDS = [11201, 12201]; // the servers the snapshot covers: NA West Siel (Elyos) and Israphel (Asmodian)
 const REGION_SHORT = { NAE: "NA East", NAW: "NA West", EU: "EU", LA: "SA", AS: "Asia" };
 const BUDGET_STORE = "a2dash.budget"; // the viewer's kinah, remembered in this browser (never put in links)
 const SERVER_STORE = "a2dash.server"; // the viewer's last server, remembered in this browser
@@ -151,7 +151,7 @@ async function init() {
   try {
     const s = await fetchJson(`${API}/api/servers`, 4000);
     state.mode = "live";
-    state.servers = s.servers.filter((x) => SERVER_REGIONS.includes(x.region));
+    state.servers = s.servers.filter((x) => SERVER_IDS.includes(x.server_id));
   } catch {
     // Expected while the API doesn't send CORS headers: use the snapshot the GitHub Action builds.
     try {
@@ -283,7 +283,7 @@ function buildControls() {
   const regions = [...new Set(state.servers.map((x) => x.region_name || x.region))];
   $("server").innerHTML = regions.map((rn) => `<optgroup label="${esc(rn)}">` +
     state.servers.filter((x) => (x.region_name || x.region) === rn)
-      .sort((a, b) => a.faction.localeCompare(b.faction) || a.server_id - b.server_id)
+      .sort((a, b) => a.server_id % 10000 - b.server_id % 10000 || a.server_id - b.server_id)
       .map((x) => `<option value="${x.server_id}">${esc(x.name)} · ${esc(x.faction)} · ${esc(REGION_SHORT[x.region] || x.region)}</option>`).join("") + "</optgroup>").join("");
   $("server").value = String(state.ui.server);
   $("server").addEventListener("change", (e) => {
