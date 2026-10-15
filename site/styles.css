@@ -462,3 +462,10 @@ table.plan-table { min-width: 760px; }
 .plan-table td.name { font-size: 13px; }
 td.over-budget { color: var(--serious); }
 @media (max-width: 560px) { .plan-summary { grid-template-columns: 1fr; } .budget-field input { width: 100%; } }
+
+/* your kinah, shared with the Market Analysis plan */
+.kinah-field > label { font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.kinah-field input { width: 170px; font: inherit; font-weight: 600; font-family: var(--mono); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; height: 34px; }
+.kinah-field input[aria-invalid="true"] { border-color: var(--critical); }
+.kinah-note { margin: 0; font-size: 11.5px; max-width: 26ch; line-height: 1.35; }
+@media (max-width: 560px) { .kinah-field input { width: 100%; } .kinah-note { max-width: none; } }

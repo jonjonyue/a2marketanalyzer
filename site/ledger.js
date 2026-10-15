@@ -51,9 +51,28 @@ function load() {
   } catch { /* blocked or corrupt storage: start empty */ }
   return { entries: [], settings: { ...DEFAULTS } };
 }
-function save() {
+// Your kinah lives with the Market Analysis page (it sizes the "what to craft" plan). Every change to the log
+// moves it by that change's kinah effect, so buying, listing and selling here keep it current.
+const BUDGET_KEY = "a2dash.budget";
+function readKinah() {
+  try { const v = parseKinah(localStorage.getItem(BUDGET_KEY)); return Number.isFinite(v) ? v : null; } catch { return null; }
+}
+function writeKinah(v) {
+  try { v == null ? localStorage.removeItem(BUDGET_KEY) : localStorage.setItem(BUDGET_KEY, String(Math.max(0, Math.round(v)))); } catch { /* not saved */ }
+}
+const logNet = (entries) => entries.reduce((t, e) => t + amounts(e).net, 0);
+
+function save({ adjustKinah = true } = {}) {
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify({ entries: state.entries, settings: state.settings }));
+    const net = logNet(state.entries);
+    const delta = net - state.lastNet;
+    state.lastNet = net;
+    const have = readKinah();
+    if (adjustKinah && delta && have != null) {
+      writeKinah(have + delta);
+      showKinah(delta);
+    }
     return true;
   } catch {
     toast("Couldn't save in this browser (private window or storage blocked). Export a backup before closing.");
@@ -80,6 +99,7 @@ const state = {
   editing: null,       // id of the entry being edited
   catalog: new Map(),  // lowercase name -> { key, name, price, icon }
   sort: { key: "ts", dir: -1 },
+  lastNet: 0,          // the log's total kinah effect at the last save, to move "your kinah" by each change
   options: [],         // catalog items for the search dropdown, sorted by name
   menu: { items: [], active: -1 },
 };
@@ -604,12 +624,22 @@ async function importJson(file) {
       ...(e.expired ? { expired: true, expiredTs: e.expiredTs } : {}),
     }));
     state.entries.push(...added);
-    save();
+    save({ adjustKinah: false }); // past history, already reflected in the kinah you have
     render();
     toast(added.length ? `Imported ${added.length} entr${added.length === 1 ? "y" : "ies"}.` : "Nothing new to import; those entries are already here.");
   } catch {
     toast("That file isn't a ledger backup.");
   }
+}
+
+// "Your kinah" box: shows the shared amount and the last change the log made to it.
+function showKinah(delta) {
+  const v = readKinah();
+  if (document.activeElement !== $("kinah")) $("kinah").value = v == null ? "" : full(v);
+  $("kinahNote").innerHTML = v == null
+    ? "Set it to have every entry here update the Market Analysis plan."
+    : delta ? `Last change: <strong class="${signClass(delta)}">${kinah(delta, { sign: true })}</strong>. Used by the Market Analysis plan.`
+      : "Moves with every entry here; used by the Market Analysis plan.";
 }
 
 // ---------- toast ----------
@@ -682,8 +712,20 @@ function init() {
   $("importFile").addEventListener("change", (ev) => { const f = ev.target.files[0]; if (f) importJson(f); ev.target.value = ""; });
   // Keep tabs in sync if the log is edited in another tab.
   window.addEventListener("storage", (ev) => {
+    if (ev.key === BUDGET_KEY) return showKinah();
     if (ev.key !== STORE_KEY) return;
-    const s = load(); state.entries = s.entries; state.settings = s.settings; render();
+    // The other tab already moved your kinah for its change; just catch up.
+    const s = load(); state.entries = s.entries; state.settings = s.settings; state.lastNet = logNet(state.entries); render();
+  });
+  state.lastNet = logNet(state.entries);
+  showKinah();
+  $("kinah").addEventListener("change", () => {
+    const raw = $("kinah").value.trim();
+    const v = raw ? parseKinah(raw) : null;
+    if (raw && !(v >= 0)) { $("kinah").setAttribute("aria-invalid", "true"); return; }
+    $("kinah").removeAttribute("aria-invalid");
+    writeKinah(v);
+    showKinah();
   });
   wireCombo();
   setSide("sell");

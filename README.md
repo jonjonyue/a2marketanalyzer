@@ -89,7 +89,7 @@ Validation: on EU server 11304, where these items are new enough that the game's
 
 `site/ledger.html` (navbar: **Profit Calculator**) is a personal transaction log. Add entries as bought or sold with an item, quantity and the base price per unit (shorthand like `1.5m` or `250k` works); sales have the sales tax and listing fee (10% / 2% by default, adjustable) deducted automatically, and purchases cost the full price. A **Listed** entry charges the listing fee when posted and appears under Active listings, where it can be marked sold (fully or partly; those sales deduct only the tax), expired, or relisted with a new fee. It shows kinah made or lost, money received and spent, tax and fees paid, and a per-item breakdown (average buy/sell, profit, units on hand), filterable by period. Item suggestions and icons come from the dashboard's snapshot; any name can be typed.
 
-Entries are stored in the viewer's browser (`localStorage`, key `a2ledger.v1`), so each person who opens the link has their own private log. Export/import a JSON backup to move it between devices, or export CSV for a spreadsheet.
+**Your kinah** (shared with the dashboard's plan, `localStorage` key `a2dash.budget`) moves with every change to the log: a purchase subtracts what you paid, a listing its fee, a sale adds what you receive, and edits, deletes and undos reverse their effect; importing a backup doesn't touch it. Entries are stored in the viewer's browser (`localStorage`, key `a2ledger.v1`), so each person who opens the link has their own private log. Export/import a JSON backup to move it between devices, or export CSV for a spreadsheet.
 
 ## Run locally
 

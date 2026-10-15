@@ -269,7 +269,15 @@ function showBanner(msg) {
 // ---------- controls ----------
 function buildControls() {
   // Your kinah: shorthand like 250m or 1.2b; remembered in this browser, never put in share links.
-  $("budget").value = state.budget ? kinah(state.budget).replace(/\.0+(?=[KMB])/, "") : "";
+  const showBudget = () => { $("budget").value = state.budget ? Math.round(state.budget).toLocaleString("en-US") : ""; };
+  showBudget();
+  // The Profit Calculator moves your kinah with each entry; pick that up live if it's open in another tab.
+  window.addEventListener("storage", (ev) => {
+    if (ev.key !== BUDGET_STORE) return;
+    state.budget = savedBudget();
+    if (document.activeElement !== $("budget")) showBudget();
+    render();
+  });
   $("budget").addEventListener("change", () => {
     const raw = $("budget").value.trim();
     const v = raw ? parseKinah(raw) : null;
