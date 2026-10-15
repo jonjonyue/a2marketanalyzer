@@ -42,11 +42,13 @@ TARGET_FIELDS = (
     "cost", "cost_market", "carried", "missing",
     "market_price", "listings", "margin", "margin_pct",
 )
-# Item keys share a slot prefix and end in a tier code: Artisan's Splendent 13, True Dragon 15,
-# Splendent True Dragon 17 (e.g. 110430013 / 110430015 / 110430017 are the three Bows).
-# Expert's Splendent is one tier below Artisan's Splendent: key + 9999 (e.g. 110430013 -> 110440012).
+# Each craft target (Artisan's Splendent) has three related tiers. Their item keys differ by faction
+# (Elyos 110430013 -> Expert's 110440012, True Dragon 110430015, Splendent 110430017; Asmodian 110430014 ->
+# 110440014, Star Dragon 110430019, Splendent 110430021), so they're looked up rather than computed:
+# Expert's Splendent from tier 2 of the site's cost chain, True / Star Dragon from recipes/true_dragon.json.
+# True Dragon and Star Dragon share the tier labels "True Dragon" / "Splendent True Dragon".
 EXPERT_TIER = "Expert's Splendent"
-EXTRA_TIERS = ((EXPERT_TIER, 9999), ("True Dragon", 2), ("Splendent True Dragon", 4))
+TD_TIER, STD_TIER = "True Dragon", "Splendent True Dragon"
 BASE_TIER = "Artisan's Splendent"
 
 ITEM_FIELDS = (
@@ -111,13 +113,7 @@ def fetch_icon_index(base: str) -> dict:
 def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tuple[dict, dict | None, list[str]]:
     crafts = get_json(base, "/api/crafts", {"server": server_id})
     targets = [dict(pick(t, TARGET_FIELDS), tier=BASE_TIER) for t in crafts.get("targets") or []]
-    extra_keys = {t["target_key"] + off: (tier, t) for t in targets for tier, off in EXTRA_TIERS}
-    keys = [t["target_key"] for t in targets] + list(extra_keys)
-    items: list[dict] = []
-    if keys:
-        time.sleep(DELAY_S)
-        resp = get_json(base, "/api/items", {"keys": ",".join(map(str, keys)), "limit": 200, "server": server_id}) or {}
-        items = [pick(i, ITEM_FIELDS) for i in resp.get("items") or []]
+    td_recipes = json.loads(TD_RECIPES.read_text())
 
     errors: list[str] = []
     # The site's cost chain for each Artisan's Splendent target: every step's materials, method, unit price,
@@ -141,6 +137,24 @@ def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tup
                                        "listing_price", "method", "via", "subtotal")) for m in s.get("materials") or []],
             } for s in detail.get("steps") or []],
         }
+
+    # Related tiers per target: Expert's Splendent (chain tier 2) and the True / Star Dragon pair from the recipes.
+    recipe_by_base = {r["base_key"]: r for r in td_recipes["recipes"]}
+    extra_keys: dict[int, tuple[str, dict]] = {}
+    for t in targets:
+        tier2 = next((x for x in (chains.get(str(t["target_key"])) or {}).get("tiers") or [] if x.get("tier") == 2), None)
+        if tier2 and tier2.get("item_key"):
+            extra_keys[tier2["item_key"]] = (EXPERT_TIER, t)
+        r = recipe_by_base.get(t["target_key"])
+        if r:
+            extra_keys[r["product_key"]] = (TD_TIER, t)
+            extra_keys[r["combo_key"]] = (STD_TIER, t)
+    keys = [t["target_key"] for t in targets] + list(extra_keys)
+    items: list[dict] = []
+    if keys:
+        time.sleep(DELAY_S)
+        resp = get_json(base, "/api/items", {"keys": ",".join(map(str, keys)), "limit": 200, "server": server_id}) or {}
+        items = [pick(i, ITEM_FIELDS) for i in resp.get("items") or []]
 
     # Extra tiers share the craft target's slot, skill and category. Only items the site has market data
     # for (ever listed on this server) are included. Expert's Splendent costs come from the site's own model
@@ -173,7 +187,6 @@ def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tup
             print(errors[-1], file=sys.stderr)
 
     # True Dragon recipe materials, priced at the current cheapest listing on this server.
-    td_recipes = json.loads(TD_RECIPES.read_text())
     mat_names = td_recipes["materials"]
     time.sleep(DELAY_S)
     resp = get_json(base, "/api/items", {"keys": ",".join(mat_names), "limit": 100, "server": server_id}) or {}
@@ -207,7 +220,8 @@ def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tup
         "targets": targets,
         "items": items,
         "history": history,
-        "recipes": td_recipes["recipes"],
+        "recipes": [r for r in td_recipes["recipes"] if r["base_key"] in recipe_by_base and
+                    any(t["target_key"] == r["base_key"] for t in targets)],  # this server's faction only
         "materials": materials,
         "icons": icons,
         "chains": chains,

@@ -1,6 +1,6 @@
 {
- "_source": "questlog.gg Aion 2 crafting database (https://questlog.gg/aion-2/en/crafting), Elyos recipes, extracted 2026-10-13",
- "_notes": "Each True Dragon craft consumes 1 Artisan's Splendent item of the same slot (base_key) plus materials, and has a combo_probability chance to yield the Splendent True Dragon item (combo_key) instead. `transfer` is the slot's transfer craft (recipe id = True Dragon recipe id + 10): it turns a True Dragon item (product_key) plus its materials into a Splendent True Dragon item (bound_key) that is bound to the character and can't be sold. The dashboard shows it as a reference cost only: it's what a player can pay instead of buying a Splendent True Dragon item, so it caps what buyers will pay. questlog lists only the materials; the True Dragon item is the gear being transferred. mastery_level is the recipe's crafting mastery level on the game's 1-100 scale (1-50 Novice, 51-100 Professional); the transfer recipe's level isn't published and is assumed to equal the True Dragon recipe's.",
+ "_source": "questlog.gg Aion 2 crafting database (https://questlog.gg/aion-2/en/crafting): Elyos recipes extracted 2026-10-13, transfer recipes and Asmodian (Star Dragon) recipes 2026-10-15",
+ "_notes": "Recipes for both factions: Elyos True Dragon (item keys ending 15 / combo 17, recipe ids like 111023001) and Asmodian Star Dragon (keys ending 19 / combo 21, recipe id = Elyos id + 10,000,000), which mirror each other slot for slot. Each True Dragon craft consumes 1 Artisan's Splendent item of the same slot (base_key) plus materials, and has a combo_probability chance to yield the Splendent True Dragon item (combo_key) instead. `transfer` is the slot's transfer craft (recipe id = True Dragon recipe id + 10): it turns a True Dragon item (product_key) plus its materials into a Splendent True Dragon item (bound_key) that is bound to the character and can't be sold. The dashboard shows it as a reference cost only: it's what a player can pay instead of buying a Splendent True Dragon item, so it caps what buyers will pay. questlog lists only the materials; the True Dragon item is the gear being transferred. Asmodian mastery_level is copied from the Elyos recipe of the same slot (questlog doesn't publish it). mastery_level is the recipe's crafting mastery level on the game's 1-100 scale (1-50 Novice, 51-100 Professional); the transfer recipe's level isn't published and is assumed to equal the True Dragon recipe's.",
  "materials": {
   "610530010": "Artisan's Ultimate Refining Stone",
   "610710006": "Fine Thick Balaur Horn",
@@ -12,7 +12,8 @@
   "610650017": "Radiant Yggdrasil Log",
   "610660034": "Radiant Sapphire Gemstone",
   "610660035": "Radiant Diamond Gemstone",
-  "610660036": "Radiant Ruby Gemstone"
+  "610660036": "Radiant Ruby Gemstone",
+  "610650018": "Radiant Asvata Log"
  },
  "recipes": [
   {
@@ -60,7 +61,8 @@
       "qty": 4
      }
     ]
-   }
+   },
+   "faction": "Elyos"
   },
   {
    "recipe_id": 111013001,
@@ -107,7 +109,8 @@
       "qty": 4
      }
     ]
-   }
+   },
+   "faction": "Elyos"
   },
   {
    "recipe_id": 111033001,
@@ -154,7 +157,8 @@
       "qty": 4
      }
     ]
-   }
+   },
+   "faction": "Elyos"
   },
   {
    "recipe_id": 211043001,
@@ -201,7 +205,8 @@
       "qty": 4
      }
     ]
-   }
+   },
+   "faction": "Elyos"
   },
   {
    "recipe_id": 311053001,
@@ -248,7 +253,8 @@
       "qty": 4
      }
     ]
-   }
+   },
+   "faction": "Elyos"
   },
   {
    "recipe_id": 311093001,
@@ -295,7 +301,8 @@
       "qty": 4
      }
     ]
-   }
+   },
+   "faction": "Elyos"
   },
   {
    "recipe_id": 111063001,
@@ -342,7 +349,8 @@
       "qty": 4
      }
     ]
-   }
+   },
+   "faction": "Elyos"
   },
   {
    "recipe_id": 211103001,
@@ -389,7 +397,8 @@
       "qty": 4
      }
     ]
-   }
+   },
+   "faction": "Elyos"
   },
   {
    "recipe_id": 111083001,
@@ -436,7 +445,8 @@
       "qty": 4
      }
     ]
-   }
+   },
+   "faction": "Elyos"
   },
   {
    "recipe_id": 412013001,
@@ -483,7 +493,8 @@
       "qty": 3
      }
     ]
-   }
+   },
+   "faction": "Elyos"
   },
   {
    "recipe_id": 412023001,
@@ -530,7 +541,8 @@
       "qty": 2
      }
     ]
-   }
+   },
+   "faction": "Elyos"
   },
   {
    "recipe_id": 412033001,
@@ -577,7 +589,8 @@
       "qty": 2
      }
     ]
-   }
+   },
+   "faction": "Elyos"
   },
   {
    "recipe_id": 412043001,
@@ -624,7 +637,8 @@
       "qty": 2
      }
     ]
-   }
+   },
+   "faction": "Elyos"
   },
   {
    "recipe_id": 412053001,
@@ -671,7 +685,8 @@
       "qty": 1
      }
     ]
-   }
+   },
+   "faction": "Elyos"
   },
   {
    "recipe_id": 412063001,
@@ -718,7 +733,8 @@
       "qty": 2
      }
     ]
-   }
+   },
+   "faction": "Elyos"
   },
   {
    "recipe_id": 412073001,
@@ -765,7 +781,8 @@
       "qty": 1
      }
     ]
-   }
+   },
+   "faction": "Elyos"
   },
   {
    "recipe_id": 213013001,
@@ -812,7 +829,8 @@
       "qty": 2
      }
     ]
-   }
+   },
+   "faction": "Elyos"
   },
   {
    "recipe_id": 213023001,
@@ -859,7 +877,8 @@
       "qty": 2
      }
     ]
-   }
+   },
+   "faction": "Elyos"
   },
   {
    "recipe_id": 213033001,
@@ -895,6 +914,919 @@
    "transfer": {
     "recipe_id": 213033011,
     "bound_key": 310330113,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610730022,
+      "qty": 4
+     },
+     {
+      "key": 610511013,
+      "qty": 2
+     }
+    ]
+   },
+   "faction": "Elyos"
+  },
+  {
+   "recipe_id": 121023001,
+   "faction": "Asmodian",
+   "product_key": 110130019,
+   "combo_key": 110130021,
+   "combo_probability": 0.25,
+   "skill": "Blacksmithing",
+   "gold_cost": 0,
+   "base_key": 110130014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 4
+    },
+    {
+     "key": 610710006,
+     "qty": 22
+    },
+    {
+     "key": 610511013,
+     "qty": 10
+    },
+    {
+     "key": 610620016,
+     "qty": 9
+    },
+    {
+     "key": 610610016,
+     "qty": 5
+    }
+   ],
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 121023011,
+    "bound_key": 110130100,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710006,
+      "qty": 11
+     },
+     {
+      "key": 610511013,
+      "qty": 4
+     }
+    ]
+   }
+  },
+  {
+   "recipe_id": 121013001,
+   "faction": "Asmodian",
+   "product_key": 110230019,
+   "combo_key": 110230021,
+   "combo_probability": 0.25,
+   "skill": "Blacksmithing",
+   "gold_cost": 0,
+   "base_key": 110230014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 4
+    },
+    {
+     "key": 610710006,
+     "qty": 22
+    },
+    {
+     "key": 610511013,
+     "qty": 10
+    },
+    {
+     "key": 610620016,
+     "qty": 9
+    },
+    {
+     "key": 610610016,
+     "qty": 5
+    }
+   ],
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 121013011,
+    "bound_key": 110230100,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710006,
+      "qty": 11
+     },
+     {
+      "key": 610511013,
+      "qty": 4
+     }
+    ]
+   }
+  },
+  {
+   "recipe_id": 121033001,
+   "faction": "Asmodian",
+   "product_key": 110330019,
+   "combo_key": 110330021,
+   "combo_probability": 0.25,
+   "skill": "Blacksmithing",
+   "gold_cost": 0,
+   "base_key": 110330014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 4
+    },
+    {
+     "key": 610710006,
+     "qty": 22
+    },
+    {
+     "key": 610511013,
+     "qty": 10
+    },
+    {
+     "key": 610620016,
+     "qty": 9
+    },
+    {
+     "key": 610610016,
+     "qty": 5
+    }
+   ],
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 121033011,
+    "bound_key": 110330100,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710006,
+      "qty": 11
+     },
+     {
+      "key": 610511013,
+      "qty": 4
+     }
+    ]
+   }
+  },
+  {
+   "recipe_id": 221043001,
+   "faction": "Asmodian",
+   "product_key": 110430019,
+   "combo_key": 110430021,
+   "combo_probability": 0.25,
+   "skill": "Handicrafting",
+   "gold_cost": 0,
+   "base_key": 110430014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 4
+    },
+    {
+     "key": 610730022,
+     "qty": 22
+    },
+    {
+     "key": 610511013,
+     "qty": 10
+    },
+    {
+     "key": 610650018,
+     "qty": 9
+    },
+    {
+     "key": 610610016,
+     "qty": 5
+    }
+   ],
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 221043011,
+    "bound_key": 110430100,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610730022,
+      "qty": 11
+     },
+     {
+      "key": 610511013,
+      "qty": 4
+     }
+    ]
+   }
+  },
+  {
+   "recipe_id": 321053001,
+   "faction": "Asmodian",
+   "product_key": 110530019,
+   "combo_key": 110530021,
+   "combo_probability": 0.25,
+   "skill": "Alchemy",
+   "gold_cost": 0,
+   "base_key": 110530014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 4
+    },
+    {
+     "key": 610730022,
+     "qty": 22
+    },
+    {
+     "key": 610511013,
+     "qty": 10
+    },
+    {
+     "key": 610660036,
+     "qty": 9
+    },
+    {
+     "key": 610610016,
+     "qty": 5
+    }
+   ],
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 321053011,
+    "bound_key": 110530100,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610730022,
+      "qty": 11
+     },
+     {
+      "key": 610511013,
+      "qty": 4
+     }
+    ]
+   }
+  },
+  {
+   "recipe_id": 321093001,
+   "faction": "Asmodian",
+   "product_key": 110630019,
+   "combo_key": 110630021,
+   "combo_probability": 0.25,
+   "skill": "Alchemy",
+   "gold_cost": 0,
+   "base_key": 110630014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 4
+    },
+    {
+     "key": 610730022,
+     "qty": 22
+    },
+    {
+     "key": 610511013,
+     "qty": 10
+    },
+    {
+     "key": 610660034,
+     "qty": 9
+    },
+    {
+     "key": 610610016,
+     "qty": 5
+    }
+   ],
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 321093011,
+    "bound_key": 110630100,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610730022,
+      "qty": 11
+     },
+     {
+      "key": 610511013,
+      "qty": 4
+     }
+    ]
+   }
+  },
+  {
+   "recipe_id": 121063001,
+   "faction": "Asmodian",
+   "product_key": 110730019,
+   "combo_key": 110730021,
+   "combo_probability": 0.25,
+   "skill": "Blacksmithing",
+   "gold_cost": 0,
+   "base_key": 110730014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 4
+    },
+    {
+     "key": 610710006,
+     "qty": 22
+    },
+    {
+     "key": 610511013,
+     "qty": 10
+    },
+    {
+     "key": 610620016,
+     "qty": 9
+    },
+    {
+     "key": 610610016,
+     "qty": 5
+    }
+   ],
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 121063011,
+    "bound_key": 110730100,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710006,
+      "qty": 11
+     },
+     {
+      "key": 610511013,
+      "qty": 4
+     }
+    ]
+   }
+  },
+  {
+   "recipe_id": 221103001,
+   "faction": "Asmodian",
+   "product_key": 110830019,
+   "combo_key": 110830021,
+   "combo_probability": 0.25,
+   "skill": "Handicrafting",
+   "gold_cost": 0,
+   "base_key": 110830014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 4
+    },
+    {
+     "key": 610730022,
+     "qty": 22
+    },
+    {
+     "key": 610511013,
+     "qty": 10
+    },
+    {
+     "key": 610650018,
+     "qty": 9
+    },
+    {
+     "key": 610610016,
+     "qty": 5
+    }
+   ],
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 221103011,
+    "bound_key": 110830100,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610730022,
+      "qty": 11
+     },
+     {
+      "key": 610511013,
+      "qty": 4
+     }
+    ]
+   }
+  },
+  {
+   "recipe_id": 121083001,
+   "faction": "Asmodian",
+   "product_key": 115030019,
+   "combo_key": 115030021,
+   "combo_probability": 0.25,
+   "skill": "Blacksmithing",
+   "gold_cost": 0,
+   "base_key": 115030014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 4
+    },
+    {
+     "key": 610710006,
+     "qty": 22
+    },
+    {
+     "key": 610511013,
+     "qty": 10
+    },
+    {
+     "key": 610620016,
+     "qty": 9
+    },
+    {
+     "key": 610610016,
+     "qty": 5
+    }
+   ],
+   "mastery_level": 60,
+   "transfer": {
+    "recipe_id": 121083011,
+    "bound_key": 115030098,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710006,
+      "qty": 11
+     },
+     {
+      "key": 610511013,
+      "qty": 4
+     }
+    ]
+   }
+  },
+  {
+   "recipe_id": 422013001,
+   "faction": "Asmodian",
+   "product_key": 210130019,
+   "combo_key": 210130021,
+   "combo_probability": 0.25,
+   "skill": "Armorsmithing",
+   "gold_cost": 0,
+   "base_key": 210130014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 3
+    },
+    {
+     "key": 610710009,
+     "qty": 15
+    },
+    {
+     "key": 610511013,
+     "qty": 7
+    },
+    {
+     "key": 610620016,
+     "qty": 6
+    },
+    {
+     "key": 610610016,
+     "qty": 3
+    }
+   ],
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 422013011,
+    "bound_key": 210130114,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710009,
+      "qty": 8
+     },
+     {
+      "key": 610511013,
+      "qty": 3
+     }
+    ]
+   }
+  },
+  {
+   "recipe_id": 422023001,
+   "faction": "Asmodian",
+   "product_key": 210230019,
+   "combo_key": 210230021,
+   "combo_probability": 0.25,
+   "skill": "Armorsmithing",
+   "gold_cost": 0,
+   "base_key": 210230014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 2
+    },
+    {
+     "key": 610710009,
+     "qty": 11
+    },
+    {
+     "key": 610511013,
+     "qty": 5
+    },
+    {
+     "key": 610620016,
+     "qty": 4
+    },
+    {
+     "key": 610610016,
+     "qty": 2
+    }
+   ],
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 422023011,
+    "bound_key": 210230113,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710009,
+      "qty": 6
+     },
+     {
+      "key": 610511013,
+      "qty": 2
+     }
+    ]
+   }
+  },
+  {
+   "recipe_id": 422033001,
+   "faction": "Asmodian",
+   "product_key": 210330019,
+   "combo_key": 210330021,
+   "combo_probability": 0.25,
+   "skill": "Armorsmithing",
+   "gold_cost": 0,
+   "base_key": 210330014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 2
+    },
+    {
+     "key": 610710009,
+     "qty": 9
+    },
+    {
+     "key": 610511013,
+     "qty": 4
+    },
+    {
+     "key": 610620016,
+     "qty": 3
+    },
+    {
+     "key": 610610016,
+     "qty": 2
+    }
+   ],
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 422033011,
+    "bound_key": 210330113,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710009,
+      "qty": 5
+     },
+     {
+      "key": 610511013,
+      "qty": 2
+     }
+    ]
+   }
+  },
+  {
+   "recipe_id": 422043001,
+   "faction": "Asmodian",
+   "product_key": 210430019,
+   "combo_key": 210430021,
+   "combo_probability": 0.25,
+   "skill": "Armorsmithing",
+   "gold_cost": 0,
+   "base_key": 210430014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 2
+    },
+    {
+     "key": 610710009,
+     "qty": 9
+    },
+    {
+     "key": 610511013,
+     "qty": 4
+    },
+    {
+     "key": 610620016,
+     "qty": 3
+    },
+    {
+     "key": 610610016,
+     "qty": 2
+    }
+   ],
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 422043011,
+    "bound_key": 210430113,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710009,
+      "qty": 5
+     },
+     {
+      "key": 610511013,
+      "qty": 2
+     }
+    ]
+   }
+  },
+  {
+   "recipe_id": 422053001,
+   "faction": "Asmodian",
+   "product_key": 210530019,
+   "combo_key": 210530021,
+   "combo_probability": 0.25,
+   "skill": "Armorsmithing",
+   "gold_cost": 0,
+   "base_key": 210530014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 2
+    },
+    {
+     "key": 610710009,
+     "qty": 7
+    },
+    {
+     "key": 610511013,
+     "qty": 3
+    },
+    {
+     "key": 610620016,
+     "qty": 2
+    },
+    {
+     "key": 610610016,
+     "qty": 2
+    }
+   ],
+   "mastery_level": 60,
+   "transfer": {
+    "recipe_id": 422053011,
+    "bound_key": 210530113,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710009,
+      "qty": 4
+     },
+     {
+      "key": 610511013,
+      "qty": 1
+     }
+    ]
+   }
+  },
+  {
+   "recipe_id": 422063001,
+   "faction": "Asmodian",
+   "product_key": 210630019,
+   "combo_key": 210630021,
+   "combo_probability": 0.25,
+   "skill": "Armorsmithing",
+   "gold_cost": 0,
+   "base_key": 210630014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 2
+    },
+    {
+     "key": 610710009,
+     "qty": 9
+    },
+    {
+     "key": 610511013,
+     "qty": 5
+    },
+    {
+     "key": 610620016,
+     "qty": 2
+    },
+    {
+     "key": 610610016,
+     "qty": 2
+    }
+   ],
+   "mastery_level": 60,
+   "transfer": {
+    "recipe_id": 422063011,
+    "bound_key": 210630113,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710009,
+      "qty": 5
+     },
+     {
+      "key": 610511013,
+      "qty": 2
+     }
+    ]
+   }
+  },
+  {
+   "recipe_id": 422073001,
+   "faction": "Asmodian",
+   "product_key": 210730019,
+   "combo_key": 210730021,
+   "combo_probability": 0.25,
+   "skill": "Armorsmithing",
+   "gold_cost": 0,
+   "base_key": 210730014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 2
+    },
+    {
+     "key": 610710009,
+     "qty": 7
+    },
+    {
+     "key": 610511013,
+     "qty": 3
+    },
+    {
+     "key": 610620016,
+     "qty": 2
+    },
+    {
+     "key": 610610016,
+     "qty": 2
+    }
+   ],
+   "mastery_level": 60,
+   "transfer": {
+    "recipe_id": 422073011,
+    "bound_key": 210730113,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710009,
+      "qty": 4
+     },
+     {
+      "key": 610511013,
+      "qty": 1
+     }
+    ]
+   }
+  },
+  {
+   "recipe_id": 223013001,
+   "faction": "Asmodian",
+   "product_key": 310130019,
+   "combo_key": 310130021,
+   "combo_probability": 0.25,
+   "skill": "Handicrafting",
+   "gold_cost": 0,
+   "base_key": 310130014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 3
+    },
+    {
+     "key": 610730022,
+     "qty": 14
+    },
+    {
+     "key": 610511013,
+     "qty": 6
+    },
+    {
+     "key": 610660036,
+     "qty": 6
+    },
+    {
+     "key": 610610016,
+     "qty": 2
+    }
+   ],
+   "mastery_level": 60,
+   "transfer": {
+    "recipe_id": 223013011,
+    "bound_key": 310130115,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610730022,
+      "qty": 7
+     },
+     {
+      "key": 610511013,
+      "qty": 2
+     }
+    ]
+   }
+  },
+  {
+   "recipe_id": 223023001,
+   "faction": "Asmodian",
+   "product_key": 310230019,
+   "combo_key": 310230021,
+   "combo_probability": 0.25,
+   "skill": "Handicrafting",
+   "gold_cost": 0,
+   "base_key": 310230014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 2
+    },
+    {
+     "key": 610730022,
+     "qty": 11
+    },
+    {
+     "key": 610511013,
+     "qty": 5
+    },
+    {
+     "key": 610660035,
+     "qty": 5
+    },
+    {
+     "key": 610610016,
+     "qty": 2
+    }
+   ],
+   "mastery_level": 60,
+   "transfer": {
+    "recipe_id": 223023011,
+    "bound_key": 310230117,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610730022,
+      "qty": 6
+     },
+     {
+      "key": 610511013,
+      "qty": 2
+     }
+    ]
+   }
+  },
+  {
+   "recipe_id": 223033001,
+   "faction": "Asmodian",
+   "product_key": 310330019,
+   "combo_key": 310330021,
+   "combo_probability": 0.25,
+   "skill": "Handicrafting",
+   "gold_cost": 0,
+   "base_key": 310330014,
+   "materials": [
+    {
+     "key": 610530010,
+     "qty": 2
+    },
+    {
+     "key": 610730022,
+     "qty": 8
+    },
+    {
+     "key": 610511013,
+     "qty": 4
+    },
+    {
+     "key": 610660034,
+     "qty": 3
+    },
+    {
+     "key": 610610016,
+     "qty": 2
+    }
+   ],
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 223033011,
+    "bound_key": 310330117,
     "gold_cost": 0,
     "materials": [
      {

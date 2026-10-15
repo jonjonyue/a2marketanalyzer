@@ -165,6 +165,12 @@ async function init() {
   if (state.mode === "live") setInterval(loadMarket, 5 * 60 * 1000);
 }
 
+// Asmodian servers call the True Dragon tiers Star Dragon; the tier values stay the same.
+function labelTiers() {
+  const asmo = state.servers.find((x) => x.server_id === state.ui.server)?.faction === "Asmodian";
+  for (const b of $("tiers").querySelectorAll("button")) b.textContent = asmo ? b.dataset.v.replace("True Dragon", "Star Dragon") : b.dataset.v;
+}
+
 const serverFiles = new Map(); // server id -> its snapshot file, so switching back is instant
 
 async function loadMarket() {
@@ -172,6 +178,7 @@ async function loadMarket() {
   const srv = state.servers.find((x) => x.server_id === sid);
   $("serverName").textContent = serverLabel(srv);
   for (const el of document.querySelectorAll(".server-short")) el.textContent = srv?.name || "this server";
+  if ($("tiers").children.length) labelTiers();
   if (state.mode === "snapshot") {
     // Older single-file snapshots carried every market inline; current ones have one file per server.
     let doc = serverFiles.get(sid);
@@ -266,6 +273,7 @@ function buildControls() {
     loadMarket();
   });
   $("tiers").innerHTML = TIERS.map((s) => `<button type="button" data-v="${s}">${s}</button>`).join("");
+  labelTiers();
   $("tiers").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
     state.ui.tier = b.dataset.v; syncControls(); writeUrl(); render();
