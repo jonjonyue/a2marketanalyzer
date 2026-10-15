@@ -1,6 +1,6 @@
 {
  "_source": "questlog.gg Aion 2 crafting database (https://questlog.gg/aion-2/en/crafting), Elyos recipes, extracted 2026-10-13",
- "_notes": "Each True Dragon craft consumes 1 Artisan's Splendent item of the same slot (base_key) plus materials, and has a combo_probability chance to yield the Splendent True Dragon item (combo_key) instead. Deliberately excluded: the direct Splendent True Dragon recipes that craft from True Dragon gear (e.g. recipe 111023011 -> item 110130096). Those are transfer crafts: the result is bound to the player and can't be sold, and it is a different item ID from the tradeable combo result. mastery_level is the recipe's crafting mastery level on the game's 1-100 scale (1-50 Novice, 51-100 Professional).",
+ "_notes": "Each True Dragon craft consumes 1 Artisan's Splendent item of the same slot (base_key) plus materials, and has a combo_probability chance to yield the Splendent True Dragon item (combo_key) instead. `transfer` is the slot's transfer craft (recipe id = True Dragon recipe id + 10): it turns a True Dragon item (product_key) plus its materials into a Splendent True Dragon item (bound_key) that is bound to the character and can't be sold. The dashboard shows it as a reference cost only: it's what a player can pay instead of buying a Splendent True Dragon item, so it caps what buyers will pay. questlog lists only the materials; the True Dragon item is the gear being transferred. mastery_level is the recipe's crafting mastery level on the game's 1-100 scale (1-50 Novice, 51-100 Professional); the transfer recipe's level isn't published and is assumed to equal the True Dragon recipe's.",
  "materials": {
   "610530010": "Artisan's Ultimate Refining Stone",
   "610710006": "Fine Thick Balaur Horn",
@@ -45,7 +45,22 @@
      "qty": 5
     }
    ],
-   "mastery_level": 55
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 111023011,
+    "bound_key": 110130096,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710006,
+      "qty": 11
+     },
+     {
+      "key": 610511013,
+      "qty": 4
+     }
+    ]
+   }
   },
   {
    "recipe_id": 111013001,
@@ -77,7 +92,22 @@
      "qty": 5
     }
    ],
-   "mastery_level": 55
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 111013011,
+    "bound_key": 110230096,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710006,
+      "qty": 11
+     },
+     {
+      "key": 610511013,
+      "qty": 4
+     }
+    ]
+   }
   },
   {
    "recipe_id": 111033001,
@@ -109,7 +139,22 @@
      "qty": 5
     }
    ],
-   "mastery_level": 55
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 111033011,
+    "bound_key": 110330096,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710006,
+      "qty": 11
+     },
+     {
+      "key": 610511013,
+      "qty": 4
+     }
+    ]
+   }
   },
   {
    "recipe_id": 211043001,
@@ -141,7 +186,22 @@
      "qty": 5
     }
    ],
-   "mastery_level": 55
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 211043011,
+    "bound_key": 110430096,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610730022,
+      "qty": 11
+     },
+     {
+      "key": 610511013,
+      "qty": 4
+     }
+    ]
+   }
   },
   {
    "recipe_id": 311053001,
@@ -173,7 +233,22 @@
      "qty": 5
     }
    ],
-   "mastery_level": 55
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 311053011,
+    "bound_key": 110530096,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610730022,
+      "qty": 11
+     },
+     {
+      "key": 610511013,
+      "qty": 4
+     }
+    ]
+   }
   },
   {
    "recipe_id": 311093001,
@@ -205,7 +280,22 @@
      "qty": 5
     }
    ],
-   "mastery_level": 55
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 311093011,
+    "bound_key": 110630096,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610730022,
+      "qty": 11
+     },
+     {
+      "key": 610511013,
+      "qty": 4
+     }
+    ]
+   }
   },
   {
    "recipe_id": 111063001,
@@ -237,7 +327,22 @@
      "qty": 5
     }
    ],
-   "mastery_level": 55
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 111063011,
+    "bound_key": 110730096,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710006,
+      "qty": 11
+     },
+     {
+      "key": 610511013,
+      "qty": 4
+     }
+    ]
+   }
   },
   {
    "recipe_id": 211103001,
@@ -269,7 +374,22 @@
      "qty": 5
     }
    ],
-   "mastery_level": 55
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 211103011,
+    "bound_key": 110830096,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610730022,
+      "qty": 11
+     },
+     {
+      "key": 610511013,
+      "qty": 4
+     }
+    ]
+   }
   },
   {
    "recipe_id": 111083001,
@@ -301,7 +421,22 @@
      "qty": 5
     }
    ],
-   "mastery_level": 60
+   "mastery_level": 60,
+   "transfer": {
+    "recipe_id": 111083011,
+    "bound_key": 115030094,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710006,
+      "qty": 11
+     },
+     {
+      "key": 610511013,
+      "qty": 4
+     }
+    ]
+   }
   },
   {
    "recipe_id": 412013001,
@@ -333,7 +468,22 @@
      "qty": 3
     }
    ],
-   "mastery_level": 55
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 412013011,
+    "bound_key": 210130110,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710009,
+      "qty": 8
+     },
+     {
+      "key": 610511013,
+      "qty": 3
+     }
+    ]
+   }
   },
   {
    "recipe_id": 412023001,
@@ -365,7 +515,22 @@
      "qty": 2
     }
    ],
-   "mastery_level": 55
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 412023011,
+    "bound_key": 210230109,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710009,
+      "qty": 6
+     },
+     {
+      "key": 610511013,
+      "qty": 2
+     }
+    ]
+   }
   },
   {
    "recipe_id": 412033001,
@@ -397,7 +562,22 @@
      "qty": 2
     }
    ],
-   "mastery_level": 55
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 412033011,
+    "bound_key": 210330109,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710009,
+      "qty": 5
+     },
+     {
+      "key": 610511013,
+      "qty": 2
+     }
+    ]
+   }
   },
   {
    "recipe_id": 412043001,
@@ -429,7 +609,22 @@
      "qty": 2
     }
    ],
-   "mastery_level": 55
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 412043011,
+    "bound_key": 210430109,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710009,
+      "qty": 5
+     },
+     {
+      "key": 610511013,
+      "qty": 2
+     }
+    ]
+   }
   },
   {
    "recipe_id": 412053001,
@@ -461,7 +656,22 @@
      "qty": 2
     }
    ],
-   "mastery_level": 60
+   "mastery_level": 60,
+   "transfer": {
+    "recipe_id": 412053011,
+    "bound_key": 210530109,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710009,
+      "qty": 4
+     },
+     {
+      "key": 610511013,
+      "qty": 1
+     }
+    ]
+   }
   },
   {
    "recipe_id": 412063001,
@@ -493,7 +703,22 @@
      "qty": 2
     }
    ],
-   "mastery_level": 60
+   "mastery_level": 60,
+   "transfer": {
+    "recipe_id": 412063011,
+    "bound_key": 210630109,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710009,
+      "qty": 5
+     },
+     {
+      "key": 610511013,
+      "qty": 2
+     }
+    ]
+   }
   },
   {
    "recipe_id": 412073001,
@@ -525,7 +750,22 @@
      "qty": 2
     }
    ],
-   "mastery_level": 60
+   "mastery_level": 60,
+   "transfer": {
+    "recipe_id": 412073011,
+    "bound_key": 210730109,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610710009,
+      "qty": 4
+     },
+     {
+      "key": 610511013,
+      "qty": 1
+     }
+    ]
+   }
   },
   {
    "recipe_id": 213013001,
@@ -557,7 +797,22 @@
      "qty": 2
     }
    ],
-   "mastery_level": 60
+   "mastery_level": 60,
+   "transfer": {
+    "recipe_id": 213013011,
+    "bound_key": 310130111,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610730022,
+      "qty": 7
+     },
+     {
+      "key": 610511013,
+      "qty": 2
+     }
+    ]
+   }
   },
   {
    "recipe_id": 213023001,
@@ -589,7 +844,22 @@
      "qty": 2
     }
    ],
-   "mastery_level": 60
+   "mastery_level": 60,
+   "transfer": {
+    "recipe_id": 213023011,
+    "bound_key": 310230113,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610730022,
+      "qty": 6
+     },
+     {
+      "key": 610511013,
+      "qty": 2
+     }
+    ]
+   }
   },
   {
    "recipe_id": 213033001,
@@ -621,7 +891,22 @@
      "qty": 2
     }
    ],
-   "mastery_level": 55
+   "mastery_level": 55,
+   "transfer": {
+    "recipe_id": 213033011,
+    "bound_key": 310330113,
+    "gold_cost": 0,
+    "materials": [
+     {
+      "key": 610730022,
+      "qty": 4
+     },
+     {
+      "key": 610511013,
+      "qty": 2
+     }
+    ]
+   }
   }
  ]
 }

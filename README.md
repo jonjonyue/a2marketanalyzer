@@ -67,7 +67,7 @@ Artisan's and Expert's Splendent costs are recomputed from the site's cost chain
 
 - **One craft attempt** = Artisan's Splendent input + materials. The input costs the cheaper of crafting it (aion2.exchange's model) and buying it; under "buy everything" it's bought. Materials are priced at Siel's cheapest listing.
 - **True Dragon** = one attempt ÷ your success rate (see Crafting proficiency). **Splendent True Dragon** = that ÷ 0.25 = 4×, with the plain True Dragon results of the other attempts not credited (the same convention aion2.exchange uses for Artisan's Splendent).
-- The direct Splendent True Dragon recipes that craft from True Dragon gear (item IDs ending `096`) are left out on purpose: they're transfer crafts, so the result is bound to the player and can't be sold. The 25% combo is the only way to make a sellable Splendent True Dragon.
+- **Transfer craft** (recipe id = True Dragon recipe + 10, `transfer` in the recipe file): a True Dragon item plus 2 materials makes a Splendent True Dragon item that's bound to the character, so it can't be sold and doesn't set a seller's cost (the 25% combo is the only way to make a sellable one). It's shown as a reference in the expanded row (`transferCost`): True Dragon input at the cheaper of crafting and buying, plus materials, ÷ success (recipe level assumed equal to the True Dragon recipe's). A sell price above it gets a ▲, because buyers can transfer their own for less.
 - Not modelled yet: buying materials in bulk beyond the cheapest listing, and crafting the Horn/Leather/Scale intermediates yourself (they need NPC-bound tools whose price isn't on the exchange).
 
 Recipes change only with game patches; regenerate the file if a patch changes them.

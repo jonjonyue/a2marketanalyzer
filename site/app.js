@@ -637,7 +637,32 @@ function trueDragonCard(r) {
   const sub = base
     ? `<details class="sub" open><summary>How ${esc(d.baseName)} is made</summary>${stepCard(base.chain, base.index, 1)}</details>`
     : "";
-  return `<div class="recipe-card">${recipeTable(rows, d.attempt)}${sum}${sub}</div>`;
+  return `<div class="recipe-card">${recipeTable(rows, d.attempt)}${sum}${sub}</div>${transferCard(r)}`;
+}
+
+// The bound transfer route for Splendent True Dragon: not a way to make one to sell, but what buyers can pay instead.
+function transferCard(r) {
+  const t = r.transfer;
+  if (!t) return "";
+  const rows = [`<tr><td>${matLink(t.tdKey, shortenName(t.tdName))}</td><td>1</td>` +
+    priceCells({ market: t.tdListing, crafted: t.tdCraft, used: t.tdMethod === "craft" ? "crafted" : "market" }) +
+    `<td>${t.tdMethod === "craft" ? "Crafted" : "Bought"}</td><td>${kinah(t.td)}</td></tr>`];
+  for (const m of t.materials) {
+    rows.push(`<tr><td>${matLink(m.key, m.name)}</td><td>${m.qty}</td>` + priceCells({ market: m.price, crafted: null, used: "market" }) +
+      `<td>Bought</td><td>${m.price == null ? "—" : kinah(m.price * m.qty)}</td></tr>`);
+  }
+  const vs = t.cost == null || r.price == null ? ""
+    : r.price > t.cost
+      ? ` That's <strong>${kinah(r.price - t.cost)} less</strong> than this item's sell price (${kinah(r.price)}), so a buyer who doesn't need to resell it can transfer one for less, which caps what this item can sell for.`
+      : ` This item's sell price (${kinah(r.price)}) is already below that, so the transfer route isn't undercutting it.`;
+  const sum = t.cost == null
+    ? `<p class="detail-sum">Transfer cost unavailable: an input has no price on Siel.</p>`
+    : `<p class="detail-sum">A transfer craft succeeds about ${asPct(t.success)} of the time, so a bound one costs ${kinah(t.attempt)} ÷ ${asPct(t.success)} = <strong>${kinah(t.cost)}</strong>.${vs}</p>`;
+  return `<details class="sub transfer" open><summary>Alternative: transfer craft (bound, can't be sold)</summary>` +
+    `<p class="muted small">Recipe ${t.recipeId} turns a True Dragon item into a Splendent True Dragon one that's bound to the character. ` +
+    `It's not a way to make one to sell, so it doesn't change this item's cost or verdict; it's shown because it's what a buyer can pay instead. ` +
+    `questlog lists the materials; the True Dragon item is the gear being transferred, and the recipe's level is assumed to match the True Dragon recipe's.</p>` +
+    `<div class="recipe-card">${recipeTable(rows, t.attempt)}${sum}</div></details>`;
 }
 
 function costTitle(r) {
@@ -670,6 +695,8 @@ function salesTitle(r) {
     `At least ${rate(e.lowerPerDay)}/day where the cheapest listing clearly sold.`;
 }
 
+const overTransfer = (r) => r.transfer?.cost != null && r.price != null && r.price > r.transfer.cost;
+
 const COLUMNS = [
   { key: "rank", label: "#", cls: "rank", sortVal: (r) => -r.rank, fmt: (r) => (r.cost == null ? "—" : r.rank) },
   { key: "name", label: "Craft", cls: "name", sortVal: (r) => r.shortName,
@@ -684,8 +711,10 @@ const COLUMNS = [
   { key: "verdict", label: "Verdict", sortVal: (r) => VERDICT_ORDER[r.verdict.id],
     fmt: (r) => `<span class="pill ${r.verdict.tone}">${esc(r.verdict.label)}</span>` },
   { key: "cost", label: "Cost", fmt: (r) => (r.costDetail && r.cost != null ? "≈" : "") + kinah(r.cost), title: costTitle },
-  { key: "price", label: "Sell price", fmt: (r) => kinah(r.price),
-    title: (r) => `Cheapest listing ${kinah(r.listing)} · avg sale ${kinah(r.soldAvg)}${r.priceSource === "estimate" ? " (estimated from listings that sold)" : r.priceSource === "official" ? " (28-day official)" : ""}` },
+  { key: "price", label: "Sell price",
+    fmt: (r) => kinah(r.price) + (overTransfer(r) ? `<span class="over-transfer" aria-label="above the transfer-craft cost">▲</span>` : ""),
+    title: (r) => `Cheapest listing ${kinah(r.listing)} · avg sale ${kinah(r.soldAvg)}${r.priceSource === "estimate" ? " (estimated from listings that sold)" : r.priceSource === "official" ? " (28-day official)" : ""}` +
+      (r.transfer?.cost != null ? `. Transfer craft makes a bound one for ${kinah(r.transfer.cost)}${overTransfer(r) ? ": buyers can make their own for less than this price" : ""}` : "") },
   { key: "profit", label: "Profit / craft", fmt: (r) => kinah(r.profit, { sign: true }), tone: (r) => (r.profit == null ? "dim" : r.profit > 0 ? "pos" : "neg") },
   { key: "marginPct", label: "Margin", fmt: (r) => pct(r.marginPct), title: () => "Profit ÷ average cost per item", tone: (r) => (r.marginPct == null ? "dim" : r.marginPct > 0 ? "pos" : "neg") },
   { key: "capital", label: "Capital needed", fmt: (r) => kinah(r.capital), title: capitalTitle },

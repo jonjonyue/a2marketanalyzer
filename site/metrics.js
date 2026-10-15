@@ -199,7 +199,7 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
     listings, sold28, perDay, supplyDays, daysToSell, dailyPool, yourDaily, turnover,
     capital: entry, roc, attempts90: attemptsFor(target.hitChance, s.capitalConfidence), hitChance: target.hitChance ?? null,
     success: target.success ?? null, recipeLevel: target.recipeLevel ?? null, playerLevel: target.playerLevel ?? null, locked: !!target.locked,
-    salesSource, priceSource, est, costDetail: target.costDetail || null,
+    salesSource, priceSource, est, costDetail: target.costDetail || null, transfer: target.transfer || null,
     missingInputs: num(target.missing) ?? 0,
     verdict: target.locked
       ? { id: "locked", label: `Needs ${masteryLabel(target.recipeLevel)}`, tone: "neutral" }
@@ -343,6 +343,43 @@ export function trueDragonCost(recipe, product_key, ctx, settings = DEFAULT_SETT
 
 export const recipeCost = trueDragonCost;
 
+/**
+ * Transfer route to a Splendent True Dragon item (reference only): one True Dragon item of the slot + the transfer
+ * recipe's materials makes a Splendent True Dragon item that is bound to the character, so it can't be sold.
+ * It's what a player can pay instead of buying one, which caps what buyers will pay on the market.
+ * The True Dragon input costs the cheaper of crafting it (one True Dragon attempt) and buying it.
+ * The transfer recipe's level isn't published; it's assumed to match the True Dragon recipe's.
+ */
+export function transferCost(recipe, ctx, settings = DEFAULT_SETTINGS) {
+  const tr = recipe.transfer;
+  if (!tr) return null;
+  const s = { ...DEFAULT_SETTINGS, ...settings };
+  const tdKey = recipe.product_key;
+  const tdTarget = ctx.targets.get(tdKey);
+  const tdListing = num(ctx.items.get(tdKey)?.price) ?? num(tdTarget?.market_price);
+  const tdCraft = trueDragonCost(recipe, tdKey, ctx, s).cost;
+  let td, tdMethod;
+  if (s.costBasis === "market") { td = tdListing ?? tdCraft; tdMethod = tdListing != null ? "buy" : "craft"; }
+  else if (tdCraft != null && (tdListing == null || tdCraft <= tdListing)) { td = tdCraft; tdMethod = "craft"; }
+  else { td = tdListing; tdMethod = "buy"; }
+  let matsCost = 0, missing = td == null ? 1 : 0;
+  const materials = tr.materials.map((m) => {
+    const mat = ctx.materials.get(m.key);
+    const price = num(mat?.price);
+    if (price == null) missing++; else matsCost += price * m.qty;
+    return { key: m.key, name: mat?.name ?? String(m.key), qty: m.qty, price };
+  });
+  const attempt = (td ?? 0) + matsCost + (num(tr.gold_cost) ?? 0);
+  const level = s.proficiency?.[ctx.skill] ?? null;
+  const success = successAt(level, recipe.mastery_level, PROFICIENCY.trueDragonCap) ?? 1;
+  return {
+    cost: missing || !(success > 0) ? null : attempt / success,
+    missing, success, recipeId: tr.recipe_id, boundKey: tr.bound_key,
+    tdKey, tdName: tdTarget?.name ?? String(tdKey), td, tdMethod, tdCraft, tdListing, materials, matsCost, attempt,
+    recipeLevel: recipe.mastery_level, playerLevel: level,
+  };
+}
+
 export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
   const s = { ...DEFAULT_SETTINGS, ...settings, proficiency: { ...DEFAULT_SETTINGS.proficiency, ...(settings.proficiency || {}) } };
   const items = new Map((market.items || []).map((i) => [i.item_key, i]));
@@ -394,6 +431,7 @@ export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
       if (recipe) {
         const c = trueDragonCost(recipe, t.target_key, { ...ctx, skill: t.skill }, s);
         t = { ...t, cost: c.cost, cost_market: c.cost, missing: c.missing, costDetail: c.detail,
+              transfer: t.target_key === recipe.combo_key ? transferCost(recipe, { ...ctx, skill: t.skill }, s) : null,
               attemptCost: c.detail.attempt, hitChance: c.hit > 0 ? c.hit : null,
               success: c.success, locked: c.locked, recipeLevel: c.recipeLevel, playerLevel: c.playerLevel };
       }

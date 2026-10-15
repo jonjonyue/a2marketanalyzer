@@ -439,3 +439,7 @@ table.listings-table { min-width: 940px; }
 @media (max-width: 560px) {
   .kpi .value.is-name { font-size: 16px; -webkit-line-clamp: 3; min-height: 0; }
 }
+
+/* Splendent True Dragon: transfer-craft reference */
+.over-transfer { margin-left: 4px; color: var(--warning); font-size: 10px; vertical-align: 1px; }
+details.sub.transfer { margin-top: 14px; border-left-color: var(--warning); }
