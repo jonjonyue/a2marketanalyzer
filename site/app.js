@@ -8,6 +8,7 @@ const SKILLS = ["All", "Blacksmithing", "Armorsmithing", "Handicrafting", "Alche
 // URL codes per skill; t and j are the old Tailoring / Jewelcrafting codes, kept so older links still work.
 const PROF_CODE = { Blacksmithing: "b", Armorsmithing: "r", Handicrafting: "h", Alchemy: "a" };
 const PROF_LEGACY = { t: "Armorsmithing", j: "Handicrafting" };
+const PROF_STORE = "a2dash.proficiency"; // the viewer's own proficiency, remembered in this browser
 const TIERS = ["All", "Expert's Splendent", "Artisan's Splendent", "True Dragon", "Splendent True Dragon"];
 const TIER_PARAM = { "Expert's Splendent": "es", "Artisan's Splendent": "as", "True Dragon": "td", "Splendent True Dragon": "std" };
 
@@ -59,7 +60,8 @@ function readUrl() {
     sharePct: Math.min(100, Math.max(1, n("share", DEFAULT_SETTINGS.sharePct))),
     hideLoss: p.get("hideLoss") === "1",
     open: p.has("open") ? +p.get("open") : null,
-    proficiency: readProficiency(p.get("prof")),
+    // A shared link's levels win (to reproduce that view); otherwise the levels this browser saved last time.
+    proficiency: p.has("prof") ? readProficiency(p.get("prof")) : savedProficiency(),
     sort: p.get("sort") || "rank",
     dir: p.get("dir") === "asc" ? "asc" : "desc",
   };
@@ -73,6 +75,18 @@ function readProficiency(v) {
     if (skill && lvl >= 1 && lvl <= 100) out[skill] = lvl;
   }
   return out;
+}
+
+function savedProficiency() {
+  const out = { ...DEFAULT_SETTINGS.proficiency };
+  try {
+    const saved = JSON.parse(localStorage.getItem(PROF_STORE) || "null") || {};
+    for (const k of CRAFT_SKILLS) if (Number.isInteger(saved[k]) && saved[k] >= 1 && saved[k] <= 100) out[k] = saved[k];
+  } catch { /* storage blocked or corrupt: use the defaults */ }
+  return out;
+}
+function saveProficiency(prof) {
+  try { localStorage.setItem(PROF_STORE, JSON.stringify(prof)); } catch { /* private window: just not remembered */ }
 }
 
 function writeUrl() {
@@ -260,6 +274,7 @@ function buildProficiency() {
     const lvl = Math.min(50, Math.max(1, parseInt(row.querySelector("input").value, 10) || 1));
     const level = (row.querySelector("select").value === "pro" ? 50 : 0) + lvl;
     state.ui.proficiency = { ...state.ui.proficiency, [row.dataset.skill]: level };
+    saveProficiency(state.ui.proficiency);
     writeUrl(); render();
   });
 }

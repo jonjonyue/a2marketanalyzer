@@ -59,7 +59,7 @@ Success rate depends on the proficiency advantage ΔL = your mastery − the rec
 
 Recipe levels come from aion2.exchange's model for the Splendent steps (e.g. weapons 3 / 15 / 30, Boots 10 / 25 / 40) and from questlog.gg for True Dragon (55 or 60, in `recipes/true_dragon.json`). Caps for the Splendent steps are the site's rates at mastery 100 (93.1% / 94.6% / 96.8%); True Dragon's cap isn't published and is assumed to be 96.8% (`PROFICIENCY.trueDragonCap`).
 
-Artisan's and Expert's Splendent costs are recomputed from the site's cost chain at your success rates (`adjustChain`): each step needs 1 ÷ (success × combo) attempts per result, multiplied down the chain. At mastery 100 (and wherever every step is capped) this reproduces the site's costs exactly. True Dragon costs one attempt ÷ success (Splendent True Dragon: ÷ success × 25%). Settings are per skill and kept in the URL (`?prof=b60.r75`: b Blacksmithing, r Armorsmithing, h Handicrafting, a Alchemy).
+Artisan's and Expert's Splendent costs are recomputed from the site's cost chain at your success rates (`adjustChain`): each step needs 1 ÷ (success × combo) attempts per result, multiplied down the chain. At mastery 100 (and wherever every step is capped) this reproduces the site's costs exactly. True Dragon costs one attempt ÷ success (Splendent True Dragon: ÷ success × 25%). Settings are per skill, remembered in the browser (`localStorage` key `a2dash.proficiency`), and kept in the URL (`?prof=b60.r75`: b Blacksmithing, r Armorsmithing, h Handicrafting, a Alchemy); a link with `prof` shows those levels without overwriting the saved ones.
 
 ## True Dragon crafting costs
 
