@@ -1,16 +1,16 @@
 # Aion 2 crafting profit dashboard
 
-A shareable dashboard that ranks Artisan's Splendent crafts on **Siel (Elyos, NA West)** by how much money they make **and** how fast they sell, including the Expert's Splendent, True Dragon and Splendent True Dragon versions of each slot. All data comes from the public [aion2.exchange](https://aion2.exchange) API.
+A shareable dashboard that ranks Artisan's Splendent crafts on each **North America server** (East and West, both factions; Siel · Elyos · NA West by default) by how much money they make **and** how fast they sell, including the Expert's Splendent, True Dragon and Splendent True Dragon versions of each slot. All data comes from the public [aion2.exchange](https://aion2.exchange) API.
 
 ## How it works
 
 ```
 GitHub Action (hourly) ──► aion2.exchange /api/servers, /api/crafts, /api/items
         │
-        └─► site/data/snapshot.json ──► GitHub Pages ──► dashboard (index.html)
+        └─► site/data/snapshot.json (server index) + site/data/servers/<id>.json ──► GitHub Pages ──► dashboard (index.html)
 ```
 
-- `scripts/fetch_snapshot.py` pulls the crafting cost model (`/api/crafts`), current prices (`/api/items?keys=…`) and 10 days of hourly listing snapshots per item (`/api/items/{id}/prices?bucket=raw`) for Siel NAW. True Dragon items are derived from each craft target's key (tier code `13` → `15` True Dragon, `17` Splendent True Dragon); slots never listed on the server are skipped. For each craft target it also keeps the site's full cost chain from `/api/crafts/{id}` (every step's materials, method, unit price, attempts, success rate and combo chance), which the dashboard shows when you expand a row. Expert's Splendent items are the craft target's key + 9999 (e.g. `110430013` → `110440012`), with their cost taken from tier 2 of that chain. It also prices the True Dragon recipe materials (`recipes/true_dragon.json`) and reads the site's icon index (`/item-icons/index.json`), so the page can show each item's icon (loaded straight from aion2.exchange) framed in its rarity color. Stdlib only, about 96 requests per run, rate-limited.
+- `scripts/fetch_snapshot.py` pulls the crafting cost model (`/api/crafts`), current prices (`/api/items?keys=…`) and 10 days of hourly listing snapshots per item (`/api/items/{id}/prices?bucket=raw`) for every NA East and NA West server (28; `--regions` changes this), three servers at a time, and writes one file per server plus an index. True Dragon items are derived from each craft target's key (tier code `13` → `15` True Dragon, `17` Splendent True Dragon); slots never listed on the server are skipped. For each craft target it also keeps the site's full cost chain from `/api/crafts/{id}` (every step's materials, method, unit price, attempts, success rate and combo chance), which the dashboard shows when you expand a row. Expert's Splendent items are the craft target's key + 9999 (e.g. `110430013` → `110440012`), with their cost taken from tier 2 of that chain. It also prices the True Dragon recipe materials (`recipes/true_dragon.json`) and reads the site's icon index (`/item-icons/index.json`), so the page can show each item's icon (loaded straight from aion2.exchange) framed in its rarity color. Stdlib only, about 96 requests per server (~2,700 per run), rate-limited.
 - `.github/workflows/deploy.yml` runs it every 20 minutes (GitHub skips many scheduled runs, so in practice it is roughly hourly; also on every push to `main`) and deploys `site/` to GitHub Pages. The snapshot is deployed, not committed.
 - The page **tries the live API first** and falls back to the snapshot. aion2.exchange doesn't currently send CORS headers, so browsers use the snapshot; if the API ever allows this origin, the page goes live automatically (refreshing every 5 minutes).
 
@@ -46,7 +46,7 @@ Items that can't be judged yet get a status instead: Needs … (mastery too low)
 
 Click an item to expand its recipe, laid out like the game's: every input (including the gear it consumes) with its market price and crafted price, the one used highlighted, and the cost per attempt. Each crafted input has a nested "How … is made" recipe, all the way down (True Dragon → Artisan's Splendent → Expert's Splendent → Splendent), with the success and combo maths that turn a per-attempt cost into a per-item cost. The ↗ button opens the item on aion2.exchange.
 
-Every control (tier, skill, price basis, tax, listing fee, share, sort, expanded item) is stored in the URL, so a copied link reproduces the exact view.
+The server picker is remembered in the browser (`localStorage` key `a2dash.server`, also used by the Profit Calculator for item prices) and kept in the URL (`?server=`); a link with a server shows it without changing the saved one. Every control (server, tier, skill, price basis, tax, listing fee, share, sort, expanded item) is stored in the URL, so a copied link reproduces the exact view.
 
 ## Crafting proficiency
 
@@ -65,7 +65,7 @@ Artisan's and Expert's Splendent costs are recomputed from the site's cost chain
 
 `recipes/true_dragon.json` holds the 19 True Dragon recipes (Elyos), taken from the [questlog.gg crafting database](https://questlog.gg/aion-2/en/crafting). Each consumes the Artisan's Splendent item of the same slot plus five materials, and has a 25% combo chance to produce the Splendent True Dragon item instead (`trueDragonCost` in `site/metrics.js`):
 
-- **One craft attempt** = Artisan's Splendent input + materials. The input costs the cheaper of crafting it (aion2.exchange's model) and buying it; under "buy everything" it's bought. Materials are priced at Siel's cheapest listing.
+- **One craft attempt** = Artisan's Splendent input + materials. The input costs the cheaper of crafting it (aion2.exchange's model) and buying it; under "buy everything" it's bought. Materials are priced at the server's cheapest listing.
 - **True Dragon** = one attempt ÷ your success rate (see Crafting proficiency). **Splendent True Dragon** = that ÷ 0.25 = 4×, with the plain True Dragon results of the other attempts not credited (the same convention aion2.exchange uses for Artisan's Splendent).
 - **Transfer craft** (recipe id = True Dragon recipe + 10, `transfer` in the recipe file): a True Dragon item plus 2 materials makes a Splendent True Dragon item that's bound to the character, so it can't be sold and doesn't set a seller's cost (the 25% combo is the only way to make a sellable one). It's shown as a reference in the expanded row (`transferCost`): True Dragon input at the cheaper of crafting and buying, plus materials, ÷ success (recipe level assumed equal to the True Dragon recipe's). A sell price above it gets a ▲, because buyers can transfer their own for less.
 - Not modelled yet: buying materials in bulk beyond the cheapest listing, and crafting the Horn/Leather/Scale intermediates yourself (they need NPC-bound tools whose price isn't on the exchange).

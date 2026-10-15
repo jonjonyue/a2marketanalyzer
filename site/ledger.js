@@ -95,9 +95,16 @@ const state = {
 // ---------- item catalog from the dashboard's snapshot ----------
 async function loadCatalog() {
   try {
-    const res = await fetch(SNAPSHOT_URL, { cache: "no-cache" });
-    const snap = await res.json();
-    const market = Object.values(snap.markets || {})[0] || {};
+    // Prices come from the server picked on the Market Analysis page (remembered in this browser).
+    const snap = await (await fetch(SNAPSHOT_URL, { cache: "no-cache" })).json();
+    let sid = 11201;
+    try { sid = parseInt(localStorage.getItem("a2dash.server"), 10) || sid; } catch { /* default server */ }
+    const servers = snap.servers || [];
+    const srv = servers.find((x) => x.server_id === sid) || servers.find((x) => x.server_id === snap.default_server) || servers[0];
+    if (srv) $("serverName").textContent = `${srv.name} · ${srv.faction} · ${srv.region_name || srv.region}`;
+    const market = snap.markets
+      ? snap.markets[String(srv?.server_id)] || Object.values(snap.markets)[0] || {}
+      : (await (await fetch(`data/servers/${srv.server_id}.json`)).json()).market || {};
     const icons = market.icons || {};
     const add = (key, rawName, price) => {
       const name = shortenName(rawName);

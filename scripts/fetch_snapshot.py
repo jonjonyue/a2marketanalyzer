@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Pull crafting, price and listing-history data for Siel (Elyos, NA West) from aion2.exchange.
+"""Pull crafting, price and listing-history data for the North America servers from aion2.exchange.
 
 Covers the Artisan's Splendent craft targets plus the Expert's Splendent, True Dragon and Splendent True Dragon
 version of each slot (no crafting cost yet). Writes one JSON snapshot the dashboard reads
@@ -7,7 +7,10 @@ version of each slot (no crafting cost yet). Writes one JSON snapshot the dashbo
 True Dragon crafting costs use the recipes in recipes/true_dragon.json priced at Siel's
 market; Expert's Splendent costs from the site's own model. About 96 requests per run.
 
-Usage: python scripts/fetch_snapshot.py [--out site/data/snapshot.json] [--base URL] [--server ID]
+Writes one file per server (site/data/servers/<id>.json, about 96 requests each) plus an index
+(site/data/snapshot.json) listing the servers and when each was refreshed.
+
+Usage: python scripts/fetch_snapshot.py [--out site/data/snapshot.json] [--base URL] [--regions NAE,NAW] [--server ID]
 Stdlib only, so the GitHub Action needs no installs.
 """
 from __future__ import annotations
@@ -16,6 +19,7 @@ import argparse
 import json
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -23,12 +27,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 DEFAULT_BASE = "https://aion2.exchange"
-DEFAULT_SERVER = 11201  # Siel · Elyos · North America West
+DEFAULT_SERVER = 11201  # Siel · Elyos · North America West (the page's default)
+DEFAULT_REGIONS = ("NAE", "NAW")  # North America East + West: 28 servers
+WORKERS = 3  # servers fetched in parallel; each still waits DELAY_S between its own requests
 RECIPES_DIR = Path(__file__).resolve().parent.parent / "recipes"
 TD_RECIPES = RECIPES_DIR / "true_dragon.json"   # True Dragon (combo -> Splendent True Dragon)
 HISTORY_DAYS = 10       # 7-day estimate window + 3 days so expiries of earlier listings can be matched
 USER_AGENT = "a2marketanalyzer-dashboard/1.0 (+https://github.com/jonjonyue/a2marketanalyzer)"
-DELAY_S = 0.25  # be gentle with the site: ~4 requests/second max
+DELAY_S = float(__import__("os").environ.get("FETCH_DELAY_S", "0.25"))  # be gentle with the site: ~4 requests/second max
 
 # Only the fields the dashboard uses, to keep the snapshot small.
 TARGET_FIELDS = (
@@ -93,7 +99,16 @@ def fetch_history(base: str, server_id: int, item_key: int, since: datetime) -> 
     ]
 
 
-def fetch_market(base: str, server_id: int) -> tuple[dict, dict | None, list[str]]:
+def fetch_icon_index(base: str) -> dict:
+    """The site's icon index: item key -> [file index, rarity index, ...]. Shared by every server."""
+    try:
+        return get_json(base, "/item-icons/index.json") or {}
+    except Exception as err:  # icons are cosmetic; never fail the run over them
+        print(f"icons: {err}", file=sys.stderr)
+        return {}
+
+
+def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tuple[dict, dict | None, list[str]]:
     crafts = get_json(base, "/api/crafts", {"server": server_id})
     targets = [dict(pick(t, TARGET_FIELDS), tier=BASE_TIER) for t in crafts.get("targets") or []]
     extra_keys = {t["target_key"] + off: (tier, t) for t in targets for tier, off in EXTRA_TIERS}
@@ -172,9 +187,8 @@ def fetch_market(base: str, server_id: int) -> tuple[dict, dict | None, list[str
     # Item icons: the site's icon index maps item key -> [file index, rarity index, ...].
     # The page loads the images straight from the site (/item-icons/{file}.webp).
     icons: dict[str, list] = {}
-    time.sleep(DELAY_S)
     try:
-        idx = get_json(base, "/item-icons/index.json") or {}
+        idx = icon_idx or {}
         files, rarities, entries = idx.get("files") or {}, idx.get("rarities") or [], idx.get("items") or {}
         for t in targets:
             e = entries.get(str(t["target_key"]))
@@ -201,39 +215,69 @@ def fetch_market(base: str, server_id: int) -> tuple[dict, dict | None, list[str
     return market, crafts.get("model"), errors
 
 
+SERVER_FIELDS = ("server_id", "name", "region", "region_name", "faction")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default="site/data/snapshot.json")
+    ap.add_argument("--out", default="site/data/snapshot.json", help="index file; per-server files go in servers/ next to it")
     ap.add_argument("--base", default=DEFAULT_BASE)
-    ap.add_argument("--server", type=int, default=DEFAULT_SERVER)
+    ap.add_argument("--regions", default=",".join(DEFAULT_REGIONS), help="comma-separated region codes (NAE, NAW, EU, LA, AS)")
+    ap.add_argument("--server", type=int, help="fetch just this server (for testing)")
     args = ap.parse_args()
 
-    servers = get_json(args.base, "/api/servers").get("servers", [])
-    server = next((s for s in servers if s.get("server_id") == args.server), None)
-    if server is None:
-        print(f"Server {args.server} not found in /api/servers", file=sys.stderr)
+    all_servers = get_json(args.base, "/api/servers").get("servers", [])
+    regions = {r.strip().upper() for r in args.regions.split(",") if r.strip()}
+    servers = [s for s in all_servers if (s.get("server_id") == args.server if args.server else s.get("region") in regions)]
+    if not servers:
+        print("No servers matched", file=sys.stderr)
         return 1
+    out = Path(args.out)
+    server_dir = out.parent / "servers"
+    server_dir.mkdir(parents=True, exist_ok=True)
+    icon_idx = fetch_icon_index(args.base)
 
-    market, model, errors = fetch_market(args.base, args.server)
-    if market["targets"] and len(errors) > len(market["targets"]) / 2:
-        print(f"Too many history failures ({len(errors)}); not writing snapshot.", file=sys.stderr)
+    def one(server: dict) -> dict:
+        sid = server["server_id"]
+        info = {k: server.get(k) for k in SERVER_FIELDS}
+        try:
+            market, model, errors = fetch_market(args.base, sid, icon_idx)
+        except Exception as err:
+            print(f"server {sid}: {err}", file=sys.stderr)
+            return {**info, "ok": False, "error": str(err)}
+        if market["targets"] and len(errors) > len(market["targets"]) / 2:
+            print(f"server {sid}: too many failures ({len(errors)}); keeping its previous file", file=sys.stderr)
+            return {**info, "ok": False, "error": f"{len(errors)} request failures"}
+        doc = {
+            "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "source": args.base, "server": info, "model": model, "market": market, "errors": errors,
+        }
+        (server_dir / f"{sid}.json").write_text(json.dumps(doc, separators=(",", ":")))
+        points = sum(len(h) for h in market["history"].values())
+        print(f"{info['name']} {info['region']} {info['faction']}: {len(market['targets'])} crafts, {points} history points, {len(errors)} errors")
+        return {**info, "ok": True, "generated_at": doc["generated_at"], "captured_at": market.get("captured_at"), "model": model}
+
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        results = list(pool.map(one, servers))
+
+    ok = [r for r in results if r["ok"]]
+    if len(ok) < len(results) / 2:
+        print(f"Only {len(ok)} of {len(results)} servers fetched; not writing the index.", file=sys.stderr)
         return 1
-
-    snapshot = {
+    model = next((r["model"] for r in ok if r.get("model")), None)
+    index = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "source": args.base,
-        "default_server": args.server,
+        "default_server": DEFAULT_SERVER,
         "model": model,
-        "servers": [{k: server.get(k) for k in ("server_id", "name", "region", "region_name", "faction")}],
-        "markets": {str(args.server): market},
-        "errors": errors,
+        # Servers that failed this run are listed only if an older file of theirs exists to fall back on.
+        "servers": [{k: r.get(k) for k in (*SERVER_FIELDS, "generated_at", "captured_at")}
+                    for r in results if r["ok"] or (server_dir / f"{r['server_id']}.json").exists()],
+        "errors": [f"{r['name']} {r['region']}: {r['error']}" for r in results if not r["ok"]],
     }
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(snapshot, separators=(",", ":")))
-    points = sum(len(h) for h in market["history"].values())
-    print(f"Wrote {out} ({out.stat().st_size / 1024:.0f} KB): {len(market['targets'])} crafts, "
-          f"{points} history points, {len(errors)} errors")
+    out.write_text(json.dumps(index, separators=(",", ":")))
+    size = sum(f.stat().st_size for f in server_dir.glob("*.json")) / 1024 / 1024
+    print(f"Wrote {out} and {len(ok)} server files ({size:.1f} MB); {len(results) - len(ok)} failed")
     return 0
 
 

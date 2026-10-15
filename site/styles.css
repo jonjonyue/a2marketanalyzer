@@ -443,3 +443,7 @@ table.listings-table { min-width: 940px; }
 /* Splendent True Dragon: transfer-craft reference */
 .over-transfer { margin-left: 4px; color: var(--warning); font-size: 10px; vertical-align: 1px; }
 details.sub.transfer { margin-top: 14px; border-left-color: var(--warning); }
+
+/* server picker */
+.server-field select { min-width: 220px; font-weight: 600; }
+@media (max-width: 560px) { .server-field select { min-width: 0; width: 100%; } }

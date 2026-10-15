@@ -2,7 +2,10 @@ import { analyzeMarket, DEFAULT_SETTINGS, ESTIMATOR, VERDICT_ORDER, byRank, isWo
 
 const API = "https://aion2.exchange";
 const SNAPSHOT_URL = "data/snapshot.json";
-const SERVER_ID = 11201; // the dashboard covers Siel · Elyos, North America West only
+const DEFAULT_SERVER = 11201; // Siel · Elyos · North America West
+const SERVER_REGIONS = ["NAE", "NAW"]; // the servers the hourly snapshot covers
+const REGION_SHORT = { NAE: "NA East", NAW: "NA West", EU: "EU", LA: "SA", AS: "Asia" };
+const SERVER_STORE = "a2dash.server"; // the viewer's last server, remembered in this browser
 const HISTORY_DAYS = 10;
 const SKILLS = ["All", "Blacksmithing", "Armorsmithing", "Handicrafting", "Alchemy"];
 // URL codes per skill; t and j are the old Tailoring / Jewelcrafting codes, kept so older links still work.
@@ -50,7 +53,8 @@ function readUrl() {
   const p = new URLSearchParams(location.search);
   const n = (k, d) => (p.has(k) && Number.isFinite(+p.get(k)) ? +p.get(k) : d);
   return {
-    server: SERVER_ID,
+    // A link's server wins; otherwise the server this browser used last. Checked against the server list once it loads.
+    server: p.has("server") && Number.isInteger(+p.get("server")) ? +p.get("server") : savedServer(),
     skill: SKILLS.includes(p.get("skill")) ? p.get("skill") : "All",
     tier: Object.keys(TIER_PARAM).find((k) => TIER_PARAM[k] === p.get("tier")) || "All",
     priceBasis: ["conservative", "listing", "sold"].includes(p.get("price")) ? p.get("price") : DEFAULT_SETTINGS.priceBasis,
@@ -77,6 +81,17 @@ function readProficiency(v) {
   return out;
 }
 
+function savedServer() {
+  try {
+    const v = parseInt(localStorage.getItem(SERVER_STORE), 10);
+    return Number.isInteger(v) ? v : DEFAULT_SERVER;
+  } catch { return DEFAULT_SERVER; }
+}
+function saveServer(id) {
+  try { localStorage.setItem(SERVER_STORE, String(id)); } catch { /* private window: just not remembered */ }
+}
+const serverLabel = (srv) => (srv ? `${srv.name} · ${srv.faction} · ${srv.region_name || srv.region}` : "");
+
 function savedProficiency() {
   const out = { ...DEFAULT_SETTINGS.proficiency };
   try {
@@ -92,6 +107,7 @@ function saveProficiency(prof) {
 function writeUrl() {
   const u = state.ui;
   const p = new URLSearchParams();
+  if (u.server !== DEFAULT_SERVER) p.set("server", u.server);
   if (u.skill !== "All") p.set("skill", u.skill);
   if (u.tier !== "All") p.set("tier", TIER_PARAM[u.tier]);
   if (u.priceBasis !== DEFAULT_SETTINGS.priceBasis) p.set("price", u.priceBasis);
@@ -126,7 +142,7 @@ async function init() {
   try {
     const s = await fetchJson(`${API}/api/servers`, 4000);
     state.mode = "live";
-    state.servers = s.servers.filter((x) => x.server_id === SERVER_ID);
+    state.servers = s.servers.filter((x) => SERVER_REGIONS.includes(x.region));
   } catch {
     // Expected while the API doesn't send CORS headers: use the snapshot the GitHub Action builds.
     try {
@@ -140,17 +156,40 @@ async function init() {
     state.servers = state.snapshot.servers;
     if (state.snapshot.model) setModelNote(state.snapshot.model);
   }
-  const srv = state.servers[0];
-  if (srv) $("serverName").textContent = `${srv.name} · ${srv.faction} · ${srv.region_name || srv.region}`;
+  if (!state.servers.some((x) => x.server_id === state.ui.server)) {
+    state.ui.server = state.servers.some((x) => x.server_id === DEFAULT_SERVER) ? DEFAULT_SERVER : state.servers[0]?.server_id;
+  }
+  writeUrl(); // so the address bar (and "Copy share link") carries the server actually shown
   buildControls();
   await loadMarket();
   if (state.mode === "live") setInterval(loadMarket, 5 * 60 * 1000);
 }
 
+const serverFiles = new Map(); // server id -> its snapshot file, so switching back is instant
+
 async function loadMarket() {
   const sid = state.ui.server;
+  const srv = state.servers.find((x) => x.server_id === sid);
+  $("serverName").textContent = serverLabel(srv);
+  for (const el of document.querySelectorAll(".server-short")) el.textContent = srv?.name || "this server";
   if (state.mode === "snapshot") {
-    state.market = shortenMarketNames(state.snapshot.markets[String(sid)] || { targets: [], items: [] });
+    // Older single-file snapshots carried every market inline; current ones have one file per server.
+    let doc = serverFiles.get(sid);
+    if (!doc) {
+      const inline = state.snapshot.markets?.[String(sid)];
+      try {
+        $("freshness").textContent = "Loading…";
+        doc = inline ? { generated_at: state.snapshot.generated_at, market: inline } : await fetchJson(`data/servers/${sid}.json`, 20000);
+        doc.market = shortenMarketNames(doc.market || { targets: [], items: [] });
+        serverFiles.set(sid, doc);
+      } catch {
+        showBanner(`Couldn't load data for ${serverLabel(srv) || "that server"}. It may not have been refreshed yet; try another server.`);
+        doc = { generated_at: null, market: { targets: [], items: [] } };
+      }
+    }
+    if (sid !== state.ui.server) return; // the viewer switched again while this loaded
+    state.serverDoc = doc;
+    state.market = doc.market;
   } else {
     try {
       const crafts = await fetchJson(`${API}/api/crafts?server=${sid}`);
@@ -188,7 +227,7 @@ function setFreshness() {
     el.className = "freshness live";
     el.innerHTML = `<span class="dot"></span>Live · prices ${esc(ago(captured))}`;
   } else {
-    const gen = state.snapshot.generated_at;
+    const gen = state.serverDoc?.generated_at ?? state.snapshot.generated_at;
     const stale = Date.now() - new Date(gen).getTime() > 3 * 3600e3;
     el.className = "freshness" + (stale ? " stale" : "");
     el.innerHTML = `<span class="dot"></span>Updated ${esc(ago(gen))} · prices ${esc(ago(captured))}`;
@@ -213,6 +252,19 @@ function showBanner(msg) {
 
 // ---------- controls ----------
 function buildControls() {
+  // Server picker, grouped by region; the choice is remembered in this browser.
+  const regions = [...new Set(state.servers.map((x) => x.region_name || x.region))];
+  $("server").innerHTML = regions.map((rn) => `<optgroup label="${esc(rn)}">` +
+    state.servers.filter((x) => (x.region_name || x.region) === rn)
+      .sort((a, b) => a.faction.localeCompare(b.faction) || a.server_id - b.server_id)
+      .map((x) => `<option value="${x.server_id}">${esc(x.name)} · ${esc(x.faction)} · ${esc(REGION_SHORT[x.region] || x.region)}</option>`).join("") + "</optgroup>").join("");
+  $("server").value = String(state.ui.server);
+  $("server").addEventListener("change", (e) => {
+    state.ui.server = +e.target.value;
+    saveServer(state.ui.server);
+    writeUrl();
+    loadMarket();
+  });
   $("tiers").innerHTML = TIERS.map((s) => `<button type="button" data-v="${s}">${s}</button>`).join("");
   $("tiers").addEventListener("click", (e) => {
     const b = e.target.closest("button"); if (!b) return;
@@ -656,7 +708,7 @@ function transferCard(r) {
       ? ` That's <strong>${kinah(r.price - t.cost)} less</strong> than this item's sell price (${kinah(r.price)}), so a buyer who doesn't need to resell it can transfer one for less, which caps what this item can sell for.`
       : ` This item's sell price (${kinah(r.price)}) is already below that, so the transfer route isn't undercutting it.`;
   const sum = t.cost == null
-    ? `<p class="detail-sum">Transfer cost unavailable: an input has no price on Siel.</p>`
+    ? `<p class="detail-sum">Transfer cost unavailable: an input has no price on this server.</p>`
     : `<p class="detail-sum">A transfer craft succeeds about ${asPct(t.success)} of the time, so a bound one costs ${kinah(t.attempt)} ÷ ${asPct(t.success)} = <strong>${kinah(t.cost)}</strong>.${vs}</p>`;
   return `<details class="sub transfer" open><summary>Alternative: transfer craft (bound, can't be sold)</summary>` +
     `<p class="muted small">Recipe ${t.recipeId} turns a True Dragon item into a Splendent True Dragon one that's bound to the character. ` +
