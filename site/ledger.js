@@ -416,7 +416,7 @@ function markSold(id, qty) {
   toast(`Sold ${qty} × ${l.name}: +${full(a.net)} after tax.`, "Undo");
 }
 
-function markExpired(id, { relist = false } = {}) {
+function markExpired(id, { relist = false, price = null } = {}) {
   const l = state.entries.find((x) => x.id === id);
   if (!l) return;
   const left = remaining(l);
@@ -424,7 +424,7 @@ function markExpired(id, { relist = false } = {}) {
   l.expiredTs = Date.now();
   let fresh = null;
   if (relist && left > 0) {
-    fresh = { id: newId(), side: "list", name: l.name, key: l.key ?? null, qty: left, price: l.price,
+    fresh = { id: newId(), side: "list", name: l.name, key: l.key ?? null, qty: left, price: price > 0 ? price : l.price,
       taxPct: state.settings.taxPct, feePct: state.settings.feePct, ts: Date.now(), note: l.note || "" };
     state.entries.push(fresh);
   }
@@ -435,7 +435,7 @@ function markExpired(id, { relist = false } = {}) {
     if (fresh) state.entries = state.entries.filter((x) => x.id !== fresh.id);
     save(); render();
   };
-  toast(fresh ? `Relisted ${left} × ${l.name}: new listing fee ${full(amounts(fresh).fee)}.` : `Marked ${left} × ${l.name} as expired; the listing fee is lost.`, "Undo");
+  toast(fresh ? `Relisted ${left} × ${l.name} at ${kinah(fresh.price)}: new listing fee ${full(amounts(fresh).fee)}.` : `Marked ${left} × ${l.name} as expired; the listing fee is lost.`, "Undo");
 }
 
 function timeLeft(l) {
@@ -443,6 +443,15 @@ function timeLeft(l) {
   const h = Math.abs(ms) / 3600e3;
   const txt = h >= 24 ? `${Math.floor(h / 24)}d ${Math.floor(h % 24)}h` : h >= 1 ? `${Math.floor(h)}h` : `${Math.max(1, Math.round(h * 60))}m`;
   return ms > 0 ? { text: `in ${txt}`, over: false } : { text: `${txt} ago`, over: true };
+}
+
+// Relist button: at a price just under the cheapest when you've been undercut, otherwise at the same price.
+function relistButton(l) {
+  const st = statsFor(l);
+  const at = st?.listing != null && st.listing < l.price ? undercut(st.listing) : null;
+  return at
+    ? `<button type="button" class="mini-btn warn-btn" data-relist="${esc(l.id)}" data-price="${at}" title="Cancel or let it expire in game, then post the unsold units at ${full(at)} to be cheapest again (new listing fee)">Relist at ${kinah(at)}</button>`
+    : `<button type="button" class="mini-btn" data-relist="${esc(l.id)}" title="Close it as expired and post the unsold units again, paying a new listing fee">Relist</button>`;
 }
 
 // Is your listing still the cheapest? (The market's cheapest may be your own listing.)
@@ -480,7 +489,7 @@ function renderListings() {
         <input type="number" id="sold-${esc(l.id)}" class="sold-qty" min="1" max="${left}" step="1" value="${left}" inputmode="numeric">
         <button type="button" class="mini-btn good" data-sold="${esc(l.id)}">Mark sold</button>
         <button type="button" class="mini-btn" data-expire="${esc(l.id)}" title="It didn't sell: close the listing (the listing fee is lost)">Expired</button>
-        <button type="button" class="mini-btn" data-relist="${esc(l.id)}" title="Close it as expired and post the unsold units again, paying a new listing fee">Relist</button>
+        ${relistButton(l)}
       </td>
     </tr>`;
   }).join("");
@@ -599,7 +608,7 @@ function renderInventory() {
       <td class="advice-cell"><span class="pill ${a.tone}">${ACTION_LABEL[a.action]}${canList && a.qty > 1 ? ` ${a.qty}` : ""}</span><span class="advice-why">${esc(a.why)}</span></td>
       <td title="${a.price ? full(a.price) : ""}">${a.price ? kinah(a.price) : "—"}</td>
       <td class="pos">${a.price ? kinah(a.price * keep) : "—"}</td>
-      <td class="listing-actions">${canList ? `<button type="button" class="mini-btn good" data-advise="${esc(g.name)}">List ${a.qty}</button>` : ""}</td>
+      <td class="listing-actions">${canList ? `<button type="button" class="mini-btn good" data-advise="${esc(g.name)}">List ${a.qty}</button>` : ""}${a.action === "relist" ? g.listed.filter((l) => l.price > a.price).map(relistButton).join("") : ""}</td>
     </tr>`;
   }).join("");
   const units = inv.reduce((n, g) => n + g.onHand, 0);
@@ -857,7 +866,9 @@ function init() {
   });
   $("inventory").addEventListener("click", (ev) => {
     const b = ev.target.closest("[data-advise]");
-    if (b) prefillListing(b.dataset.advise);
+    if (b) return prefillListing(b.dataset.advise);
+    const re = ev.target.closest("[data-relist]");
+    if (re) return markExpired(re.dataset.relist, { relist: true, price: Number(re.dataset.price) || null });
   });
   $("listings").addEventListener("click", (ev) => {
     const sold = ev.target.closest("[data-sold]");
@@ -865,7 +876,7 @@ function init() {
     const exp = ev.target.closest("[data-expire]");
     if (exp) return markExpired(exp.dataset.expire);
     const re = ev.target.closest("[data-relist]");
-    if (re) return markExpired(re.dataset.relist, { relist: true });
+    if (re) return markExpired(re.dataset.relist, { relist: true, price: Number(re.dataset.price) || null });
   });
   $("listings").addEventListener("keydown", (ev) => {
     if (ev.key === "Enter" && ev.target.classList.contains("sold-qty")) markSold(ev.target.id.slice(5), Number(ev.target.value));
