@@ -469,3 +469,11 @@ td.over-budget { color: var(--serious); }
 .kinah-field input[aria-invalid="true"] { border-color: var(--critical); }
 .kinah-note { margin: 0; font-size: 11.5px; max-width: 26ch; line-height: 1.35; }
 @media (max-width: 560px) { .kinah-field input { width: 100%; } .kinah-note { max-width: none; } }
+
+/* inventory and listing advice */
+table.inventory-table { min-width: 1000px; }
+.inventory-table td.advice-cell { white-space: normal; text-align: left; font-family: inherit; min-width: 280px; max-width: 420px; }
+.inventory-table th:nth-child(5) { text-align: left; }
+.advice-why { display: block; margin-top: 4px; font-size: 12px; color: var(--text-2); line-height: 1.4; }
+.inventory-table td.market-cell { font-size: 12px; }
+.pill.got::before { content: "+"; }
