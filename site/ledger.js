@@ -1,4 +1,4 @@
-import { shortenName, parseKinah, analyzeMarket, DEFAULT_SETTINGS } from "./metrics.js";
+import { shortenName, parseKinah } from "./metrics.js";
 
 // Profit calculator: a personal log of exchange purchases and sales, kept in this browser (localStorage).
 const API = "https://aion2.exchange";
@@ -33,7 +33,6 @@ const LISTING_HOURS = 72; // exchange listings last 3 days
 // A sale loses tax + listing fee; a sale from a logged listing has feePct 0 because the listing already paid it.
 export function amounts(e) {
   const gross = e.qty * e.price;
-  if (e.side === "got") return { gross, tax: 0, fee: 0, net: 0 }; // crafted, combo, drop: inventory only
   if (e.side === "buy") return { gross, tax: 0, fee: 0, net: -gross };
   if (e.side === "list") {
     const fee = Math.round(gross * e.feePct / 100);
@@ -81,7 +80,7 @@ function save({ adjustKinah = true } = {}) {
   }
 }
 function valid(e) {
-  return e && typeof e.id === "string" && ["buy", "sell", "list", "got"].includes(e.side) && Number.isFinite(e.qty) && e.qty > 0
+  return e && typeof e.id === "string" && (e.side === "buy" || e.side === "sell" || e.side === "list") && Number.isFinite(e.qty) && e.qty > 0
     && Number.isFinite(e.price) && e.price >= 0 && Number.isFinite(e.ts) && typeof e.name === "string";
 }
 const salesOf = (listing, except = null) => state.entries.filter((x) => x.side === "sell" && x.listingId === listing.id && x.id !== except);
@@ -99,7 +98,6 @@ const state = {
   side: "sell",
   editing: null,       // id of the entry being edited
   catalog: new Map(),  // lowercase name -> { key, name, price, icon }
-  stats: new Map(),    // item key -> market stats on the picked server { listing, listings, perDay, soldAvg }
   sort: { key: "ts", dir: -1 },
   lastNet: 0,          // the log's total kinah effect at the last save, to move "your kinah" by each change
   options: [],         // catalog items for the search dropdown, sorted by name
@@ -120,13 +118,6 @@ async function loadCatalog() {
       ? snap.markets[String(srv?.server_id)] || Object.values(snap.markets)[0] || {}
       : (await (await fetch(`data/servers/${srv.server_id}.json`)).json()).market || {};
     const icons = market.icons || {};
-    // Market stats for listing advice: cheapest listing, listing count, sales per day, average sale price.
-    try {
-      for (const r of analyzeMarket(market, { ...DEFAULT_SETTINGS, salesTaxPct: state.settings.taxPct, listingFeePct: state.settings.feePct })) {
-        state.stats.set(r.key, { listing: r.listing > 0 ? r.listing : null, listings: r.listings, perDay: r.perDay, soldAvg: r.soldAvg > 0 ? r.soldAvg : null });
-      }
-    } catch { /* advice falls back to prices only */ }
-    for (const m of market.materials || []) if (!state.stats.has(m.item_key)) state.stats.set(m.item_key, { listing: m.price > 0 ? m.price : null, listings: m.listings, perDay: null, soldAvg: null });
     const add = (key, rawName, price) => {
       const name = shortenName(rawName);
       if (!name) return;
@@ -261,7 +252,6 @@ function wireCombo() {
 // ---------- form ----------
 function setSide(side) {
   state.side = side;
-  $("price").placeholder = side === "got" ? "optional" : "e.g. 1.5m or 250k";
   for (const b of $("side").querySelectorAll("button")) b.setAttribute("aria-checked", String(b.dataset.v === side));
   $("side").dataset.side = side;
   updatePreview();
@@ -276,8 +266,7 @@ function localInputValue(ts) {
 function readForm() {
   const name = shortenName($("item").value.trim());
   const qty = Number($("qty").value);
-  const rawPrice = $("price").value.trim();
-  const price = state.side === "got" && !rawPrice ? 0 : parseKinah(rawPrice);
+  const price = parseKinah($("price").value);
   const ts = $("when").value ? new Date($("when").value).getTime() : Date.now();
   const editing = state.editing && state.entries.find((x) => x.id === state.editing);
   const taxPct = editing ? editing.taxPct : state.settings.taxPct;
@@ -314,10 +303,6 @@ function updatePreview() {
     return;
   }
   const a = amounts(f);
-  if (f.side === "got") {
-    $("preview").innerHTML = `Adds <strong>${f.qty}</strong> to your inventory without changing your kinah. Listing advice for it appears under Inventory.${priceHint}`;
-    return;
-  }
   if (f.side === "list") {
     const tax = Math.round(a.gross * f.taxPct / 100);
     $("preview").innerHTML = `<strong class="neg">Listing fee ${full(a.fee)}</strong> (${f.feePct}% of ${full(a.gross)}) paid now · ` +
@@ -346,7 +331,7 @@ function submit(ev) {
     state.entries.push({ id: newId(), ...entry });
     toast(isMaterials(entry.name) && f.side === "buy"
       ? `Materials added: ${full(amounts(entry).gross)} spent.`
-      : `${{ sell: "Sale", buy: "Purchase", list: "Listing", got: "Added to inventory" }[f.side]}: ${f.qty} × ${entry.name}.`);
+      : `${{ sell: "Sale", buy: "Purchase", list: "Listing" }[f.side]} added: ${f.qty} × ${entry.name}.`);
   }
   save();
   resetForm({ keepItem: !state.editing });
@@ -416,7 +401,7 @@ function markSold(id, qty) {
   toast(`Sold ${qty} × ${l.name}: +${full(a.net)} after tax.`, "Undo");
 }
 
-function markExpired(id, { relist = false, price = null } = {}) {
+function markExpired(id, { relist = false } = {}) {
   const l = state.entries.find((x) => x.id === id);
   if (!l) return;
   const left = remaining(l);
@@ -424,7 +409,7 @@ function markExpired(id, { relist = false, price = null } = {}) {
   l.expiredTs = Date.now();
   let fresh = null;
   if (relist && left > 0) {
-    fresh = { id: newId(), side: "list", name: l.name, key: l.key ?? null, qty: left, price: price > 0 ? price : l.price,
+    fresh = { id: newId(), side: "list", name: l.name, key: l.key ?? null, qty: left, price: l.price,
       taxPct: state.settings.taxPct, feePct: state.settings.feePct, ts: Date.now(), note: l.note || "" };
     state.entries.push(fresh);
   }
@@ -435,7 +420,7 @@ function markExpired(id, { relist = false, price = null } = {}) {
     if (fresh) state.entries = state.entries.filter((x) => x.id !== fresh.id);
     save(); render();
   };
-  toast(fresh ? `Relisted ${left} × ${l.name} at ${kinah(fresh.price)}: new listing fee ${full(amounts(fresh).fee)}.` : `Marked ${left} × ${l.name} as expired; the listing fee is lost.`, "Undo");
+  toast(fresh ? `Relisted ${left} × ${l.name}: new listing fee ${full(amounts(fresh).fee)}.` : `Marked ${left} × ${l.name} as expired; the listing fee is lost.`, "Undo");
 }
 
 function timeLeft(l) {
@@ -443,25 +428,6 @@ function timeLeft(l) {
   const h = Math.abs(ms) / 3600e3;
   const txt = h >= 24 ? `${Math.floor(h / 24)}d ${Math.floor(h % 24)}h` : h >= 1 ? `${Math.floor(h)}h` : `${Math.max(1, Math.round(h * 60))}m`;
   return ms > 0 ? { text: `in ${txt}`, over: false } : { text: `${txt} ago`, over: true };
-}
-
-// Relist button: at a price just under the cheapest when you've been undercut, otherwise at the same price.
-function relistButton(l) {
-  const st = statsFor(l);
-  const at = st?.listing != null && st.listing < l.price ? undercut(st.listing) : null;
-  return at
-    ? `<button type="button" class="mini-btn warn-btn" data-relist="${esc(l.id)}" data-price="${at}" title="Cancel or let it expire in game, then post the unsold units at ${full(at)} to be cheapest again (new listing fee)">Relist at ${kinah(at)}</button>`
-    : `<button type="button" class="mini-btn" data-relist="${esc(l.id)}" title="Close it as expired and post the unsold units again, paying a new listing fee">Relist</button>`;
-}
-
-// Is your listing still the cheapest? (The market's cheapest may be your own listing.)
-function marketCheck(l) {
-  const st = statsFor(l);
-  if (!st || st.listing == null) return `<td class="dim">—</td>`;
-  if (st.listing < l.price) {
-    return `<td class="warn" title="Someone is listing below you; relist at about ${full(undercut(st.listing))} to be cheapest again">Undercut: ${kinah(st.listing)}</td>`;
-  }
-  return `<td class="dim" title="The cheapest listing on the market at the last refresh was ${full(st.listing)}">You're cheapest</td>`;
 }
 
 function renderListings() {
@@ -483,150 +449,18 @@ function renderListings() {
       <td>${left.toLocaleString()}${left < l.qty ? ` <span class="dim">of ${l.qty.toLocaleString()}</span>` : ""}</td>
       <td title="${full(l.price)}">${kinah(l.price)}</td>
       <td class="pos" title="${full(net)} after ${l.taxPct}% tax">${kinah(net)}</td>
-      ${marketCheck(l)}
       <td class="listing-actions">
         <label class="sr-only" for="sold-${esc(l.id)}">Quantity sold</label>
         <input type="number" id="sold-${esc(l.id)}" class="sold-qty" min="1" max="${left}" step="1" value="${left}" inputmode="numeric">
         <button type="button" class="mini-btn good" data-sold="${esc(l.id)}">Mark sold</button>
         <button type="button" class="mini-btn" data-expire="${esc(l.id)}" title="It didn't sell: close the listing (the listing fee is lost)">Expired</button>
-        ${relistButton(l)}
+        <button type="button" class="mini-btn" data-relist="${esc(l.id)}" title="Close it as expired and post the unsold units again, paying a new listing fee">Relist</button>
       </td>
     </tr>`;
   }).join("");
   $("listingsNote").textContent = `${units.toLocaleString()} unit${units === 1 ? "" : "s"} on the market, worth ${kinah(value)} after tax if they all sell.`;
-  $("listings").querySelector("thead").innerHTML = `<tr><th>Item</th><th>Listed</th><th>Status</th><th>Left</th><th>Price each</th><th>If sold</th><th>Market</th><th><span class="sr-only">Actions</span></th></tr>`;
+  $("listings").querySelector("thead").innerHTML = `<tr><th>Item</th><th>Listed</th><th>Status</th><th>Left</th><th>Price each</th><th>If sold</th><th><span class="sr-only">Actions</span></th></tr>`;
   $("listings").querySelector("tbody").innerHTML = rows;
-}
-
-// ---------- inventory and listing advice ----------
-const statsFor = (e) => (e.key != null ? state.stats.get(e.key) : null) ?? (lookup(e.name)?.key != null ? state.stats.get(lookup(e.name).key) : null);
-
-// Undercut a price slightly, landing on a 999-style number just under a round figure (27,999,999 -> 27,799,999).
-function undercut(price) {
-  if (!(price > 1)) return price;
-  const target = price * 0.995;
-  const mag = Math.pow(10, Math.max(0, Math.floor(Math.log10(target)) - 2)); // keep 3 significant digits
-  return Math.max(1, Math.floor(target / mag) * mag - 1);
-}
-
-// What you hold per item: got + bought − sold − still listed, across the whole log.
-function inventory() {
-  const groups = new Map();
-  for (const e of state.entries) {
-    if (isMaterials(e.name)) continue;
-    const k = e.name.toLowerCase();
-    if (!groups.has(k)) groups.set(k, { name: e.name, key: e.key, in: 0, out: 0, listed: [], sample: e });
-    const g = groups.get(k);
-    if (g.key == null && e.key != null) g.key = e.key;
-    if (e.side === "got" || e.side === "buy") g.in += e.qty;
-    else if (e.side === "sell") g.out += e.qty;
-    else if (isActive(e)) g.listed.push(e);
-  }
-  return [...groups.values()].map((g) => {
-    const listedUnits = g.listed.reduce((n, l) => n + remaining(l), 0);
-    return { ...g, listedUnits, onHand: Math.max(0, g.in - g.out - listedUnits) };
-  }).filter((g) => g.onHand > 0);
-}
-
-/**
- * When and at what price to list what you hold, given the market and your own active listings.
- * Your listings are counted in the market's listing count (they can't be told apart), so when your lowest
- * listing is at or below the market's cheapest, the cheapest is taken to be yours.
- */
-export function adviseListing({ onHand, listed }, st, settings) {
-  const keep = 1 - (settings.taxPct + settings.feePct) / 100;
-  const myLow = listed.length ? Math.min(...listed.map((l) => l.price)) : null;
-  const myUnits = listed.reduce((n, l) => n + remaining(l), 0);
-  const cheapest = st?.listing ?? null;
-  const avgSale = st?.soldAvg ?? null;
-  const perDay = st?.perDay ?? null;
-  const listings = st?.listings ?? 0;
-  // How many the market takes from you per 3-day listing (25% of sales), at least 1.
-  const slots = perDay > 0 ? Math.max(1, Math.round(perDay * 3 * 0.25)) : 1;
-  const out = { action: "list", qty: Math.min(onHand, slots), price: null, why: "", tone: "good" };
-
-  if (myLow != null) {
-    const undercutMe = cheapest != null && cheapest < myLow;
-    if (undercutMe) {
-      return { ...out, action: "relist", tone: "warning", qty: 0, price: undercut(cheapest),
-        why: `Your listing at ${kinah(myLow)} has been undercut (cheapest is ${kinah(cheapest)}). Relist it at about ${kinah(undercut(cheapest))} before adding more; a new, lower listing would just sell ahead of your own.` };
-    }
-    if (myUnits >= slots) {
-      return { ...out, action: "hold", tone: "neutral", qty: 0, price: myLow,
-        why: `You already have ${myUnits} listed at ${kinah(myLow)}${cheapest != null && cheapest >= myLow ? " (the cheapest on the market)" : ""}. The market takes about ${slots} from you per 3 days, so wait for ${myUnits === 1 ? "it" : "those"} to sell instead of listing against yourself.` };
-    }
-    return { ...out, price: myLow,
-      why: `You're the cheapest at ${kinah(myLow)}. There's room for about ${slots - myUnits} more, so list at the same price; going lower would only undercut your own listing.`, qty: Math.min(onHand, slots - myUnits) };
-  }
-
-  if (cheapest == null) {
-    if (avgSale == null) return { ...out, action: "check", tone: "neutral", why: "No listings or recent sales on this server to price from. Check the item's page before listing." };
-    return { ...out, price: Math.round(avgSale), why: `Nobody is selling this right now. Recent sales averaged ${kinah(avgSale)}, so list there.` };
-  }
-  let price = undercut(cheapest);
-  let why = `Undercut the cheapest listing (${kinah(cheapest)}).`;
-  if (avgSale != null && cheapest > avgSale * 1.15) {
-    price = Math.round(avgSale);
-    why = `The cheapest listing (${kinah(cheapest)}) is well above what actually sold recently (${kinah(avgSale)}), so list nearer the sale price.`;
-  }
-  const daysToSell = perDay > 0 ? (listings + 1) / perDay : null;
-  if (perDay == null || perDay === 0) {
-    return { ...out, qty: 1, tone: "warning", price, why: `${why} No sales seen in the last 7 days, so list one and see if it moves.` };
-  }
-  if (daysToSell > 3) {
-    return { ...out, action: "wait", tone: "warning", qty: 1, price,
-      why: `${listings} already listed and about ${perDay.toFixed(1)} sell a day, so a new one waits ~${daysToSell.toFixed(1)} days and may expire first. Wait for the queue to clear, or list one at ${kinah(price)} to jump to the front.` };
-  }
-  return { ...out, price, why: `${why} About ${perDay.toFixed(1)} sell a day with ${listings} listed, so it should sell in ~${daysToSell.toFixed(1)} days.` };
-}
-
-const ACTION_LABEL = { list: "List now", relist: "Relist yours", hold: "Hold", wait: "Wait", check: "Check price" };
-
-function renderInventory() {
-  const inv = inventory();
-  const panel = $("inventoryPanel");
-  panel.hidden = !inv.length;
-  if (!inv.length) return;
-  const settings = state.settings;
-  const keep = 1 - (settings.taxPct + settings.feePct) / 100;
-  state.advice = new Map();
-  $("inventory").querySelector("thead").innerHTML = `<tr><th>Item</th><th>On hand</th><th>Market</th><th>Yours listed</th><th>Advice</th><th>Price</th><th>You get each</th><th><span class="sr-only">Actions</span></th></tr>`;
-  $("inventory").querySelector("tbody").innerHTML = inv.map((g) => {
-    const st = statsFor(g);
-    const a = adviseListing(g, st, settings);
-    state.advice.set(g.name.toLowerCase(), { ...a, name: g.name });
-    const market = st
-      ? `${st.listing != null ? kinah(st.listing) : "none listed"} <span class="dim">· ${st.listings ?? 0} listed${st.perDay != null ? ` · ${st.perDay.toFixed(1)}/day` : ""}</span>`
-      : `<span class="dim">no market data</span>`;
-    const mine = g.listedUnits ? `${g.listedUnits} @ ${kinah(Math.min(...g.listed.map((l) => l.price)))}` : "—";
-    const canList = a.qty > 0 && a.price > 0;
-    return `<tr>
-      <td class="name"><span class="item-cell">${entryIcon(g.sample)}<span>${esc(g.name)}</span></span></td>
-      <td>${g.onHand.toLocaleString()}</td>
-      <td class="market-cell" title="Cheapest listing, number of listings (including yours) and estimated sales per day on this server">${market}</td>
-      <td>${mine}</td>
-      <td class="advice-cell"><span class="pill ${a.tone}">${ACTION_LABEL[a.action]}${canList && a.qty > 1 ? ` ${a.qty}` : ""}</span><span class="advice-why">${esc(a.why)}</span></td>
-      <td title="${a.price ? full(a.price) : ""}">${a.price ? kinah(a.price) : "—"}</td>
-      <td class="pos">${a.price ? kinah(a.price * keep) : "—"}</td>
-      <td class="listing-actions">${canList ? `<button type="button" class="mini-btn good" data-advise="${esc(g.name)}">List ${a.qty}</button>` : ""}${a.action === "relist" ? g.listed.filter((l) => l.price > a.price).map(relistButton).join("") : ""}</td>
-    </tr>`;
-  }).join("");
-  const units = inv.reduce((n, g) => n + g.onHand, 0);
-  $("inventoryNote").textContent = `${units.toLocaleString()} unit${units === 1 ? "" : "s"} not listed. Market data refreshes every ~30 minutes.`;
-}
-
-// Fill the form with a suggested listing.
-function prefillListing(name) {
-  const a = state.advice?.get(name.toLowerCase());
-  if (!a) return;
-  resetForm();
-  setSide("list");
-  $("item").value = a.name;
-  $("qty").value = a.qty;
-  $("price").value = a.price;
-  updatePreview();
-  $("entryForm").scrollIntoView({ behavior: "smooth", block: "start" });
-  $("submitBtn").focus({ preventScroll: true });
 }
 
 // ---------- totals ----------
@@ -640,13 +474,12 @@ function inPeriod(e) {
 }
 
 function totals(entries) {
-  const t = { received: 0, spent: 0, tax: 0, fee: 0, sold: 0, bought: 0, got: 0, listingFees: 0, profit: 0 };
+  const t = { received: 0, spent: 0, tax: 0, fee: 0, sold: 0, bought: 0, listingFees: 0, profit: 0 };
   for (const e of entries) {
     const a = amounts(e);
     t.profit += a.net;
     if (e.side === "sell") { t.received += a.net; t.tax += a.tax; t.fee += a.fee; t.sold += e.qty; }
     else if (e.side === "list") { t.fee += a.fee; t.listingFees += a.fee; }
-    else if (e.side === "got") { t.got += e.qty; }
     else { t.spent += a.gross; t.bought += e.qty; if (isMaterials(e.name)) t.materials = (t.materials || 0) + a.gross; }
   }
   return t;
@@ -665,14 +498,13 @@ function byItem(entries) {
     const avg = (list) => (list.length ? list.reduce((s, e) => s + e.qty * e.price, 0) / list.reduce((s, e) => s + e.qty, 0) : null);
     // Units still listed are counted from every active listing, not just this period's.
     const listed = state.entries.filter((e) => isActive(e) && e.name.toLowerCase() === g.name.toLowerCase()).reduce((n, e) => n + remaining(e), 0);
-    return { ...g, ...t, avgBuy: avg(buys), avgSell: avg(sells), listed, onHand: t.bought + t.got - t.sold - listed, last: Math.max(...g.list.map((e) => e.ts)) };
+    return { ...g, ...t, avgBuy: avg(buys), avgSell: avg(sells), listed, onHand: t.bought - t.sold - listed, last: Math.max(...g.list.map((e) => e.ts)) };
   }).sort((a, b) => b.profit - a.profit);
 }
 
 // ---------- render ----------
 function render() {
   const entries = state.entries.filter(inPeriod);
-  renderInventory();
   renderListings();
   renderKpis(entries);
   renderByItem(entries);
@@ -705,13 +537,12 @@ function renderByItem(entries) {
         <td>${r.received ? kinah(r.received) : "—"}</td>
         <td class="${signClass(r.profit)}" title="${full(r.profit)}">${kinah(r.profit, { sign: true })}</td>
         <td>${r.listed ? r.listed.toLocaleString() : "—"}</td>
-        <td title="${r.onHand < 0 ? "More sold or listed than bought here (crafted or bought before you started logging)" : ""}">${r.onHand < 0 || !(r.bought || r.got) || isMaterials(r.name) ? "—" : r.onHand.toLocaleString()}</td>
+        <td title="${r.onHand < 0 ? "More sold or listed than bought here (crafted or bought before you started logging)" : ""}">${r.onHand < 0 || !r.bought || isMaterials(r.name) ? "—" : r.onHand.toLocaleString()}</td>
       </tr>`).join("")
     : `<tr><td colspan="10" class="empty-row">${state.entries.length ? "No transactions in this period." : "Nothing logged yet. Add your first purchase or sale above."}</td></tr>`;
 }
 
 function typeCell(e) {
-  if (e.side === "got") return `<span class="pill neutral got">Got</span><span class="type-sub">inventory</span>`;
   if (e.side === "buy") return `<span class="pill neutral bought">Bought</span>`;
   if (e.side === "sell") return `<span class="pill good sold">Sold</span>${e.listingId ? `<span class="type-sub">from listing</span>` : ""}`;
   const sold = soldQty(e), left = e.qty - sold;
@@ -719,7 +550,6 @@ function typeCell(e) {
   return `<span class="pill listed${isActive(e) ? "" : " closed"}">Listed</span><span class="type-sub">${sub}</span>`;
 }
 function deductTitle(e, a) {
-  if (e.side === "got") return "Added to inventory; no kinah change";
   if (e.side === "buy") return "No tax on purchases";
   if (e.side === "list") return `Listing fee ${full(a.fee)} (${e.feePct}%), paid when listed`;
   return e.listingId ? `Tax ${full(a.tax)} (${e.taxPct}%); listing fee was paid on the listing` : `Tax ${full(a.tax)} (${e.taxPct}%) + listing fee ${full(a.fee)} (${e.feePct}%)`;
@@ -750,7 +580,7 @@ function renderTransactions(entries) {
         <td>${e.qty.toLocaleString()}</td>
         <td title="${full(e.price)}">${kinah(e.price)}</td>
         <td title="${full(a.gross)}">${kinah(a.gross)}</td>
-        <td title="${deductTitle(e, a)}">${e.side === "buy" || e.side === "got" ? "—" : kinah(a.tax + a.fee)}</td>
+        <td title="${deductTitle(e, a)}">${e.side === "buy" ? "—" : kinah(a.tax + a.fee)}</td>
         <td class="${signClass(a.net)}" title="${full(a.net)}">${kinah(a.net, { sign: true })}</td>
         <td class="note-cell">${esc(e.note || "")}</td>
         <td class="actions"><button type="button" class="icon-btn" data-edit="${esc(e.id)}" title="Edit" aria-label="Edit ${esc(e.name)}">✎</button><button type="button" class="icon-btn danger" data-del="${esc(e.id)}" title="Delete" aria-label="Delete ${esc(e.name)}">✕</button></td>
@@ -777,7 +607,7 @@ function exportCsv() {
   const lines = [["date", "item", "item_key", "type", "qty", "price_each", "total", "tax", "listing_fee", "kinah_change", "note"].join(",")];
   for (const e of [...state.entries].sort((a, b) => a.ts - b.ts)) {
     const a = amounts(e);
-    lines.push([new Date(e.ts).toISOString(), q(e.name), e.key ?? "", { sell: "sold", buy: "bought", list: "listed", got: "acquired" }[e.side], e.qty, e.price, a.gross, a.tax, a.fee, a.net, q(e.note)].join(","));
+    lines.push([new Date(e.ts).toISOString(), q(e.name), e.key ?? "", { sell: "sold", buy: "bought", list: "listed" }[e.side], e.qty, e.price, a.gross, a.tax, a.fee, a.net, q(e.note)].join(","));
   }
   download(`aion2-ledger-${stamp()}.csv`, lines.join("\n"), "text/csv");
 }
@@ -864,19 +694,13 @@ function init() {
     const del = ev.target.closest("[data-del]");
     if (del) remove(del.dataset.del);
   });
-  $("inventory").addEventListener("click", (ev) => {
-    const b = ev.target.closest("[data-advise]");
-    if (b) return prefillListing(b.dataset.advise);
-    const re = ev.target.closest("[data-relist]");
-    if (re) return markExpired(re.dataset.relist, { relist: true, price: Number(re.dataset.price) || null });
-  });
   $("listings").addEventListener("click", (ev) => {
     const sold = ev.target.closest("[data-sold]");
     if (sold) return markSold(sold.dataset.sold, Number($(`sold-${sold.dataset.sold}`).value));
     const exp = ev.target.closest("[data-expire]");
     if (exp) return markExpired(exp.dataset.expire);
     const re = ev.target.closest("[data-relist]");
-    if (re) return markExpired(re.dataset.relist, { relist: true, price: Number(re.dataset.price) || null });
+    if (re) return markExpired(re.dataset.relist, { relist: true });
   });
   $("listings").addEventListener("keydown", (ev) => {
     if (ev.key === "Enter" && ev.target.classList.contains("sold-qty")) markSold(ev.target.id.slice(5), Number(ev.target.value));
