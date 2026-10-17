@@ -498,10 +498,31 @@ export function shortenMarketNames(market) {
 
 /**
  * Where to put a kinah budget. Candidates are crafts worth making (Top pick / Craft it), best return on capital
- * first. Each gets as many units as the market can take from you in one listing period (sold/day × 3 days × your
- * share, at least 1) and the budget allows, where n units need cost-per-attempt × the attempts for 90% odds of n
+ * first. Each gets as many units as the market has room for in one listing period (`marketRoom`) and the budget allows, where n units need cost-per-attempt × the attempts for 90% odds of n
  * successes (never less than n × the average cost). Returns the picks, totals, and the best craft just out of reach.
  */
+/**
+ * How many of one item you can sell in a listing period without flooding it or competing with yourself.
+ * Your first unit, priced at the cheapest, sells once the market clears what's already listed (the verdicts
+ * already require that within 3 days). Every extra unit sits behind your own first one while other sellers keep
+ * relisting, so you only win your share of the sales left after current listings:
+ *   n = 1 + floor(share × (sold/day × 3 − listings − 1)), at least 1.
+ */
+export function marketRoom(r, settings = DEFAULT_SETTINGS) {
+  const s = { ...DEFAULT_SETTINGS, ...settings };
+  if (!(r.perDay > 0)) return 1;
+  const spare = r.perDay * s.listingDays - (r.listings ?? 0) - 1; // sales left once current listings and your first sell
+  return 1 + Math.max(0, Math.floor((s.sharePct / 100) * spare + 1e-9));
+}
+
+/** Days until your n-th unit sells: the current listings and your first at the market's pace, then your share of sales. */
+export function daysForUnits(r, n, settings = DEFAULT_SETTINGS) {
+  const s = { ...DEFAULT_SETTINGS, ...settings };
+  if (!(r.perDay > 0)) return null;
+  const first = ((r.listings ?? 0) + 1) / r.perDay;
+  return first + (n - 1) / (r.perDay * (s.sharePct / 100));
+}
+
 export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
   if (!(budget > 0)) return null;
@@ -517,14 +538,14 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
   const picks = [];
   const skipped = [];
   for (const r of candidates) {
-    const slots = Math.max(1, Math.round(r.perDay * s.listingDays * (s.sharePct / 100)));
+    const slots = marketRoom(r, s);
     let n = 0;
     while (n < slots && capitalFor(r, n + 1) <= left) n++;
     if (!n) { skipped.push({ row: r, capital: capitalFor(r, 1) }); continue; }
     const capital = capitalFor(r, n);
     left -= capital;
     picks.push({ row: r, units: n, slots, capital, spend: n * r.cost, profit: n * r.profit,
-      daysToSell: r.perDay > 0 ? (r.listings + n) / r.perDay : null });
+      daysToSell: daysForUnits(r, n, s) });
   }
   const capital = picks.reduce((t, p) => t + p.capital, 0);
   const profit = picks.reduce((t, p) => t + p.profit, 0);
