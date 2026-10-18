@@ -32,7 +32,8 @@ jobs:
           python-version: "3.12"
 
       - name: Fetch market snapshot from aion2.exchange
-        run: python scripts/fetch_snapshot.py --out site/data/snapshot.json
+        # A server that fails keeps its last published data (read back from the live site).
+        run: python scripts/fetch_snapshot.py --out site/data/snapshot.json --fallback "https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
 
       # GitHub Pages lets browsers cache files for 10 minutes; versioned URLs make a deploy show up immediately.
       - name: Cache-bust script and style URLs

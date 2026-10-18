@@ -16,6 +16,7 @@ Stdlib only, so the GitHub Action needs no installs.
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import sys
 import time
@@ -58,7 +59,7 @@ ITEM_FIELDS = (
 )
 
 
-def get_json(base: str, path: str, params: dict | None = None, retries: int = 3):
+def get_json(base: str, path: str, params: dict | None = None, retries: int = 5):
     url = base.rstrip("/") + path
     if params:
         url += "?" + urllib.parse.urlencode(params)
@@ -73,9 +74,11 @@ def get_json(base: str, path: str, params: dict | None = None, retries: int = 3)
                 return None
             last_err = err
             time.sleep(2 ** attempt)
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as err:
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError,
+                http.client.HTTPException, ConnectionError, OSError) as err:
+            # HTTPException covers IncompleteRead: the site sometimes cuts a response off partway.
             last_err = err
-            time.sleep(2 ** attempt)
+            time.sleep(min(2 ** attempt, 10))
     raise RuntimeError(f"{url}: {last_err}")
 
 
@@ -238,6 +241,7 @@ def main() -> int:
     ap.add_argument("--base", default=DEFAULT_BASE)
     ap.add_argument("--servers", default=",".join(map(str, DEFAULT_SERVERS)), help="comma-separated server ids")
     ap.add_argument("--regions", help="fetch every server in these region codes instead (NAE, NAW, EU, LA, AS)")
+    ap.add_argument("--fallback", help="the published dashboard's URL: a server that fails this run keeps its last published file from there")
     args = ap.parse_args()
 
     all_servers = get_json(args.base, "/api/servers").get("servers", [])
@@ -278,9 +282,25 @@ def main() -> int:
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         results = list(pool.map(one, servers))
 
+    # A server that failed keeps its last published data rather than vanishing from the dashboard.
+    if args.fallback:
+        for r in results:
+            if r["ok"]:
+                continue
+            sid = r["server_id"]
+            try:
+                doc = get_json(args.fallback, f"/data/servers/{sid}.json", {"run": int(time.time())}, retries=3)
+            except Exception as err:
+                print(f"server {sid}: no fallback ({err})", file=sys.stderr)
+                continue
+            if doc and doc.get("market"):
+                (server_dir / f"{sid}.json").write_text(json.dumps(doc, separators=(",", ":")))
+                r.update(stale=True, generated_at=doc.get("generated_at"), captured_at=(doc.get("market") or {}).get("captured_at"))
+                print(f"server {sid}: kept the last published data from {doc.get('generated_at')}", file=sys.stderr)
+
     ok = [r for r in results if r["ok"]]
-    if len(ok) < len(results) / 2:
-        print(f"Only {len(ok)} of {len(results)} servers fetched; not writing the index.", file=sys.stderr)
+    if not ok:
+        print(f"None of the {len(results)} servers fetched; not writing the index (the live site keeps its data).", file=sys.stderr)
         return 1
     model = next((r["model"] for r in ok if r.get("model")), None)
     index = {
@@ -288,9 +308,9 @@ def main() -> int:
         "source": args.base,
         "default_server": DEFAULT_SERVER,
         "model": model,
-        # Servers that failed this run are listed only if an older file of theirs exists to fall back on.
-        "servers": [{k: r.get(k) for k in (*SERVER_FIELDS, "generated_at", "captured_at")}
-                    for r in results if r["ok"] or (server_dir / f"{r['server_id']}.json").exists()],
+        # Servers that failed this run are listed only if their last published file was kept (marked stale).
+        "servers": [{**{k: r.get(k) for k in (*SERVER_FIELDS, "generated_at", "captured_at")}, **({"stale": True} if r.get("stale") else {})}
+                    for r in results if r["ok"] or r.get("stale")],
         "errors": [f"{r['name']} {r['region']}: {r['error']}" for r in results if not r["ok"]],
     }
     out.write_text(json.dumps(index, separators=(",", ":")))
