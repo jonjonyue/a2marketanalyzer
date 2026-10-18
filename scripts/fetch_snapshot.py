@@ -244,7 +244,14 @@ def main() -> int:
     ap.add_argument("--fallback", help="the published dashboard's URL: a server that fails this run keeps its last published file from there")
     args = ap.parse_args()
 
-    all_servers = get_json(args.base, "/api/servers").get("servers", [])
+    try:
+        all_servers = get_json(args.base, "/api/servers").get("servers", [])
+    except Exception as err:
+        if not args.fallback:
+            raise
+        # The server list itself failed: use the published one so each server can still fall back.
+        print(f"server list: {err}; using the published list", file=sys.stderr)
+        all_servers = (get_json(args.fallback, "/data/snapshot.json", {"run": int(time.time())}, retries=2) or {}).get("servers", [])
     if args.regions:
         regions = {r.strip().upper() for r in args.regions.split(",") if r.strip()}
         servers = [s for s in all_servers if s.get("region") in regions]
@@ -299,10 +306,16 @@ def main() -> int:
                 print(f"server {sid}: kept the last published data from {doc.get('generated_at')}", file=sys.stderr)
 
     ok = [r for r in results if r["ok"]]
-    if not ok:
-        print(f"None of the {len(results)} servers fetched; not writing the index (the live site keeps its data).", file=sys.stderr)
+    kept = [r for r in results if r.get("stale")]
+    if not ok and not kept:
+        print(f"None of the {len(results)} servers fetched and nothing to fall back on; not writing the index.", file=sys.stderr)
         return 1
     model = next((r["model"] for r in ok if r.get("model")), None)
+    if model is None and args.fallback:  # every server fell back: keep the published model note too
+        try:
+            model = (get_json(args.fallback, "/data/snapshot.json", {"run": int(time.time())}, retries=2) or {}).get("model")
+        except Exception:
+            pass
     index = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "source": args.base,
