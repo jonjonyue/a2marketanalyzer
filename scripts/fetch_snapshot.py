@@ -73,7 +73,14 @@ def get_json(base: str, path: str, params: dict | None = None, retries: int = 5)
             if err.code == 404:  # e.g. an item that has never been listed: nothing to retry
                 return None
             last_err = err
-            time.sleep(2 ** attempt)
+            # 503 / 429 mean the site is busy or rate-limiting: back off much longer (5, 10, 20, 40 s),
+            # honouring Retry-After when it's sent.
+            busy = err.code in (429, 502, 503, 504)
+            wait = min(2 ** attempt, 10)
+            if busy:
+                retry_after = err.headers.get("Retry-After") if err.headers else None
+                wait = int(retry_after) if retry_after and retry_after.isdigit() else 5 * 2 ** attempt
+            time.sleep(min(wait, 60))
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError,
                 http.client.HTTPException, ConnectionError, OSError) as err:
             # HTTPException covers IncompleteRead: the site sometimes cuts a response off partway.
