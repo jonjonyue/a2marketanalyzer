@@ -523,6 +523,28 @@ export function daysForUnits(r, n, settings = DEFAULT_SETTINGS) {
   return first + (n - 1) / (r.perDay * (s.sharePct / 100));
 }
 
+/** A price just under `price`, landing on a 999-style figure (27,999,999 -> 27,799,999; 1,333 -> 1,319). */
+export function undercutPrice(price) {
+  if (!(price > 1)) return price;
+  const target = price * 0.995;
+  const mag = Math.pow(10, Math.max(0, Math.floor(Math.log10(target)) - 2)); // keep 3 significant digits
+  return Math.max(1, Math.floor(target / mag) * mag - 1);
+}
+
+/**
+ * Where to list from the two market prices: just under the cheapest listing, so you sell first; but when that
+ * listing sits more than 15% above what actually sold recently, near the recent average sale price instead
+ * (the cheapest listing isn't moving). With no listings, the recent average sale.
+ */
+export function suggestedListPrice(r) {
+  const cheapest = r.listing > 0 ? r.listing : null;
+  const avg = r.soldAvg > 0 ? r.soldAvg : null;
+  if (cheapest != null && avg != null && cheapest > avg * 1.15) return { price: undercutPrice(avg), basis: "sales" };
+  if (cheapest != null) return { price: undercutPrice(cheapest), basis: "undercut" };
+  if (avg != null) return { price: Math.round(avg), basis: "sales" };
+  return { price: r.price ?? null, basis: "price" };
+}
+
 export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
   if (!(budget > 0)) return null;
@@ -544,8 +566,11 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
     if (!n) { skipped.push({ row: r, capital: capitalFor(r, 1) }); continue; }
     const capital = capitalFor(r, n);
     left -= capital;
-    picks.push({ row: r, units: n, slots, capital, spend: n * r.cost, profit: n * r.profit,
-      daysToSell: daysForUnits(r, n, s) });
+    const list = suggestedListPrice(r);
+    const keep = 1 - (s.salesTaxPct + s.listingFeePct) / 100;
+    const each = list.price != null ? list.price * keep - r.cost : r.profit; // profit per unit at the suggested price
+    picks.push({ row: r, units: n, slots, capital, spend: n * r.cost, profit: n * each, listAt: list.price, listBasis: list.basis,
+      netEach: list.price != null ? list.price * keep : null, daysToSell: daysForUnits(r, n, s) });
   }
   const capital = picks.reduce((t, p) => t + p.capital, 0);
   const profit = picks.reduce((t, p) => t + p.profit, 0);

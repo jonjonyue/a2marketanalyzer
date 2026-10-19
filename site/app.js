@@ -394,6 +394,14 @@ function render() {
 }
 
 // ---------- plan for the viewer's kinah ----------
+function listTitle(p) {
+  const r = p.row;
+  const cheap = r.listing > 0 ? kinah(r.listing) : "none", avg = r.soldAvg > 0 ? kinah(r.soldAvg) : "no recent sales";
+  const why = p.listBasis === "undercut" ? "just under the cheapest listing, so yours sells first"
+    : p.listBasis === "sales" ? (r.listing > 0 ? "near what actually sold: the cheapest listing sits more than 15% above recent sales, so it isn't moving" : "at the recent average sale price, since nothing is listed")
+      : "the dashboard's sell price";
+  return `Cheapest listing ${cheap} · recent average sale ${avg}. List ${why}. List all ${p.units} at this price: going lower on later ones only undercuts your own.`;
+}
 function renderPlan(rows, settings) {
   const box = $("planBody");
   if (!state.budget) {
@@ -415,7 +423,8 @@ function renderPlan(rows, settings) {
       <td title="Room for about ${p.slots} from you in one 3-day listing: your first sells once the ${p.row.listings} current listings clear (${rate(p.row.perDay)}/day); each extra one only gets your ${settings.sharePct}% share of the sales left after that, since other sellers keep relisting and your own listings compete with each other">${p.units}${p.units < p.slots ? ` <span class="dim">of ${p.slots}</span>` : ""}</td>
       <td title="Kinah to set aside for 90% odds of making ${p.units} (combo luck included)">${kinah(p.capital)}</td>
       <td title="Average spend for ${p.units}">${kinah(p.spend)}</td>
-      <td class="pos">${kinah(p.profit, { sign: true })}</td>
+      <td title="${listTitle(p)}"><strong>${kinah(p.listAt)}</strong></td>
+      <td class="${p.profit > 0 ? "pos" : "neg"}" title="At ${kinah(p.listAt)} each you keep ${kinah(p.netEach)} after tax and fee">${kinah(p.profit, { sign: true })}</td>
       <td>${pct(p.row.roc)}</td>
       <td title="When your last one should sell: the current listings and your first at the market's pace, then your ${settings.sharePct}% share of sales for each extra">${days(p.daysToSell)} d</td>
     </tr>`).join("");
@@ -429,7 +438,7 @@ function renderPlan(rows, settings) {
       <div><span class="label">Set aside</span><strong>${kinah(plan.capital)}</strong><span class="sub">average spend ${kinah(plan.spend)}</span></div>
       <div><span class="label">Left over</span><strong>${kinah(plan.left)}</strong><span class="sub">${plan.picks.length} of ${plan.candidates} worthwhile crafts</span></div>
     </div>
-    <div class="table-scroll"><table class="plan-table"><thead><tr><th>Craft</th><th>Verdict</th><th>Make</th><th>Set aside</th><th>Avg spend</th><th>Profit</th><th>Return</th><th>Sells in</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
+    <div class="table-scroll"><table class="plan-table"><thead><tr><th>Craft</th><th>Verdict</th><th>Make</th><th>Set aside</th><th>Avg spend</th><th>List at</th><th>Profit</th><th>Return</th><th>Sells in</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
     ${next}
     <p class="muted small">Best return on capital first. "Set aside" covers bad luck on combo crafts (90% odds of making them all); on average you spend less and keep the rest. Each craft is capped at what one 3-day listing can sell: one beyond the current listings, plus extras only where your share of the remaining sales leaves room, since other sellers keep relisting and extra copies compete with your own.</p>`;
 }
