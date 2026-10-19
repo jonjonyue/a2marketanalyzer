@@ -63,6 +63,7 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
   const expiries = []; // predicted expiry times (epoch minutes) of listings we saw appear
   let sales = 0, cheapestSold = 0, priceSum = 0, priceN = 0;
   const events = []; // each inferred sale: [price (cheapest listing before it), listings up at the time, units]
+  const undercutDepths = []; // each time a new listing went in below the cheapest: how far below, as a fraction
 
   for (let i = 1; i < timeline.length; i++) {
     const a = timeline[i - 1], b = timeline[i];
@@ -81,6 +82,8 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
     } else if (cheapestGone && a.n > 0) {
       s = sLow = 1;
     }
+    // An undercut: the cheapest price dropped while no listing disappeared (a new, cheaper listing went up).
+    if (b.t > start && d >= 0 && a.low > 0 && b.low > 0 && b.low < a.low) undercutDepths.push(1 - b.low / a.low);
     if (b.t > start && s > 0) {
       sales += s;
       cheapestSold += sLow;
@@ -103,6 +106,11 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
     lowerPerDay: enough ? cheapestSold / days : null,
     avgSalePrice: priceN ? priceSum / priceN : null,
     events,
+    undercutDepths,
+    // Per day, as observed (no capture adjustment): undercuts vs sales of the cheapest listing. Their ratio says how
+    // often a listing that's just become the cheapest sells before someone undercuts it.
+    undercutsPerDay: enough ? undercutDepths.length / days : null,
+    cheapestSoldPerDay: enough ? cheapestSold / days : null,
   };
 }
 
@@ -535,8 +543,9 @@ export function undercutPrice(price) {
 }
 
 /** The plan's list price: see `suggestListing`. */
-export function suggestedListPrice(r) {
-  const a = suggestListing(r);
+export function suggestedListPrice(r, settings = DEFAULT_SETTINGS) {
+  const keep = 1 - (settings.salesTaxPct + settings.listingFeePct) / 100;
+  const a = suggestListing(r, { breakEven: r.cost > 0 && keep > 0 ? r.cost / keep : 0 });
   return a.price != null ? a : { ...a, price: r.price ?? null, basis: "price", note: "No listings or recent sales to price from; using the dashboard's sell price." };
 }
 
@@ -561,7 +570,7 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
     if (!n) { skipped.push({ row: r, capital: capitalFor(r, 1) }); continue; }
     const capital = capitalFor(r, n);
     left -= capital;
-    const list = suggestedListPrice(r);
+    const list = suggestedListPrice(r, s);
     const keep = 1 - (s.salesTaxPct + s.listingFeePct) / 100;
     const each = list.price != null ? list.price * keep - r.cost : r.profit; // profit per unit at the suggested price
     picks.push({ row: r, units: n, slots, capital, spend: n * r.cost, profit: n * each, listAt: list.price, listBasis: list.basis, listNote: list.note,
@@ -590,7 +599,23 @@ function weightedMedian(events) {
   return xs.length ? xs[Math.floor(xs.length / 2)] : null;
 }
 
-export const LISTING_ADVICE = { thinListings: 2, minThinSales: 2, maxPremium: 1.5 };
+export const LISTING_ADVICE = {
+  thinListings: 2, minThinSales: 2, maxPremium: 1.5,
+  minUndercuts: 2,      // undercuts seen in the window before judging the risk
+  safeOdds: 0.6,        // below this chance of selling before an undercut, price deeper for a surer sale
+  depthPercentile: 0.75, maxDepth: 0.15, minDepth: 0.02,
+};
+
+// Chance the cheapest listing sells before someone undercuts it, and how deep undercutters usually go.
+export function undercutRisk(est, o = LISTING_ADVICE) {
+  const depths = est?.undercutDepths || [];
+  const U = est?.undercutsPerDay, S = est?.cheapestSoldPerDay;
+  if (!(depths.length >= o.minUndercuts) || U == null || S == null || !(U + S > 0)) return null;
+  const sorted = [...depths].sort((a, b) => a - b);
+  const at = (q) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
+  return { sellFirst: S / (U + S), undercutsPerDay: U, cheapestSoldPerDay: S, typicalDepth: at(0.5),
+    secureDepth: Math.min(o.maxDepth, Math.max(o.minDepth, at(o.depthPercentile))), count: depths.length };
+}
 
 /**
  * Suggested listing price for one item, from how crowded its market is now and how sales went in the past week.
@@ -602,6 +627,28 @@ export const LISTING_ADVICE = { thinListings: 2, minThinSales: 2, maxPremium: 1.
  */
 export function suggestListing(r, opts = LISTING_ADVICE) {
   const o = { ...LISTING_ADVICE, ...opts };
+  const base = baseListing(r, o);
+  const risk = undercutRisk(r.est, o);
+  const cheapest = r.listing > 0 ? r.listing : null;
+  if (!risk || base.price == null || !cheapest) return { ...base, risk };
+  const pct = (x) => `${Math.round(x * 100)}%`;
+  const odds = `Undercuts are common here (${risk.undercutsPerDay.toFixed(1)}/day vs ${risk.cheapestSoldPerDay.toFixed(1)} sales of the cheapest/day), ` +
+    `so a listing that's cheapest sells before being undercut only ~${pct(risk.sellFirst)} of the time.`;
+  if (risk.sellFirst >= o.safeOdds) return { ...base, risk };
+  // A surer sale: below where most undercutters land, but never below break-even.
+  const secure = undercutPrice(cheapest * (1 - risk.secureDepth));
+  const floor = o.breakEven > 0 ? Math.ceil(o.breakEven) : 0;
+  if (secure >= base.price) return { ...base, risk, note: `${base.note} ${odds}` };
+  if (secure < floor) {
+    return { ...base, risk, basis: base.basis + "-risky",
+      note: `${base.note} ${odds} Going deep enough to stay ahead of them (~${pct(risk.secureDepth)} under the cheapest) would sell at a loss, so expect to relist.` };
+  }
+  return { ...base, price: secure, basis: "secure", risk, givenUp: base.price - secure,
+    note: `${odds} Undercutters usually go ~${pct(risk.typicalDepth)} under; listing ${pct(risk.secureDepth)} under the cheapest (${fmtK(cheapest)}) ` +
+      `puts you below most of them for a surer sale, giving up ${fmtK(base.price - secure)} vs the ${fmtK(base.price)} you'd otherwise list at.` };
+}
+
+function baseListing(r, o) {
   const events = r.est?.events || [];
   const thinEvents = events.filter(([, n]) => n <= o.thinListings);
   const normalEvents = events.filter(([, n]) => n > o.thinListings);
