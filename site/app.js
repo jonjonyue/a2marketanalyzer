@@ -396,11 +396,8 @@ function render() {
 // ---------- plan for the viewer's kinah ----------
 function listTitle(p) {
   const r = p.row;
-  const cheap = r.listing > 0 ? kinah(r.listing) : "none", avg = r.soldAvg > 0 ? kinah(r.soldAvg) : "no recent sales";
-  const why = p.listBasis === "undercut" ? "just under the cheapest listing, so yours sells first"
-    : p.listBasis === "sales" ? (r.listing > 0 ? "near what actually sold: the cheapest listing sits more than 15% above recent sales, so it isn't moving" : "at the recent average sale price, since nothing is listed")
-      : "the dashboard's sell price";
-  return `Cheapest listing ${cheap} · recent average sale ${avg}. List ${why}. List all ${p.units} at this price: going lower on later ones only undercuts your own.`;
+  return `${p.listNote || ""} Cheapest listing ${r.listing > 0 ? kinah(r.listing) : "none"} · ${r.listings ?? 0} listed. ` +
+    `List all ${p.units} at this price: going lower on later ones only undercuts your own.`;
 }
 function renderPlan(rows, settings) {
   const box = $("planBody");

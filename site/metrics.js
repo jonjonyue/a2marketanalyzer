@@ -62,6 +62,7 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
   const start = Math.max(first, end - o.windowDays * 1440);
   const expiries = []; // predicted expiry times (epoch minutes) of listings we saw appear
   let sales = 0, cheapestSold = 0, priceSum = 0, priceN = 0;
+  const events = []; // each inferred sale: [price (cheapest listing before it), listings up at the time, units]
 
   for (let i = 1; i < timeline.length; i++) {
     const a = timeline[i - 1], b = timeline[i];
@@ -85,6 +86,7 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
       cheapestSold += sLow;
       priceSum += a.low * s;
       priceN += s;
+      if (a.low > 0) events.push([a.low, a.n, s]);
     }
   }
 
@@ -100,6 +102,7 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
     perDay: observedPerDay == null ? null : Math.round(observedPerDay * o.captureAdjust * 10) / 10,
     lowerPerDay: enough ? cheapestSold / days : null,
     avgSalePrice: priceN ? priceSum / priceN : null,
+    events,
   };
 }
 
@@ -531,18 +534,10 @@ export function undercutPrice(price) {
   return Math.max(1, Math.floor(target / mag) * mag - 1);
 }
 
-/**
- * Where to list from the two market prices: just under the cheapest listing, so you sell first; but when that
- * listing sits more than 15% above what actually sold recently, near the recent average sale price instead
- * (the cheapest listing isn't moving). With no listings, the recent average sale.
- */
+/** The plan's list price: see `suggestListing`. */
 export function suggestedListPrice(r) {
-  const cheapest = r.listing > 0 ? r.listing : null;
-  const avg = r.soldAvg > 0 ? r.soldAvg : null;
-  if (cheapest != null && avg != null && cheapest > avg * 1.15) return { price: undercutPrice(avg), basis: "sales" };
-  if (cheapest != null) return { price: undercutPrice(cheapest), basis: "undercut" };
-  if (avg != null) return { price: Math.round(avg), basis: "sales" };
-  return { price: r.price ?? null, basis: "price" };
+  const a = suggestListing(r);
+  return a.price != null ? a : { ...a, price: r.price ?? null, basis: "price", note: "No listings or recent sales to price from; using the dashboard's sell price." };
 }
 
 export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
@@ -569,7 +564,7 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
     const list = suggestedListPrice(r);
     const keep = 1 - (s.salesTaxPct + s.listingFeePct) / 100;
     const each = list.price != null ? list.price * keep - r.cost : r.profit; // profit per unit at the suggested price
-    picks.push({ row: r, units: n, slots, capital, spend: n * r.cost, profit: n * each, listAt: list.price, listBasis: list.basis,
+    picks.push({ row: r, units: n, slots, capital, spend: n * r.cost, profit: n * each, listAt: list.price, listBasis: list.basis, listNote: list.note,
       netEach: list.price != null ? list.price * keep : null, daysToSell: daysForUnits(r, n, s) });
   }
   const capital = picks.reduce((t, p) => t + p.capital, 0);
@@ -588,4 +583,69 @@ export function parseKinah(text) {
   if (!m) return NaN;
   const mult = { k: 1e3, m: 1e6, b: 1e9 }[m[2]] || 1;
   return Math.round(parseFloat(m[1]) * mult);
+}
+
+function weightedMedian(events) {
+  const xs = events.flatMap(([price, , units]) => Array(Math.max(1, Math.min(units, 20))).fill(price)).sort((a, b) => a - b);
+  return xs.length ? xs[Math.floor(xs.length / 2)] : null;
+}
+
+export const LISTING_ADVICE = { thinListings: 2, minThinSales: 2, maxPremium: 1.5 };
+
+/**
+ * Suggested listing price for one item, from how crowded its market is now and how sales went in the past week.
+ * - Crowded (3+ listed): just under the cheapest listing, but no higher than the typical recent sale price, so
+ *   overpriced listings that aren't selling don't set your price.
+ * - Thin (0-2 listed): the median price of sales that happened while the market was similarly thin (2 or fewer
+ *   listed), when there are at least 2 of them; scarcity often lets higher prices sell. Capped at 1.5x the typical
+ *   sale price. Without that history, just under the cheapest listing, or the typical sale price if nothing's listed.
+ */
+export function suggestListing(r, opts = LISTING_ADVICE) {
+  const o = { ...LISTING_ADVICE, ...opts };
+  const events = r.est?.events || [];
+  const thinEvents = events.filter(([, n]) => n <= o.thinListings);
+  const normalEvents = events.filter(([, n]) => n > o.thinListings);
+  // The usual price: sales in a normal (not thin) market, so the thin-market premium isn't measured against itself.
+  const normalUnits = normalEvents.reduce((t, e) => t + e[2], 0);
+  const typical = (normalUnits >= 2 ? weightedMedian(normalEvents) : weightedMedian(events)) ?? (r.soldAvg > 0 ? r.soldAvg : null);
+  const thinUnits = thinEvents.reduce((t, e) => t + e[2], 0);
+  const thinMedian = thinUnits >= o.minThinSales ? weightedMedian(thinEvents) : null;
+  const cheapest = r.listing > 0 ? r.listing : null;
+  const listings = r.listings ?? 0;
+  const premium = thinMedian && typical ? thinMedian / typical - 1 : null;
+  if (listings > o.thinListings && cheapest) {
+    if (typical && cheapest > typical * 1.1) {
+      return { price: undercutPrice(typical), basis: "crowded-high", typical, thinMedian, premium, thinSales: thinUnits,
+        note: `${listings} listed, but the cheapest (${fmtK(cheapest)}) is well above what's been selling (~${fmtK(typical)}), so list near recent sales.` };
+    }
+    return { price: undercutPrice(cheapest), basis: "crowded", typical, thinMedian, premium, thinSales: thinUnits,
+      note: `${listings} listed: undercut the cheapest (${fmtK(cheapest)}) slightly to sell first.` };
+  }
+  if (thinMedian) {
+    const cap = typical ? typical * o.maxPremium : Infinity;
+    const target = Math.min(thinMedian, cap);
+    // Never further below the cheapest listing than needed to sell first.
+    const price = Math.max(undercutPrice(target + 1) || target, cheapest ? undercutPrice(cheapest) : 0);
+    const behind = cheapest && cheapest < price ? ` The ${fmtK(cheapest)} listing will likely sell before yours.` : "";
+    return { price, basis: "thin", typical, thinMedian, premium, thinSales: thinUnits,
+      note: `${listings ? `Only ${listings} listed` : "Nothing listed"}. When it was this thin over the past week, ${thinUnits} sold at a median ${fmtK(thinMedian)}` +
+        `${premium != null ? ` (${premium >= 0 ? "+" : ""}${Math.round(premium * 100)}% vs the usual ~${fmtK(typical)})` : ""}${thinMedian > cap ? `; capped at 1.5× the usual price` : ""}.${behind}` };
+  }
+  if (cheapest) {
+    return { price: undercutPrice(cheapest), basis: "thin-no-history", typical, thinMedian, premium, thinSales: thinUnits,
+      note: `Only ${listings} listed, but too few sales in a thin market last week to judge a premium; undercut the cheapest (${fmtK(cheapest)}).` };
+  }
+  if (typical) {
+    return { price: undercutPrice(typical + 1), basis: "empty", typical, thinMedian, premium, thinSales: thinUnits,
+      note: `Nothing listed; recent sales went for ~${fmtK(typical)}.` };
+  }
+  return { price: null, basis: "none", note: "No listings or recent sales to price from." };
+}
+
+function fmtK(v) {
+  const a = Math.abs(v);
+  if (a >= 1e9) return (v / 1e9).toFixed(2) + "B";
+  if (a >= 1e6) return (v / 1e6).toFixed(a >= 1e8 ? 0 : a >= 1e7 ? 1 : 2) + "M";
+  if (a >= 1e3) return (v / 1e3).toFixed(a >= 1e5 ? 0 : 1) + "K";
+  return String(Math.round(v));
 }
