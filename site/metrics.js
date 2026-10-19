@@ -63,7 +63,7 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
   const expiries = []; // predicted expiry times (epoch minutes) of listings we saw appear
   let sales = 0, cheapestSold = 0, priceSum = 0, priceN = 0;
   const events = []; // each inferred sale: [price (cheapest listing before it), listings up at the time, units]
-  const undercutDepths = []; // each time a new listing went in below the cheapest: how far below, as a fraction
+  const undercuts = []; // each time a new listing went in below the cheapest: [snapshot time, previous snapshot time, new cheapest, depth]
 
   for (let i = 1; i < timeline.length; i++) {
     const a = timeline[i - 1], b = timeline[i];
@@ -83,7 +83,7 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
       s = sLow = 1;
     }
     // An undercut: the cheapest price dropped while no listing disappeared (a new, cheaper listing went up).
-    if (b.t > start && d >= 0 && a.low > 0 && b.low > 0 && b.low < a.low) undercutDepths.push(1 - b.low / a.low);
+    if (b.t > start && d >= 0 && a.low > 0 && b.low > 0 && b.low < a.low) undercuts.push([b.t, a.t, b.low, 1 - b.low / a.low]);
     if (b.t > start && s > 0) {
       sales += s;
       cheapestSold += sLow;
@@ -106,10 +106,11 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
     lowerPerDay: enough ? cheapestSold / days : null,
     avgSalePrice: priceN ? priceSum / priceN : null,
     events,
-    undercutDepths,
+    undercuts,
+    undercutDepths: undercuts.map((u) => u[3]),
     // Per day, as observed (no capture adjustment): undercuts vs sales of the cheapest listing. Their ratio says how
     // often a listing that's just become the cheapest sells before someone undercuts it.
-    undercutsPerDay: enough ? undercutDepths.length / days : null,
+    undercutsPerDay: enough ? undercuts.length / days : null,
     cheapestSoldPerDay: enough ? cheapestSold / days : null,
   };
 }
@@ -545,7 +546,9 @@ export function undercutPrice(price) {
 /** The plan's list price: see `suggestListing`. */
 export function suggestedListPrice(r, settings = DEFAULT_SETTINGS) {
   const keep = 1 - (settings.salesTaxPct + settings.listingFeePct) / 100;
-  const a = suggestListing(r, { breakEven: r.cost > 0 && keep > 0 ? r.cost / keep : 0 });
+  // Your own logged listings of this item (from the Profit Calculator), so your relists don't count as competitors.
+  const own = settings.ownListings?.get(r.key) || settings.ownListings?.get(String(r.name || "").toLowerCase()) || [];
+  const a = suggestListing(r, { breakEven: r.cost > 0 && keep > 0 ? r.cost / keep : 0, ownListings: own });
   return a.price != null ? a : { ...a, price: r.price ?? null, basis: "price", note: "No listings or recent sales to price from; using the dashboard's sell price." };
 }
 
@@ -607,14 +610,20 @@ export const LISTING_ADVICE = {
 };
 
 // Chance the cheapest listing sells before someone undercuts it, and how deep undercutters usually go.
-export function undercutRisk(est, o = LISTING_ADVICE) {
-  const depths = est?.undercutDepths || [];
-  const U = est?.undercutsPerDay, S = est?.cheapestSoldPerDay;
+export function undercutRisk(est, o = LISTING_ADVICE, own = []) {
+  // Undercuts that match one of your own logged listings (same item, appeared within the hour around when you logged
+  // it, price within 1%) are you, not a competitor: leave them out.
+  const all = est?.undercuts || [];
+  const isOwn = ([t, prevT, low]) => own.some((l) => l.t >= prevT - 60 && l.t <= t + 60 && Math.abs(l.price - low) <= low * 0.01);
+  const theirs = all.filter((u) => !isOwn(u));
+  const depths = theirs.map((u) => u[3]);
+  const days = est?.days;
+  const U = days > 0 && est?.undercutsPerDay != null ? theirs.length / days : null, S = est?.cheapestSoldPerDay;
   if (!(depths.length >= o.minUndercuts) || U == null || S == null || !(U + S > 0)) return null;
   const sorted = [...depths].sort((a, b) => a - b);
   const at = (q) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
   return { sellFirst: S / (U + S), undercutsPerDay: U, cheapestSoldPerDay: S, typicalDepth: at(0.5),
-    secureDepth: Math.min(o.maxDepth, Math.max(o.minDepth, at(o.depthPercentile))), count: depths.length };
+    secureDepth: Math.min(o.maxDepth, Math.max(o.minDepth, at(o.depthPercentile))), count: depths.length, ownExcluded: all.length - theirs.length };
 }
 
 /**
@@ -628,11 +637,12 @@ export function undercutRisk(est, o = LISTING_ADVICE) {
 export function suggestListing(r, opts = LISTING_ADVICE) {
   const o = { ...LISTING_ADVICE, ...opts };
   const base = baseListing(r, o);
-  const risk = undercutRisk(r.est, o);
+  const risk = undercutRisk(r.est, o, o.ownListings || []);
   const cheapest = r.listing > 0 ? r.listing : null;
   if (!risk || base.price == null || !cheapest) return { ...base, risk };
   const pct = (x) => `${Math.round(x * 100)}%`;
-  const odds = `Undercuts are common here (${risk.undercutsPerDay.toFixed(1)}/day vs ${risk.cheapestSoldPerDay.toFixed(1)} sales of the cheapest/day), ` +
+  const mine = risk.ownExcluded ? ` (not counting ${risk.ownExcluded} of your own listing${risk.ownExcluded > 1 ? "s" : ""} from the Profit Calculator)` : "";
+  const odds = `Undercuts are common here (${risk.undercutsPerDay.toFixed(1)}/day${mine} vs ${risk.cheapestSoldPerDay.toFixed(1)} sales of the cheapest/day), ` +
     `so a listing that's cheapest sells before being undercut only ~${pct(risk.sellFirst)} of the time.`;
   if (risk.sellFirst >= o.safeOdds) return { ...base, risk };
   // A surer sale: below where most undercutters land, but never below break-even.

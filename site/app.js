@@ -273,6 +273,7 @@ function buildControls() {
   showBudget();
   // The Profit Calculator moves your kinah with each entry; pick that up live if it's open in another tab.
   window.addEventListener("storage", (ev) => {
+    if (ev.key === LEDGER_STORE) return render(); // a new listing in the calculator changes the undercut stats
     if (ev.key !== BUDGET_STORE) return;
     state.budget = savedBudget();
     if (document.activeElement !== $("budget")) showBudget();
@@ -394,6 +395,25 @@ function render() {
 }
 
 // ---------- plan for the viewer's kinah ----------
+// Your listings logged in the Profit Calculator (same browser), by item key and by name: { t (epoch minutes), price }.
+const LEDGER_STORE = "a2ledger.v1";
+function ownListings() {
+  const map = new Map();
+  try {
+    const entries = JSON.parse(localStorage.getItem(LEDGER_STORE) || "null")?.entries || [];
+    for (const e of entries) {
+      if (e.side !== "list" || !(e.price > 0) || !Number.isFinite(e.ts)) continue;
+      const item = { t: Math.floor(e.ts / 60000), price: e.price };
+      for (const k of [e.key, shortenName(String(e.name || "")).toLowerCase()]) {
+        if (k == null || k === "") continue;
+        if (!map.has(k)) map.set(k, []);
+        map.get(k).push(item);
+      }
+    }
+  } catch { /* no log, or storage blocked */ }
+  return map;
+}
+
 function listTitle(p) {
   const r = p.row;
   return `${p.listNote || ""} Cheapest listing ${r.listing > 0 ? kinah(r.listing) : "none"} · ${r.listings ?? 0} listed. ` +
@@ -406,7 +426,7 @@ function renderPlan(rows, settings) {
     box.innerHTML = `<p class="muted plan-empty">Enter how much kinah you have above to see what to craft with it.</p>`;
     return;
   }
-  const plan = planBudget(rows, state.budget, settings);
+  const plan = planBudget(rows, state.budget, { ...settings, ownListings: ownListings() });
   $("planNote").textContent = `For ${kinah(state.budget)} on ${state.servers.find((x) => x.server_id === state.ui.server)?.name || "this server"}, using the filters above and your proficiency.`;
   if (!plan.picks.length) {
     box.innerHTML = plan.nextUp
