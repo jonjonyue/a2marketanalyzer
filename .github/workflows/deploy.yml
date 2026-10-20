@@ -53,13 +53,14 @@ jobs:
           path: site
 
       # GitHub sometimes leaves a Pages deployment stuck "in progress", which blocks every later deploy.
-      # Only one run deploys at a time (concurrency group), so anything still in progress here is stuck: cancel it.
+      # Only one run deploys at a time (concurrency group), so anything else still in progress here is stuck: cancel it
+      # (skipping this run's own commit, which the job's environment has already registered).
       # Cancelling an already finished deployment is a no-op error, which is ignored.
       - name: Clear stuck Pages deployments
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          for sha in $(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=5" -q '.[].sha' | sort -u); do
+          for sha in $(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=5" -q '.[].sha' | sort -u | grep -v "^$GITHUB_SHA$"); do
             gh api -X POST "repos/$GITHUB_REPOSITORY/pages/deployments/$sha/cancel" >/dev/null 2>&1 && echo "cancelled stuck deployment $sha" || true
           done
 
