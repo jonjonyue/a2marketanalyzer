@@ -537,7 +537,7 @@ function renderPlan() {
   const budget = readKinah();
   const filters = [tier !== "All" && tier, skill !== "All" && skill].filter(Boolean).join(", ");
   const { note, html } = planPanel({
-    rows, budget: budget > 0 ? budget : null, settings, serverName: state.planServer,
+    rows, budget: budget > 0 ? budget : null, settings, serverName: state.planServer, snapshotAt: state.planMarket.captured_at,
     iconHtml: (key, cls) => iconHtml(state.planMarket.icons?.[key], cls),
     scope: `with your Market Analysis settings${filters ? ` (${filters})` : ""}`,
     emptyHint: "Enter your kinah below (next to the tax and fee settings) to see what to craft with it.",

@@ -566,18 +566,27 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
   let left = budget;
   const picks = [];
   const skipped = [];
-  for (const r of candidates) {
-    const slots = marketRoom(r, s);
+  const covered = []; // crafts your own active listings already fill
+  for (const r0 of candidates) {
+    // Your own active listings of this item (from the Profit Calculator). Those posted before the market snapshot are
+    // already in its listing count; take them out so they aren't counted twice (once as yours, once as competitors).
+    const mine = s.ownActive?.get(r0.key) || s.ownActive?.get(String(r0.name || "").toLowerCase()) || [];
+    const myUnits = mine.reduce((t, l) => t + l.units, 0);
+    const inSnapshot = s.snapshotAt ? mine.filter((l) => l.t <= s.snapshotAt).reduce((t, l) => t + l.units, 0) : 0;
+    const r = myUnits ? { ...r0, listings: Math.max(0, (r0.listings ?? 0) - inSnapshot) } : r0;
+    const room = marketRoom(r, s);
+    const slots = Math.max(0, room - myUnits); // what's left after your listings take their places
+    if (myUnits && !slots) { covered.push({ row: r0, myUnits, room }); continue; }
     let n = 0;
     while (n < slots && capitalFor(r, n + 1) <= left) n++;
-    if (!n) { skipped.push({ row: r, capital: capitalFor(r, 1) }); continue; }
+    if (!n) { skipped.push({ row: r0, capital: capitalFor(r, 1), myUnits }); continue; }
     const capital = capitalFor(r, n);
     left -= capital;
     const list = suggestedListPrice(r, s);
     const keep = 1 - (s.salesTaxPct + s.listingFeePct) / 100;
     const each = list.price != null ? list.price * keep - r.cost : r.profit; // profit per unit at the suggested price
-    picks.push({ row: r, units: n, slots, capital, spend: n * r.cost, profit: n * each, listAt: list.price, listBasis: list.basis, listNote: list.note,
-      netEach: list.price != null ? list.price * keep : null, daysToSell: daysForUnits(r, n, s) });
+    picks.push({ row: r0, units: n, slots, myUnits, capital, spend: n * r.cost, profit: n * each, listAt: list.price, listBasis: list.basis, listNote: list.note,
+      netEach: list.price != null ? list.price * keep : null, daysToSell: daysForUnits(r, myUnits + n, s) });
   }
   const capital = picks.reduce((t, p) => t + p.capital, 0);
   const profit = picks.reduce((t, p) => t + p.profit, 0);
@@ -585,7 +594,7 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
   // The best craft that didn't fit, and what it would take.
   const nextUp = skipped.sort((a, b) => (b.row.roc ?? 0) - (a.row.roc ?? 0))[0] || null;
   return { budget, picks, capital, spend, profit, left: budget - capital, roi: capital ? (profit / capital) * 100 : null,
-    nextUp: nextUp && { ...nextUp, short: nextUp.capital - left }, candidates: candidates.length };
+    nextUp: nextUp && { ...nextUp, short: nextUp.capital - left }, candidates: candidates.length, covered };
 }
 
 // "1.5m" -> 1500000, "250k" -> 250000, "1,234,567" -> 1234567. Returns NaN if it can't be read.

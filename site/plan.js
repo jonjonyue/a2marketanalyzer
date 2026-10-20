@@ -35,6 +35,31 @@ export function ownListings() {
   return map;
 }
 
+/**
+ * Your active listings in the Profit Calculator, by item key and by name: [{ units still unsold, t (epoch minutes), price }].
+ * Listings older than 3 days are left out: they've expired in game even if not marked so in the calculator.
+ */
+export function ownActiveListings(now = Date.now()) {
+  const map = new Map();
+  try {
+    const entries = JSON.parse(localStorage.getItem(LEDGER_STORE) || "null")?.entries || [];
+    const sold = new Map();
+    for (const e of entries) if (e.side === "sell" && e.listingId) sold.set(e.listingId, (sold.get(e.listingId) || 0) + (e.qty || 0));
+    for (const e of entries) {
+      if (e.side !== "list" || e.expired || !Number.isFinite(e.ts) || now - e.ts > 72 * 3600e3) continue;
+      const units = (e.qty || 0) - (sold.get(e.id) || 0);
+      if (units <= 0) continue;
+      const item = { units, t: Math.floor(e.ts / 60000), price: e.price };
+      for (const k of [e.key, shortenName(String(e.name || "")).toLowerCase()]) {
+        if (k == null || k === "") continue;
+        if (!map.has(k)) map.set(k, []);
+        map.get(k).push(item);
+      }
+    }
+  } catch { /* no log, or storage blocked */ }
+  return map;
+}
+
 function listTitle(p) {
   const r = p.row;
   return `${p.listNote || ""} Cheapest listing ${r.listing > 0 ? kinah(r.listing) : "none"} · ${r.listings ?? 0} listed. ` +
@@ -46,21 +71,25 @@ function listTitle(p) {
  * (e.g. "using the filters above and your proficiency"); `emptyHint` is shown when no kinah is set.
  * Returns { note, html }.
  */
-export function planPanel({ rows, budget, settings, serverName, iconHtml = () => "", scope = "", emptyHint }) {
+export function planPanel({ rows, budget, settings, serverName, iconHtml = () => "", scope = "", emptyHint, snapshotAt = null }) {
   if (!budget) {
     return { note: "", html: `<p class="muted plan-empty">${emptyHint || "Enter how much kinah you have to see what to craft with it."}</p>` };
   }
-  const plan = planBudget(rows, budget, { ...settings, ownListings: ownListings() });
+  const plan = planBudget(rows, budget, { ...settings, ownListings: ownListings(), ownActive: ownActiveListings(),
+    snapshotAt: snapshotAt ? Math.floor(new Date(snapshotAt).getTime() / 60000) : null });
   const note = `For ${kinah(budget)} on ${serverName || "this server"}${scope ? `, ${scope}` : ""}.`;
+  const coveredHtml = plan.covered.length
+    ? `<p class="muted small plan-covered">Already covered by your listings: ${plan.covered.map((c) => `<strong>${esc(c.row.shortName)}</strong> (${c.myUnits} listed, room for ${c.room})`).join(", ")}. Wait for ${plan.covered.reduce((t, c) => t + c.myUnits, 0) === 1 ? "it" : "those"} to sell before making more.</p>`
+    : "";
   if (!plan.picks.length) {
-    return { note, html: plan.nextUp
+    return { note, html: coveredHtml + (plan.nextUp
       ? `<p class="plan-empty">Nothing worth crafting fits ${kinah(budget)} yet. The best option, <strong>${esc(plan.nextUp.row.shortName)}</strong>, needs about <strong>${kinah(plan.nextUp.capital)}</strong> to be 90% sure of making one.</p>`
-      : `<p class="plan-empty muted">No craft in view is currently worth making (Top pick or Craft it). Try other filters or a different server.</p>` };
+      : plan.covered.length ? "" : `<p class="plan-empty muted">No craft in view is currently worth making (Top pick or Craft it). Try other filters or a different server.</p>`) };
   }
   const rowsHtml = plan.picks.map((p) => `<tr>
       <td class="name"><span class="item-cell">${iconHtml(p.row.key, "small")}<span>${esc(p.row.shortName)}</span></span></td>
       <td><span class="pill ${p.row.verdict.tone}">${esc(p.row.verdict.label)}</span></td>
-      <td title="Room for about ${p.slots} from you in one 3-day listing: your first sells once the ${p.row.listings} current listings clear (${rate(p.row.perDay)}/day); each extra one only gets your ${settings.sharePct}% share of the sales left after that, since other sellers keep relisting and your own listings compete with each other">${p.units}${p.units < p.slots ? ` <span class="dim">of ${p.slots}</span>` : ""}</td>
+      <td title="Room for about ${p.slots} from you in one 3-day listing: your first sells once the ${p.row.listings} current listings clear (${rate(p.row.perDay)}/day); each extra one only gets your ${settings.sharePct}% share of the sales left after that, since other sellers keep relisting and your own listings compete with each other">${p.units}${p.units < p.slots ? ` <span class="dim">of ${p.slots}</span>` : ""}${p.myUnits ? ` <span class="dim" title="You already have ${p.myUnits} listed (Profit Calculator); they take ${p.myUnits === 1 ? "a place" : "places"} in the market's room">+${p.myUnits} listed</span>` : ""}</td>
       <td title="Kinah to set aside for 90% odds of making ${p.units} (combo luck included)">${kinah(p.capital)}</td>
       <td title="Average spend for ${p.units}">${kinah(p.spend)}</td>
       <td title="${esc(listTitle(p))}"><strong>${kinah(p.listAt)}</strong></td>
@@ -79,6 +108,7 @@ export function planPanel({ rows, budget, settings, serverName, iconHtml = () =>
       <div><span class="label">Left over</span><strong>${kinah(plan.left)}</strong><span class="sub">${plan.picks.length} of ${plan.candidates} worthwhile crafts</span></div>
     </div>
     <div class="table-scroll"><table class="plan-table"><thead><tr><th>Craft</th><th>Verdict</th><th>Make</th><th>Set aside</th><th>Avg spend</th><th>List at</th><th>Profit</th><th>Return</th><th>Sells in</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
+    ${coveredHtml}
     ${next}
     <p class="muted small">Best return on capital first. "Set aside" covers bad luck on combo crafts (90% odds of making them all); on average you spend less and keep the rest. Each craft is capped at what one 3-day listing can sell: one beyond the current listings, plus extras only where your share of the remaining sales leaves room, since other sellers keep relisting and extra copies compete with your own.</p>`;
   return { note, html };

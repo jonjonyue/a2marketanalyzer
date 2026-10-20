@@ -404,7 +404,7 @@ function renderPlan(rows, settings) {
     localStorage.setItem(PLAN_SETTINGS_STORE, JSON.stringify({ sharePct, priceBasis, costBasis, salesTaxPct, listingFeePct, tier, skill }));
   } catch { /* not remembered */ }
   const { note, html } = planPanel({
-    rows, budget: state.budget, settings, iconHtml,
+    rows, budget: state.budget, settings, iconHtml, snapshotAt: state.market?.captured_at,
     serverName: state.servers.find((x) => x.server_id === state.ui.server)?.name,
     scope: "using the filters above and your proficiency",
     emptyHint: "Enter how much kinah you have above to see what to craft with it.",
