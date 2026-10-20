@@ -1,4 +1,5 @@
-import { shortenName, parseKinah } from "./metrics.js";
+import { shortenName, parseKinah, analyzeMarket, DEFAULT_SETTINGS, shortenMarketNames } from "./metrics.js";
+import { planPanel } from "./plan.js";
 
 // Profit calculator: a personal log of exchange purchases and sales, kept in this browser (localStorage).
 const API = "https://aion2.exchange";
@@ -118,6 +119,8 @@ async function loadCatalog() {
       ? snap.markets[String(srv?.server_id)] || Object.values(snap.markets)[0] || {}
       : (await (await fetch(`data/servers/${srv.server_id}.json`)).json()).market || {};
     const icons = market.icons || {};
+    state.planMarket = shortenMarketNames(JSON.parse(JSON.stringify(market)));
+    state.planServer = srv?.name;
     const add = (key, rawName, price) => {
       const name = shortenName(rawName);
       if (!name) return;
@@ -503,8 +506,49 @@ function byItem(entries) {
 }
 
 // ---------- render ----------
+// ---------- what to craft with your kinah (same plan as Market Analysis, from plan.js) ----------
+// Uses the settings last used on Market Analysis (filters, share of sales, price basis, proficiency) in this browser.
+function planSettings() {
+  let saved = {}, prof = {};
+  try { saved = JSON.parse(localStorage.getItem("a2dash.planSettings") || "null") || {}; } catch { /* defaults */ }
+  try { prof = JSON.parse(localStorage.getItem("a2dash.proficiency") || "null") || {}; } catch { /* defaults */ }
+  const proficiency = { ...DEFAULT_SETTINGS.proficiency };
+  for (const [k, v] of Object.entries(prof)) if (k in proficiency && Number.isInteger(v) && v >= 1 && v <= 100) proficiency[k] = v;
+  const pick = (k, ok) => (ok(saved[k]) ? saved[k] : DEFAULT_SETTINGS[k]);
+  const num = (lo, hi) => (v) => Number.isFinite(v) && v >= lo && v <= hi;
+  return {
+    settings: { ...DEFAULT_SETTINGS, proficiency,
+      sharePct: pick("sharePct", num(1, 100)), salesTaxPct: pick("salesTaxPct", num(0, 50)), listingFeePct: pick("listingFeePct", num(0, 50)),
+      priceBasis: pick("priceBasis", (v) => ["conservative", "listing", "sold"].includes(v)),
+      costBasis: pick("costBasis", (v) => ["cheapest", "market"].includes(v)) },
+    tier: typeof saved.tier === "string" ? saved.tier : "All",
+    skill: typeof saved.skill === "string" ? saved.skill : "All",
+  };
+}
+
+function renderPlan() {
+  const body = $("planBody");
+  if (!body) return;
+  if (!state.planMarket) { body.innerHTML = `<p class="muted plan-empty">Loading market data…</p>`; return; }
+  const { settings, tier, skill } = planSettings();
+  let rows = analyzeMarket(state.planMarket, settings);
+  if (tier !== "All") rows = rows.filter((r) => r.tier === tier);
+  if (skill !== "All") rows = rows.filter((r) => r.skill === skill);
+  const budget = readKinah();
+  const filters = [tier !== "All" && tier, skill !== "All" && skill].filter(Boolean).join(", ");
+  const { note, html } = planPanel({
+    rows, budget: budget > 0 ? budget : null, settings, serverName: state.planServer,
+    iconHtml: (key, cls) => iconHtml(state.planMarket.icons?.[key], cls),
+    scope: `with your Market Analysis settings${filters ? ` (${filters})` : ""}`,
+    emptyHint: "Enter your kinah below (next to the tax and fee settings) to see what to craft with it.",
+  });
+  $("planNote").textContent = note;
+  body.innerHTML = html;
+}
+
 function render() {
   const entries = state.entries.filter(inPeriod);
+  renderPlan();
   renderListings();
   renderKpis(entries);
   renderByItem(entries);
@@ -712,7 +756,8 @@ function init() {
   $("importFile").addEventListener("change", (ev) => { const f = ev.target.files[0]; if (f) importJson(f); ev.target.value = ""; });
   // Keep tabs in sync if the log is edited in another tab.
   window.addEventListener("storage", (ev) => {
-    if (ev.key === BUDGET_KEY) return showKinah();
+    if (ev.key === BUDGET_KEY) { showKinah(); return renderPlan(); }
+    if (ev.key === "a2dash.planSettings" || ev.key === "a2dash.proficiency") return renderPlan();
     if (ev.key !== STORE_KEY) return;
     // The other tab already moved your kinah for its change; just catch up.
     const s = load(); state.entries = s.entries; state.settings = s.settings; state.lastNet = logNet(state.entries); render();
@@ -726,6 +771,7 @@ function init() {
     $("kinah").removeAttribute("aria-invalid");
     writeKinah(v);
     showKinah();
+    renderPlan();
   });
   wireCombo();
   setSide("sell");

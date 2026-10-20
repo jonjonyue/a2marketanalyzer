@@ -469,3 +469,8 @@ td.over-budget { color: var(--serious); }
 .kinah-field input[aria-invalid="true"] { border-color: var(--critical); }
 .kinah-note { margin: 0; font-size: 11.5px; max-width: 26ch; line-height: 1.35; }
 @media (max-width: 560px) { .kinah-field input { width: 100%; } .kinah-note { max-width: none; } }
+
+/* the kinah plan at the top of the profit calculator */
+.ledger-plan { margin-top: 20px; }
+.ledger-plan + .entry-form { margin-top: 0; }
+.ledger-plan .table-head a { font-size: 12.5px; white-space: nowrap; }

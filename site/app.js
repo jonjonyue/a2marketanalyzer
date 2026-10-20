@@ -1,4 +1,5 @@
-import { analyzeMarket, DEFAULT_SETTINGS, ESTIMATOR, VERDICT_ORDER, byRank, isWorthCrafting, SKILLS as CRAFT_SKILLS, masteryLabel, PROFICIENCY, shortenMarketNames, shortenName, planBudget, parseKinah } from "./metrics.js";
+import { analyzeMarket, DEFAULT_SETTINGS, ESTIMATOR, VERDICT_ORDER, byRank, isWorthCrafting, SKILLS as CRAFT_SKILLS, masteryLabel, PROFICIENCY, shortenMarketNames, shortenName, parseKinah } from "./metrics.js";
+import { planPanel, LEDGER_STORE } from "./plan.js";
 
 const API = "https://aion2.exchange";
 const SNAPSHOT_URL = "data/snapshot.json";
@@ -394,70 +395,22 @@ function render() {
   renderTable(rows);
 }
 
-// ---------- plan for the viewer's kinah ----------
-// Your listings logged in the Profit Calculator (same browser), by item key and by name: { t (epoch minutes), price }.
-const LEDGER_STORE = "a2ledger.v1";
-function ownListings() {
-  const map = new Map();
-  try {
-    const entries = JSON.parse(localStorage.getItem(LEDGER_STORE) || "null")?.entries || [];
-    for (const e of entries) {
-      if (e.side !== "list" || !(e.price > 0) || !Number.isFinite(e.ts)) continue;
-      const item = { t: Math.floor(e.ts / 60000), price: e.price };
-      for (const k of [e.key, shortenName(String(e.name || "")).toLowerCase()]) {
-        if (k == null || k === "") continue;
-        if (!map.has(k)) map.set(k, []);
-        map.get(k).push(item);
-      }
-    }
-  } catch { /* no log, or storage blocked */ }
-  return map;
-}
-
-function listTitle(p) {
-  const r = p.row;
-  return `${p.listNote || ""} Cheapest listing ${r.listing > 0 ? kinah(r.listing) : "none"} · ${r.listings ?? 0} listed. ` +
-    `List all ${p.units} at this price: going lower on later ones only undercuts your own.`;
-}
+// ---------- plan for the viewer's kinah (shared with the Profit Calculator: plan.js) ----------
+// The plan's settings, saved so the Profit Calculator's copy of the plan matches this page.
+const PLAN_SETTINGS_STORE = "a2dash.planSettings";
 function renderPlan(rows, settings) {
-  const box = $("planBody");
-  if (!state.budget) {
-    $("planNote").textContent = "";
-    box.innerHTML = `<p class="muted plan-empty">Enter how much kinah you have above to see what to craft with it.</p>`;
-    return;
-  }
-  const plan = planBudget(rows, state.budget, { ...settings, ownListings: ownListings() });
-  $("planNote").textContent = `For ${kinah(state.budget)} on ${state.servers.find((x) => x.server_id === state.ui.server)?.name || "this server"}, using the filters above and your proficiency.`;
-  if (!plan.picks.length) {
-    box.innerHTML = plan.nextUp
-      ? `<p class="plan-empty">Nothing worth crafting fits ${kinah(state.budget)} yet. The best option, <strong>${esc(plan.nextUp.row.shortName)}</strong>, needs about <strong>${kinah(plan.nextUp.capital)}</strong> to be 90% sure of making one.</p>`
-      : `<p class="plan-empty muted">No craft in view is currently worth making (Top pick or Craft it). Try other filters or a different server.</p>`;
-    return;
-  }
-  const rowsHtml = plan.picks.map((p) => `<tr>
-      <td class="name"><span class="item-cell">${iconHtml(p.row.key, "small")}<span>${esc(p.row.shortName)}</span></span></td>
-      <td><span class="pill ${p.row.verdict.tone}">${esc(p.row.verdict.label)}</span></td>
-      <td title="Room for about ${p.slots} from you in one 3-day listing: your first sells once the ${p.row.listings} current listings clear (${rate(p.row.perDay)}/day); each extra one only gets your ${settings.sharePct}% share of the sales left after that, since other sellers keep relisting and your own listings compete with each other">${p.units}${p.units < p.slots ? ` <span class="dim">of ${p.slots}</span>` : ""}</td>
-      <td title="Kinah to set aside for 90% odds of making ${p.units} (combo luck included)">${kinah(p.capital)}</td>
-      <td title="Average spend for ${p.units}">${kinah(p.spend)}</td>
-      <td title="${listTitle(p)}"><strong>${kinah(p.listAt)}</strong></td>
-      <td class="${p.profit > 0 ? "pos" : "neg"}" title="At ${kinah(p.listAt)} each you keep ${kinah(p.netEach)} after tax and fee">${kinah(p.profit, { sign: true })}</td>
-      <td>${pct(p.row.roc)}</td>
-      <td title="When your last one should sell: the current listings and your first at the market's pace, then your ${settings.sharePct}% share of sales for each extra">${days(p.daysToSell)} d</td>
-    </tr>`).join("");
-  const next = plan.nextUp
-    ? `<p class="muted small">Next up: <strong>${esc(plan.nextUp.row.shortName)}</strong> (${pct(plan.nextUp.row.roc)} return) needs ${kinah(plan.nextUp.capital)} set aside, ${kinah(plan.nextUp.short)} more than you have left.</p>`
-    : plan.left > 0 && plan.picks.length === plan.candidates
-      ? `<p class="muted small">That covers every craft worth making right now at the amount the market can take; the remaining ${kinah(plan.left)} has nowhere better to go until listings sell or prices change.</p>`
-      : "";
-  box.innerHTML = `<div class="plan-summary">
-      <div><span class="label">Expected profit</span><strong class="pos">${kinah(plan.profit, { sign: true })}</strong><span class="sub">${pct(plan.roi)} on what you set aside</span></div>
-      <div><span class="label">Set aside</span><strong>${kinah(plan.capital)}</strong><span class="sub">average spend ${kinah(plan.spend)}</span></div>
-      <div><span class="label">Left over</span><strong>${kinah(plan.left)}</strong><span class="sub">${plan.picks.length} of ${plan.candidates} worthwhile crafts</span></div>
-    </div>
-    <div class="table-scroll"><table class="plan-table"><thead><tr><th>Craft</th><th>Verdict</th><th>Make</th><th>Set aside</th><th>Avg spend</th><th>List at</th><th>Profit</th><th>Return</th><th>Sells in</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
-    ${next}
-    <p class="muted small">Best return on capital first. "Set aside" covers bad luck on combo crafts (90% odds of making them all); on average you spend less and keep the rest. Each craft is capped at what one 3-day listing can sell: one beyond the current listings, plus extras only where your share of the remaining sales leaves room, since other sellers keep relisting and extra copies compete with your own.</p>`;
+  try {
+    const { sharePct, priceBasis, costBasis, salesTaxPct, listingFeePct, tier, skill } = state.ui;
+    localStorage.setItem(PLAN_SETTINGS_STORE, JSON.stringify({ sharePct, priceBasis, costBasis, salesTaxPct, listingFeePct, tier, skill }));
+  } catch { /* not remembered */ }
+  const { note, html } = planPanel({
+    rows, budget: state.budget, settings, iconHtml,
+    serverName: state.servers.find((x) => x.server_id === state.ui.server)?.name,
+    scope: "using the filters above and your proficiency",
+    emptyHint: "Enter how much kinah you have above to see what to craft with it.",
+  });
+  $("planNote").textContent = note;
+  $("planBody").innerHTML = html;
 }
 
 // True Dragon tiers have no crafting cost yet; when nothing in view has one, show market size instead of profit.
