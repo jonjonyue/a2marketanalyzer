@@ -8,7 +8,6 @@ const SERVER_IDS = [11201, 12201]; // the servers the snapshot covers: NA West S
 const REGION_SHORT = { NAE: "NA East", NAW: "NA West", EU: "EU", LA: "SA", AS: "Asia" };
 const BUDGET_STORE = "a2dash.budget"; // the viewer's kinah, remembered in this browser (never put in links)
 const SERVER_STORE = "a2dash.server"; // the viewer's last server, remembered in this browser
-const HISTORY_DAYS = 10;
 const SKILLS = ["All", "Blacksmithing", "Armorsmithing", "Handicrafting", "Alchemy"];
 // URL codes per skill; t and j are the old Tailoring / Jewelcrafting codes, kept so older links still work.
 const PROF_CODE = { Blacksmithing: "b", Armorsmithing: "r", Handicrafting: "h", Alchemy: "a" };
@@ -19,7 +18,6 @@ const TIER_PARAM = { "Expert's Splendent": "es", "Artisan's Splendent": "as", "T
 
 const $ = (id) => document.getElementById(id);
 const state = {
-  mode: null,          // "live" | "snapshot"
   servers: [],
   snapshot: null,
   market: null,        // { captured_at, targets, items }
@@ -149,30 +147,27 @@ async function fetchJson(url, ms = 6000) {
 }
 
 async function init() {
+  // The data comes from the snapshot the GitHub Action builds (aion2.exchange's API can't be read from other sites,
+  // so trying it first only cost ~0.75 s per visit). The saved server's file is requested alongside the index.
+  const early = fetchJson(`data/servers/${state.ui.server}.json`, 20000).catch(() => null);
   try {
-    const s = await fetchJson(`${API}/api/servers`, 4000);
-    state.mode = "live";
-    state.servers = s.servers.filter((x) => SERVER_IDS.includes(x.server_id));
-  } catch {
-    // Expected while the API doesn't send CORS headers: use the snapshot the GitHub Action builds.
-    try {
-      state.snapshot = await fetchJson(SNAPSHOT_URL, 20000);
-    } catch (err) {
-      showBanner("Couldn't load market data. The snapshot hasn't been built yet, or the site is unreachable.");
-      $("freshness").textContent = "No data";
-      return;
-    }
-    state.mode = "snapshot";
-    state.servers = state.snapshot.servers;
-    if (state.snapshot.model) setModelNote(state.snapshot.model);
+    state.snapshot = await fetchJson(SNAPSHOT_URL, 20000);
+  } catch (err) {
+    showBanner("Couldn't load market data. The snapshot hasn't been built yet, or the site is unreachable.");
+    $("freshness").textContent = "No data";
+    return;
   }
+  state.servers = state.snapshot.servers;
+  if (state.snapshot.model) setModelNote(state.snapshot.model);
   if (!state.servers.some((x) => x.server_id === state.ui.server)) {
     state.ui.server = state.servers.some((x) => x.server_id === DEFAULT_SERVER) ? DEFAULT_SERVER : state.servers[0]?.server_id;
+  } else {
+    const doc = await early;
+    if (doc?.market) serverFiles.set(state.ui.server, { ...doc, market: shortenMarketNames(doc.market) });
   }
   writeUrl(); // so the address bar (and "Copy share link") carries the server actually shown
   buildControls();
   await loadMarket();
-  if (state.mode === "live") setInterval(loadMarket, 5 * 60 * 1000);
 }
 
 // Asmodian servers call the True Dragon tiers Star Dragon; the tier values stay the same.
@@ -189,50 +184,23 @@ async function loadMarket() {
   $("serverName").textContent = serverLabel(srv);
   for (const el of document.querySelectorAll(".server-short")) el.textContent = srv?.name || "this server";
   if ($("tiers").children.length) labelTiers();
-  if (state.mode === "snapshot") {
-    // Older single-file snapshots carried every market inline; current ones have one file per server.
-    let doc = serverFiles.get(sid);
-    if (!doc) {
-      const inline = state.snapshot.markets?.[String(sid)];
-      try {
-        $("freshness").textContent = "Loading…";
-        doc = inline ? { generated_at: state.snapshot.generated_at, market: inline } : await fetchJson(`data/servers/${sid}.json`, 20000);
-        doc.market = shortenMarketNames(doc.market || { targets: [], items: [] });
-        serverFiles.set(sid, doc);
-      } catch {
-        showBanner(`Couldn't load data for ${serverLabel(srv) || "that server"}. It may not have been refreshed yet; try another server.`);
-        doc = { generated_at: null, market: { targets: [], items: [] } };
-      }
-    }
-    if (sid !== state.ui.server) return; // the viewer switched again while this loaded
-    state.serverDoc = doc;
-    state.market = doc.market;
-  } else {
+  // Older single-file snapshots carried every market inline; current ones have one file per server.
+  let doc = serverFiles.get(sid);
+  if (!doc) {
+    const inline = state.snapshot.markets?.[String(sid)];
     try {
-      const crafts = await fetchJson(`${API}/api/crafts?server=${sid}`);
-      const keys = crafts.targets.map((t) => t.target_key).join(",");
-      const items = keys ? await fetchJson(`${API}/api/items?keys=${keys}&limit=100&server=${sid}`) : { items: [] };
-      const since = new Date(Date.now() - HISTORY_DAYS * 86400e3).toISOString();
-      const history = {};
-      for (const t of crafts.targets) {
-        const h = await fetchJson(`${API}/api/items/${t.target_key}/prices?bucket=raw&from=${since}&server=${sid}`);
-        history[t.target_key] = (h.points || []).map((p) => [Math.floor(new Date(p.ts).getTime() / 60000), p.listings || 0, p.low]);
-      }
-      const icons = {};
-      try {
-        const idx = await fetchJson(`${API}/item-icons/index.json`);
-        for (const t of crafts.targets) {
-          const e = idx.items?.[t.target_key];
-          const r = e && idx.rarities?.[e[1]];
-          if (e && idx.files?.[e[0]]) icons[t.target_key] = [idx.files[e[0]], r?.color, r?.name];
-        }
-      } catch { /* icons are optional */ }
-      state.market = shortenMarketNames({ captured_at: crafts.captured_at, targets: crafts.targets, items: items.items, history, icons });
-      if (crafts.model) setModelNote(crafts.model);
+      $("freshness").textContent = "Loading…";
+      doc = inline ? { generated_at: state.snapshot.generated_at, market: inline } : await fetchJson(`data/servers/${sid}.json`, 20000);
+      doc.market = shortenMarketNames(doc.market || { targets: [], items: [] });
+      serverFiles.set(sid, doc);
     } catch {
-      showBanner("Lost connection to aion2.exchange; showing the last data loaded.");
+      showBanner(`Couldn't load data for ${serverLabel(srv) || "that server"}. It may not have been refreshed yet; try another server.`);
+      doc = { generated_at: null, market: { targets: [], items: [] } };
     }
   }
+  if (sid !== state.ui.server) return; // the viewer switched again while this loaded
+  state.serverDoc = doc;
+  state.market = doc.market;
   setFreshness();
   render();
 }
@@ -240,16 +208,11 @@ async function loadMarket() {
 function setFreshness() {
   const el = $("freshness");
   const captured = state.market?.captured_at;
-  if (state.mode === "live") {
-    el.className = "freshness live";
-    el.innerHTML = `<span class="dot"></span>Live · prices ${esc(ago(captured))}`;
-  } else {
-    const gen = state.serverDoc?.generated_at ?? state.snapshot.generated_at;
-    const stale = Date.now() - new Date(gen).getTime() > 3 * 3600e3;
-    el.className = "freshness" + (stale ? " stale" : "");
-    el.innerHTML = `<span class="dot"></span>Updated ${esc(ago(gen))} · prices ${esc(ago(captured))}`;
-    el.title = `Snapshot built ${new Date(gen).toLocaleString()}; refreshed hourly`;
-  }
+  const gen = state.serverDoc?.generated_at ?? state.snapshot.generated_at;
+  const stale = Date.now() - new Date(gen).getTime() > 3 * 3600e3;
+  el.className = "freshness" + (stale ? " stale" : "");
+  el.innerHTML = `<span class="dot"></span>Updated ${esc(ago(gen))} · prices ${esc(ago(captured))}`;
+  el.title = `Snapshot built ${new Date(gen).toLocaleString()}; refreshed about every 30 minutes`;
 }
 
 function setModelNote(m) {
@@ -780,7 +743,12 @@ function costTitle(r) {
   const base = `${d.baseName} ${kinah(d.base)} (${d.baseMethod === "craft" ? "crafted" : "bought"}; craft ${kinah(d.baseCraft)}, listing ${kinah(d.baseListing)})`;
   const mats = d.materials.map((m) => `${m.qty}× ${m.name} @ ${kinah(m.price)}`).join(", ");
   const per = `= ${kinah(d.attempt)} per craft attempt`;
-  const combo = d.factor !== 1 ? `; ÷ ${Math.round(d.comboProbability * 100)}% combo chance = ${kinah(r.cost)}` : "";
+  // Plain True Dragon divides by the success rate; the Splendent version by success × the combo chance.
+  const pctOf = (x) => `${(x * 100).toFixed(x * 100 % 1 ? 1 : 0)}%`;
+  const combo = d.factor === 1 ? ""
+    : d.isCombo
+      ? `; ÷ (${pctOf(d.success)} success × ${Math.round(d.comboProbability * 100)}% combo) = ${kinah(r.cost)}`
+      : `; ÷ ${pctOf(d.success)} success = ${kinah(r.cost)}`;
   return `${base} + materials ${kinah(d.matsCost)} (${mats}) ${per}${combo}`;
 }
 
