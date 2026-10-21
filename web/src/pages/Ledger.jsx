@@ -345,18 +345,18 @@ export default function Ledger() {
       const item = lookup(name);
       if (item && !price && item.price != null) price = String(item.price);
     }
-    setForm((x) => ({ ...x, item: name, price }));
+    setForm((x) => ({ ...x, item: name, price: x.price || price }));
     requestAnimationFrame(() => (isMaterials(name) || !price ? priceRef : qtyRef).current?.focus());
   }
   // Leaving the box: "materials" in any spelling is the catch-all; a known item fills in its cheapest listing.
   function itemBlur() {
-    if (isMaterials(form.item)) {
-      if (form.item !== MATERIALS) setField("item", MATERIALS);
-      if (side !== "buy" && !editing) setSide("buy");
-      return;
-    }
-    const item = lookup(form.item);
-    if (item && !form.price && item.price != null) setField("price", String(item.price));
+    // Read the latest form (not this render's copy), so a price typed meanwhile is never overwritten.
+    if (isMaterials(form.item) && side !== "buy" && !editing) setSide("buy");
+    setForm((x) => {
+      if (isMaterials(x.item)) return x.item === MATERIALS ? x : { ...x, item: MATERIALS };
+      const item = lookup(x.item);
+      return item && !x.price && item.price != null ? { ...x, price: String(item.price) } : x;
+    });
   }
 
   function startEdit(id) {
