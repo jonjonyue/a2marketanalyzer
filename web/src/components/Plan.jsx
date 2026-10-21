@@ -13,9 +13,10 @@ function listTitle(p) {
 
 /**
  * The plan for `budget`: returns { note, body }. `entries` are the Profit Calculator's logged entries (your own
- * listings count); `icons` is the market's icon map; `scope` describes what the plan covers.
+ * listings count); `icons` is the market's icon map; `scope` describes what the plan covers. `onList(pick)`, if given,
+ * adds a button per craft that logs a listing of one at the suggested price.
  */
-export function planView({ rows, budget, settings, serverName, icons = {}, scope = "", emptyHint, snapshotAt = null, entries = [] }) {
+export function planView({ rows, budget, settings, serverName, icons = {}, scope = "", emptyHint, snapshotAt = null, entries = [], onList = null }) {
   if (!budget) {
     return { note: "", body: <p className="muted plan-empty">{emptyHint || "Enter how much kinah you have to see what to craft with it."}</p> };
   }
@@ -49,10 +50,17 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
     </div>
     <div className="table-scroll">
       <table className="plan-table">
-        <thead><tr><th>Craft</th><th>Verdict</th><th>Make</th><th>Set aside</th><th>Avg spend</th><th>List at</th><th>Profit</th><th>Return</th><th>Sells in</th></tr></thead>
+        <thead><tr>{onList && <th><span className="sr-only">Log a listing</span></th>}<th>Craft</th><th>Verdict</th><th>Make</th><th>Set aside</th><th>Avg spend</th><th>List at</th><th>Profit</th><th>Return</th><th>Sells in</th></tr></thead>
         <tbody>
           {plan.picks.map((p) => (
             <tr key={p.row.key}>
+              {onList && (
+                <td className="plan-list">
+                  <button type="button" className="mini-btn" disabled={!(p.listAt > 0)} onClick={() => onList(p)}
+                    title={p.listAt > 0 ? `Log a listing of 1 ${p.row.shortName} at ${kinah(p.listAt)} in the Profit Calculator (listing fee ${kinah(p.listAt * settings.listingFeePct / 100)})` : "No suggested price"}
+                    aria-label={`List 1 ${p.row.shortName} at ${kinah(p.listAt)}`}>+ List</button>
+                </td>
+              )}
               <td className="name"><span className="item-cell">{icon(p.row.key)}<span>{p.row.shortName}</span></span></td>
               <td><span className={`pill ${p.row.verdict.tone}`}>{p.row.verdict.label}</span></td>
               <td title={`Room for about ${p.slots} from you in one 3-day listing: your first sells once the ${p.row.listings} current listings clear (${rate(p.row.perDay)}/day); each extra one only gets your ${share}% share of the sales left after that, since other sellers keep relisting and your own listings compete with each other`}>

@@ -4,6 +4,7 @@ import { kinah, full, signClass, cx } from "../lib/format.js";
 import { KEYS, readRaw, readJson, writeRaw, writeKinah, useKinah, useStoredRaw } from "../lib/storage.js";
 import { DEFAULT_SERVER, serverLabel, useServerDoc, useSnapshot } from "../lib/data.js";
 import { ItemIcon } from "../components/ItemIcon.jsx";
+import { listingEntry } from "../lib/ledgerStore.js";
 import { planView } from "../components/Plan.jsx";
 import { LedgerMethod } from "./LedgerMethod.jsx";
 
@@ -457,8 +458,15 @@ export default function Ledger() {
     return rows;
   }, [market, settings, tier, skill]);
   const filters = [tier !== "All" && tier, skill !== "All" && skill].filter(Boolean).join(", ");
+  // The plan's "+ List" button: log one at the suggested price, like adding it with the form.
+  function listFromPlan(p) {
+    const entry = listingEntry({ name: p.row.shortName, key: p.row.key, price: p.listAt }, log.settings);
+    commit({ entries: [...entries, entry] });
+    showToast(`Listed 1 × ${entry.name} at ${full(entry.price)}: listing fee ${full(amounts(entry).fee)}.`,
+      () => commit({ entries: logRef.current.entries.filter((x) => x.id !== entry.id) }));
+  }
   const plan = planRows && planView({
-    rows: planRows, budget: have > 0 ? have : null, settings, serverName: srv?.name, snapshotAt: market.captured_at, icons: market.icons, entries,
+    rows: planRows, budget: have > 0 ? have : null, settings, serverName: srv?.name, snapshotAt: market.captured_at, icons: market.icons, entries, onList: listFromPlan,
     scope: `with your Market Analysis settings${filters ? ` (${filters})` : ""}`,
     emptyHint: "Enter your kinah below (next to the tax and fee settings) to see what to craft with it.",
   });

@@ -474,3 +474,6 @@ td.over-budget { color: var(--serious); }
 .ledger-plan { margin-top: 20px; }
 .ledger-plan + .entry-form { margin-top: 0; }
 .ledger-plan .table-head a { font-size: 12.5px; white-space: nowrap; }
+.plan-table td.plan-list { width: 1%; padding-right: 0; }
+.plan-table td.plan-list .mini-btn { margin-left: 0; height: 26px; padding: 0 9px; white-space: nowrap; }
+.mini-btn:disabled { opacity: .45; cursor: default; border-color: var(--border); color: var(--text-2); }

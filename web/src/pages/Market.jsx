@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { analyzeMarket, DEFAULT_SETTINGS, ESTIMATOR, VERDICT_ORDER, byRank, isWorthCrafting, SKILLS as CRAFT_SKILLS, masteryLabel, shortenName, parseKinah } from "../lib/metrics.js";
 import { kinah, pct, rate, days, ago, asPct, cx } from "../lib/format.js";
 import { KEYS, readJson, readRaw, writeRaw, useKinah, useStoredRaw } from "../lib/storage.js";
-import { entriesOf } from "../lib/ledgerStore.js";
+import { entriesOf, listOne, unlistOne, listingFee } from "../lib/ledgerStore.js";
+import { useToast } from "../components/Toast.jsx";
 import { DEFAULT_SERVER, serverLabel, useServerDoc, useSnapshot } from "../lib/data.js";
 import { ItemIcon } from "../components/ItemIcon.jsx";
 import { planView } from "../components/Plan.jsx";
@@ -343,6 +344,13 @@ export default function Market() {
   const budget = budget0 > 0 ? budget0 : null;
   const ledgerRaw = useStoredRaw(KEYS.ledger); // a new listing in the calculator changes the plan
   const [tip, tipFor] = useTip();
+  const [toastEl, toast] = useToast();
+  // The plan's "+ List" button: log one at the suggested price in the Profit Calculator.
+  const listFromPlan = (p) => {
+    const entry = listOne({ name: p.row.shortName, key: p.row.key, price: p.listAt });
+    if (!entry) return toast("Couldn't save in this browser (private window or storage blocked).");
+    toast(`Listed 1 × ${entry.name} at ${kinah(entry.price)} (fee ${kinah(listingFee(entry))}). It's in the Profit Calculator.`, () => unlistOne(entry));
+  };
 
   const servers = snapshot?.servers || [];
   // The link's (or saved) server, if the snapshot has it; otherwise the default.
@@ -379,7 +387,7 @@ export default function Market() {
 
   const icons = market?.icons || {};
   const plan = market && planView({
-    rows, budget, settings, icons, snapshotAt: market.captured_at, serverName: srv?.name, entries: entriesOf(ledgerRaw),
+    rows, budget, settings, icons, snapshotAt: market.captured_at, serverName: srv?.name, entries: entriesOf(ledgerRaw), onList: listFromPlan,
     scope: "using the filters above and your proficiency",
     emptyHint: "Enter how much kinah you have above to see what to craft with it.",
   });
@@ -529,5 +537,6 @@ export default function Market() {
       Data from <a href="https://aion2.exchange" target="_blank" rel="noopener">aion2.exchange</a>. Not affiliated with NCSOFT.
     </footer>
     <Tooltip tip={tip} icons={icons} />
+    {toastEl}
   </>;
 }
