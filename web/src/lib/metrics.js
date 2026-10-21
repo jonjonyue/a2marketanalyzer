@@ -289,34 +289,43 @@ export function successAt(playerLevel, recipeLevel, cap, base = PROFICIENCY.base
 
 /**
  * aion2.exchange's cost chain for one Artisan's Splendent item, recomputed at a player's mastery: each step's success
- * from successAt() (the site's rate is the cap), then the expected cost of every tier. Each attempt of step k uses one
- * result of step k−1; only success × combo results count, so attempts multiply down the chain.
- * Returns a copy whose steps carry success_rate (yours), cap and level, and whose tiers carry cost (cheapest path)
- * and cost_market (every material bought at its listing); a tier you can't craft yet has cost null.
+ * from successAt() (the site's rate is the cap), then the expected cost of crafting every tier. Each attempt of step k
+ * consumes one item of the tier before it, and only success × combo results count, so a tier costs
+ * (that input + the step's materials) ÷ (success × combo).
+ * The input gear is bought or crafted, whichever is cheaper (its cheapest listing vs. its own crafting cost); under
+ * "buy everything" it's bought whenever it's listed. Buying it also works when you can't craft that tier yourself.
+ * Returns a copy whose steps carry success_rate (yours), cap, level and how their input gear is sourced
+ * (gear_method "buy" | "craft", gear_cost, and gear_method_market / gear_cost_market for "buy everything"), and whose
+ * tiers carry cost (cheapest path) and cost_market (every input bought where listed); null when it can't be made.
  */
 export function adjustChain(chain, playerLevel) {
   const steps = (chain.steps || []).map((s) => ({
     ...s, cap: s.success_rate, player_level: playerLevel,
     success_rate: successAt(playerLevel, s.mastery_level, s.success_rate),
   }));
+  const tierOf = new Map((chain.tiers || []).map((x) => [x.item_key, x]));
   const per = (s, key) => (s.materials || []).reduce((a, m) => a + (num(m[key] ?? m.unit_price) ?? 0) * m.per_attempt, 0);
-  const cheap = steps.map((s) => per(s, "unit_price"));
-  const listed = steps.map((s) => per(s, "listing_price"));
-  const costOf = (k, perAttempt) => {
-    let need = 1, total = 0;
-    for (let j = k; j >= 0; j--) {
-      const q = steps[j].success_rate * (steps[j].combo_probability ?? 1);
-      if (!(q > 0)) return null;
-      const attempts = need / q;
-      total += perAttempt[j] * attempts;
-      need = attempts;
+  const cost = new Map(), costMarket = new Map(); // tier item key -> cost to craft it
+  steps.forEach((s, k) => {
+    const q = s.success_rate * (s.combo_probability ?? 1);
+    let gear = 0, gearMarket = 0;
+    if (k > 0) {
+      const prevKey = steps[k - 1].result_key;
+      const listed = num(tierOf.get(prevKey)?.market_price);
+      const buy = listed > 0 ? listed : null;
+      const craft = cost.get(prevKey) ?? null;
+      gear = buy != null && (craft == null || buy < craft) ? buy : craft;
+      s.gear_method = gear == null ? null : gear === buy ? "buy" : "craft";
+      s.gear_cost = gear;
+      gearMarket = buy ?? costMarket.get(prevKey) ?? null;
+      s.gear_method_market = gearMarket == null ? null : buy != null ? "buy" : "craft";
+      s.gear_cost_market = gearMarket;
     }
-    return total;
-  };
-  const tiers = (chain.tiers || []).map((x) => {
-    const k = steps.findIndex((s) => s.result_key === x.item_key);
-    return k < 0 ? { ...x } : { ...x, cost: costOf(k, cheap), cost_market: costOf(k, listed) };
+    const ok = q > 0;
+    cost.set(s.result_key, ok && gear != null ? (gear + per(s, "unit_price")) / q : null);
+    costMarket.set(s.result_key, ok && gearMarket != null ? (gearMarket + per(s, "listing_price")) / q : null);
   });
+  const tiers = (chain.tiers || []).map((x) => (cost.has(x.item_key) ? { ...x, cost: cost.get(x.item_key), cost_market: costMarket.get(x.item_key) } : { ...x }));
   return { ...chain, steps, tiers, player_level: playerLevel };
 }
 

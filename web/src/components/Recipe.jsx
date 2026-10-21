@@ -79,15 +79,17 @@ function StepCard({ chain, index, depth = 0 }) {
   const prev = prevStep ? tierOf(chain, prevStep.result_key) : null;
   const rows = [];
   let perAttempt = 0;
+  const bought = s.gear_method === "buy";
   if (prevStep) {
-    perAttempt += prev.cost ?? 0;
-    rows.push({ id: prevStep.result_key, name: prevStep.result_name, qty: 1, market: prev.market_price, crafted: prev.cost, used: "crafted", method: <Crafted />, cost: kinah(prev.cost) });
+    perAttempt += s.gear_cost ?? 0;
+    rows.push({ id: prevStep.result_key, name: prevStep.result_name, qty: 1, market: prev.market_price, crafted: prev.cost,
+      used: bought ? "market" : "crafted", method: bought ? "Bought" : <Crafted />, cost: kinah(s.gear_cost) });
   }
   for (const m of s.materials || []) {
     const cost = (m.unit_price ?? 0) * m.per_attempt;
     perAttempt += cost;
-    const bought = !m.method || m.method === "buy";
-    rows.push({ id: m.material_key, name: m.name, qty: m.per_attempt, market: m.listing_price, crafted: bought ? null : m.unit_price, used: bought ? "market" : "crafted", method: methodLabel(m), cost: kinah(cost) });
+    const matBought = !m.method || m.method === "buy";
+    rows.push({ id: m.material_key, name: m.name, qty: m.per_attempt, market: m.listing_price, crafted: matBought ? null : m.unit_price, used: matBought ? "market" : "crafted", method: methodLabel(m), cost: kinah(cost) });
   }
   const rate = (s.success_rate ?? 1) * (s.combo_probability ?? 1);
   const itemCost = tierOf(chain, s.result_key).cost ?? perAttempt / rate;
@@ -109,8 +111,8 @@ function StepCard({ chain, index, depth = 0 }) {
         {" "}(about {(1 / rate).toFixed(1)} attempts each).
       </p>
       {prevStep && (
-        <details className="sub" open={depth < 1}>
-          <summary>How {prevStep.result_name} is made</summary>
+        <details className="sub" open={depth < 1 && !bought}>
+          <summary>How {prevStep.result_name} is made{bought ? " (bought here, since that's cheaper)" : ""}</summary>
           <StepCard chain={chain} index={index - 1} depth={depth + 1} />
         </details>
       )}
@@ -192,7 +194,7 @@ export function RecipeDetail({ row, chains }) {
       : c ? <StepCard chain={c.chain} index={c.index} />
         : <p className="muted">No recipe available for this item.</p>}
     {(row.costDetail || c) && (
-      <p className="muted small">Highlighted price is the one used. Gear inputs use their crafted cost; materials use the cheapest way to get them
+      <p className="muted small">Highlighted price is the one used. Gear inputs are bought or crafted, whichever is cheaper; materials use the cheapest way to get them
         (bought at the cheapest listing, or converted/crafted when that's cheaper). Click a "How … is made" line to open or close a sub-recipe.
         Recipes from questlog.gg; Splendent costs from aion2.exchange's model.</p>
     )}
