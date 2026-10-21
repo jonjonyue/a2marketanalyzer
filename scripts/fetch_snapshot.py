@@ -242,6 +242,33 @@ def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tup
 SERVER_FIELDS = ("server_id", "name", "region", "region_name", "faction")
 
 
+def reuse_published(site: str, out: Path) -> int:
+    """Copy the published index and every server file it lists, unchanged. All or nothing."""
+    run = {"run": int(time.time())}
+    try:
+        index = get_json(site, "/data/snapshot.json", run, retries=3)
+        servers = (index or {}).get("servers") or []
+        if not servers:
+            raise RuntimeError("the published index lists no servers")
+        docs = {}
+        for srv in servers:
+            sid = srv["server_id"]
+            doc = get_json(site, f"/data/servers/{sid}.json", run, retries=3)
+            if not (doc and doc.get("market")):
+                raise RuntimeError(f"server {sid}: no published file")
+            docs[sid] = doc
+    except Exception as err:
+        print(f"Couldn't reuse the published data: {err}", file=sys.stderr)
+        return 1
+    server_dir = out.parent / "servers"
+    server_dir.mkdir(parents=True, exist_ok=True)
+    for sid, doc in docs.items():
+        (server_dir / f"{sid}.json").write_text(json.dumps(doc, separators=(",", ":")))
+    out.write_text(json.dumps(index, separators=(",", ":")))
+    print(f"Reused the published data from {index.get('generated_at')} ({len(docs)} servers)")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="site/data/snapshot.json", help="index file; per-server files go in servers/ next to it")
@@ -249,7 +276,11 @@ def main() -> int:
     ap.add_argument("--servers", default=",".join(map(str, DEFAULT_SERVERS)), help="comma-separated server ids")
     ap.add_argument("--regions", help="fetch every server in these region codes instead (NAE, NAW, EU, LA, AS)")
     ap.add_argument("--fallback", help="the published dashboard's URL: a server that fails this run keeps its last published file from there")
+    ap.add_argument("--reuse", metavar="URL", help="don't call the API: copy the data already published at this dashboard URL "
+                    "(for deploys that only change the site's code); exits 1 if any of it can't be read")
     args = ap.parse_args()
+    if args.reuse:
+        return reuse_published(args.reuse, Path(args.out))
 
     try:
         all_servers = get_json(args.base, "/api/servers").get("servers", [])

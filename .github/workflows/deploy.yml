@@ -33,8 +33,15 @@ jobs:
           python-version: "3.12"
 
       - name: Fetch market snapshot from aion2.exchange
-        # A server that fails keeps its last published data (read back from the live site).
-        run: python scripts/fetch_snapshot.py --out site/data/snapshot.json --fallback "https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
+        # A push only changes the site's code, so it redeploys the data already live instead of calling the API
+        # (the scheduled / cron-job.org runs keep it fresh); if that can't be read, it fetches as usual.
+        # On a full fetch, a server that fails keeps its last published data (read back from the live site).
+        run: |
+          site="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && python scripts/fetch_snapshot.py --out site/data/snapshot.json --reuse "$site"; then
+            exit 0
+          fi
+          python scripts/fetch_snapshot.py --out site/data/snapshot.json --fallback "$site"
 
       # The site is a Vite + React app in web/. Its build copies site/ (the fresh data/ and the ledger.html redirect)
       # into web/dist; script and style file names carry a content hash, so a deploy shows up immediately.
