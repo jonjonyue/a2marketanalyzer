@@ -1,132 +1,7 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Aion 2 Crafting Profit</title>
-  <meta name="description" content="Which Artisan's Splendent and True Dragon crafts make money on Aion 2 NA West Siel (Elyos) and Israphel (Asmodian), ranked by profit and how fast they actually sell. Data from aion2.exchange.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-  <nav class="nav" aria-label="Pages">
-    <div class="wrap nav-inner">
-      <a class="brand" href="index.html"><span class="brand-mark" aria-hidden="true">◆</span>A2 Market</a>
-      <div class="nav-links">
-        <a href="index.html" aria-current="page">Market Analysis</a>
-        <a href="ledger.html">Profit Calculator</a>
-      </div>
-    </div>
-  </nav>
-  <header class="top">
-    <div class="wrap top-inner">
-      <div>
-        <p class="eyebrow">Aion 2 · Expert's Splendent, Artisan's Splendent &amp; True / Star Dragon gear · <span id="serverName">Siel · Elyos · North America West</span></p>
-        <h1>Crafting profit</h1>
-        <p class="lede">Which crafts make money on <span class="server-short">Siel</span>, ranked by profit per craft <em>and</em> how fast they actually sell.</p>
-      </div>
-      <div class="freshness" id="freshness" aria-live="polite">Loading…</div>
-    </div>
-  </header>
-
-  <main class="wrap">
-    <section class="controls" aria-label="Filters and assumptions">
-      <label class="field server-field">
-        <span>Server</span>
-        <select id="server" aria-label="Server"></select>
-      </label>
-      <label class="field budget-field">
-        <span>Your kinah</span>
-        <input id="budget" type="text" inputmode="decimal" placeholder="e.g. 250m or 1.2b" autocomplete="off" title="How much kinah you can put into crafting. Saved in this browser only; entries in the Profit Calculator update it.">
-      </label>
-      <div class="field">
-        <span>Tier</span>
-        <div class="chips" id="tiers" role="group" aria-label="Tier"></div>
-      </div>
-      <div class="field">
-        <span>Skill</span>
-        <div class="chips" id="skills" role="group" aria-label="Skill"></div>
-      </div>
-      <div class="field">
-        <span>Sell price</span>
-        <div class="seg" id="priceBasis" role="radiogroup" aria-label="Sell price basis">
-          <button data-v="conservative" title="Lower of the cheapest listing and the average sale price">Conservative</button>
-          <button data-v="listing" title="Cheapest listing right now">Cheapest listing</button>
-          <button data-v="sold" title="Average price of listings that sold over the last 7 days">Avg sale price</button>
-        </div>
-      </div>
-      <div class="field">
-        <span>Material cost</span>
-        <div class="seg" id="costBasis" role="radiogroup" aria-label="Material cost basis">
-          <button data-v="cheapest" title="Cheapest path per input: buy, convert Odyle, or craft it">Cheapest path</button>
-          <button data-v="market" title="Buy every input off the exchange">Buy everything</button>
-        </div>
-      </div>
-      <label class="field small">
-        <span>Sales tax %</span>
-        <input id="tax" type="number" min="0" max="50" step="0.5" inputmode="decimal">
-      </label>
-      <label class="field small">
-        <span>Listing fee %</span>
-        <input id="listFee" type="number" min="0" max="50" step="0.5" inputmode="decimal">
-      </label>
-      <label class="field small">
-        <span>Your share of sales %</span>
-        <input id="share" type="number" min="1" max="100" step="1" inputmode="numeric">
-      </label>
-      <div class="field prof-field">
-        <span>Your crafting proficiency</span>
-        <div class="profs" id="proficiency" role="group" aria-label="Crafting proficiency per skill"></div>
-      </div>
-      <label class="check">
-        <input id="hideLoss" type="checkbox"> Hide losses
-      </label>
-      <button class="link-btn" id="copyLink" type="button">Copy share link</button>
-    </section>
-
-    <section class="kpis" id="kpis" aria-label="Summary"></section>
-
-    <section class="panel plan" aria-labelledby="planTitle">
-      <div class="table-head">
-        <h2 id="planTitle">What to craft with your kinah</h2>
-        <p class="muted" id="planNote"></p>
-      </div>
-      <div id="planBody"></div>
-    </section>
-
-    <section class="charts">
-      <figure class="panel">
-        <figcaption>
-          <h2 id="barTitle">Expected daily profit, whole market</h2>
-          <p id="barNote">Profit per craft × units sold per day. This is the pool every crafter on the server is competing for.</p>
-        </figcaption>
-        <div class="chart" id="barChart"></div>
-      </figure>
-      <figure class="panel">
-        <figcaption>
-          <h2>Margin vs. how fast it sells</h2>
-          <p>Top right is where you want to be. The dashed line marks break-even; solid dots are Top pick or Craft it; crafts with no sales in the last 7 days are left out.</p>
-        </figcaption>
-        <div class="chart" id="scatter"></div>
-      </figure>
-    </section>
-
-    <section class="panel table-panel">
-      <div class="table-head">
-        <h2>All crafts</h2>
-        <p class="muted" id="tableNote"></p>
-      </div>
-      <div class="table-scroll">
-        <table id="table">
-          <thead></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="panel method">
+// The "How this is calculated" notes for Market Analysis.
+export function MarketMethod({ modelNote }) {
+  return (
+    <section className="panel method">
       <h2>How this is calculated</h2>
       <ul>
         <li><strong>Cost per craft</strong> comes from aion2.exchange's crafting model: expected value over many crafts at mastery 100, with each material priced at the cheapest of buying it, converting Odyle, or crafting it from cheaper inputs. "Buy everything" uses the site's all-market cost instead.</li>
@@ -141,15 +16,7 @@
         <li><strong>Daily profit pool</strong> = profit per craft × sold per day; <strong>your daily</strong> scales that by the share of sales you expect to win. Crafts are ranked by the pool.</li>
         <li>Verdicts, checked in this order: <em>Loss</em> (profit ≤ 0) · <em>Oversupplied</em> (more than 5 days of supply, i.e. listings ÷ sold per day; listings only last 3 days) · <em>Slow seller</em> (a listing you post now would wait more than 3 days to sell: (listings + 1) ÷ sold per day, so it would likely expire first) · <em>Low return</em> (under 15% return on capital: profitable, but a run of bad luck on the combo wipes it out) · <em>Top pick</em> (at least 50% return on capital, 1+ sold/day and at most 3 days of supply) · <em>Craft it</em> (everything else that's profitable and selling). <em>Needs …</em>, <em>Cost TBD</em>, <em>No sales data</em> and <em>No price</em> mean the item can't be judged yet.</li>
       </ul>
-      <p class="muted" id="modelNote"></p>
+      <p className="muted" id="modelNote">{modelNote}</p>
     </section>
-  </main>
-
-  <footer class="wrap foot">
-    Data from <a href="https://aion2.exchange" target="_blank" rel="noopener">aion2.exchange</a>. Not affiliated with NCSOFT.
-  </footer>
-
-  <div class="tooltip" id="tooltip" role="status" hidden></div>
-  <script type="module" src="app.js"></script>
-</body>
-</html>
+  );
+}

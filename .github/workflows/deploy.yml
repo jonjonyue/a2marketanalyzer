@@ -36,21 +36,26 @@ jobs:
         # A server that fails keeps its last published data (read back from the live site).
         run: python scripts/fetch_snapshot.py --out site/data/snapshot.json --fallback "https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
 
-      # GitHub Pages lets browsers cache files for 10 minutes; versioned URLs make a deploy show up immediately.
-      - name: Cache-bust script and style URLs
+      # The site is a Vite + React app in web/. Its build copies site/ (the fresh data/ and the ledger.html redirect)
+      # into web/dist; script and style file names carry a content hash, so a deploy shows up immediately.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build site
+        working-directory: web
         run: |
-          v="${GITHUB_SHA::8}"
-          sed -i "s|href=\"styles.css\"|href=\"styles.css?v=$v\"|; s|src=\"app.js\"|src=\"app.js?v=$v\"|" site/index.html
-          sed -i "s|href=\"styles.css\"|href=\"styles.css?v=$v\"|; s|src=\"ledger.js\"|src=\"ledger.js?v=$v\"|" site/ledger.html
-          sed -i "s|from \"./metrics.js\"|from \"./metrics.js?v=$v\"|" site/app.js site/ledger.js site/plan.js
-          sed -i "s|from \"./plan.js\"|from \"./plan.js?v=$v\"|" site/app.js site/ledger.js
-          grep -q "app.js?v=$v" site/index.html && grep -q "metrics.js?v=$v" site/app.js && grep -q "ledger.js?v=$v" site/ledger.html
+          npm ci
+          npm run build
+          test -f dist/data/snapshot.json
 
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: web/dist
 
       # GitHub sometimes leaves a Pages deployment stuck "in progress", which blocks every later deploy.
       # Only one run deploys at a time (concurrency group), so anything else still in progress here is stuck: cancel it
