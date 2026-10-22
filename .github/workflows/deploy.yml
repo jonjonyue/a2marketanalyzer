@@ -19,7 +19,36 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # GitHub only lets one github-pages deployment through at a time and holds a new run at the environment gate until
+  # the previous deployment record finishes. A cancelled or glitched run can leave its record stuck ("waiting" /
+  # "queued") with nothing behind it, which then blocks every later run. This job runs before the gate: it marks any
+  # unfinished github-pages deployment record as inactive (only one run in the "pages" group runs at a time, so none
+  # of them belongs to a live run) and cancels stuck Pages deployments.
+  unblock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      deployments: write
+      pages: write
+    steps:
+      - name: Clear stuck github-pages deployments
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for id in $(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=github-pages&per_page=20" -q '.[].id'); do
+            state=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses?per_page=1" -q '.[0].state // "none"')
+            case "$state" in
+              waiting|queued|pending|in_progress|none)
+                sha=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id" -q '.sha')
+                gh api -X POST "repos/$GITHUB_REPOSITORY/pages/deployments/$sha/cancel" >/dev/null 2>&1 || true
+                gh api -X POST "repos/$GITHUB_REPOSITORY/deployments/$id/statuses" -f state=inactive \
+                  -f description="Cleared: left unfinished by an earlier run" >/dev/null && echo "cleared deployment $id ($state, ${sha:0:8})" || echo "couldn't clear deployment $id ($state)"
+                ;;
+            esac
+          done
+
   deploy:
+    needs: unblock
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment:
