@@ -65,7 +65,10 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
   const expiries = []; // predicted expiry times (epoch minutes) of listings we saw appear
   let sales = 0, cheapestSold = 0, priceSum = 0, priceN = 0;
   const events = []; // each inferred sale: [price (cheapest listing before it), listings up at the time, units]
-  const undercuts = []; // each time a new listing went in below the cheapest: [snapshot time, previous snapshot time, new cheapest, depth]
+  // Each time a new listing went in below the cheapest: [snapshot time, previous snapshot time, new cheapest, depth,
+  // outcome ("sold" before anyone went lower, "cut" by an even lower listing, null if neither within 72h),
+  // fall (when cut: how far below this price the cheapest got within 24h)].
+  const undercuts = [];
 
   for (let i = 1; i < timeline.length; i++) {
     const a = timeline[i - 1], b = timeline[i];
@@ -85,7 +88,7 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
       s = sLow = 1;
     }
     // An undercut: the cheapest price dropped while no listing disappeared (a new, cheaper listing went up).
-    if (b.t > start && d >= 0 && a.low > 0 && b.low > 0 && b.low < a.low) undercuts.push([b.t, a.t, b.low, 1 - b.low / a.low]);
+    if (b.t > start && d >= 0 && a.low > 0 && b.low > 0 && b.low < a.low) undercuts.push([b.t, a.t, b.low, 1 - b.low / a.low, ...afterUndercut(timeline, i)]);
     if (b.t > start && s > 0) {
       sales += s;
       cheapestSold += sLow;
@@ -115,6 +118,21 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
     undercutsPerDay: enough ? undercuts.length / days : null,
     cheapestSoldPerDay: enough ? cheapestSold / days : null,
   };
+}
+
+// What happened to a listing that just became the cheapest at timeline[i]: [outcome, fall] (see estimateSales).
+function afterUndercut(timeline, i) {
+  const { t, low: p } = timeline[i];
+  for (let j = i + 1; j < timeline.length && timeline[j].t - t <= 72 * 60; j++) {
+    const d = timeline[j];
+    if (d.low != null && d.low < p) {
+      let floor = d.low;
+      for (let k = j; k < timeline.length && timeline[k].t - t <= 24 * 60; k++) if (timeline[k].low != null) floor = Math.min(floor, timeline[k].low);
+      return ["cut", 1 - floor / p];
+    }
+    if (d.low == null || d.low > p) return ["sold", 0];
+  }
+  return [null, 0];
 }
 
 /** All snapshot times seen across a server's items: the market-wide snapshot schedule. */
@@ -479,6 +497,9 @@ export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
       return analyzeCraft(t, items.get(t.target_key), s, est);
     })
     .sort(byRank);
+  // What happens after undercuts across the whole server, to steady each item's own (smaller) record when pricing.
+  const pool = undercutRecord(rows);
+  for (const r of rows) r.undercutPool = pool;
   rows.chains = chains; // the chains at your mastery, for the recipe panels
   return rows;
 }
@@ -560,7 +581,8 @@ export function suggestedListPrice(r, settings = DEFAULT_SETTINGS) {
   const keep = 1 - (settings.salesTaxPct + settings.listingFeePct) / 100;
   // Your own logged listings of this item (from the Profit Calculator), so your relists don't count as competitors.
   const own = settings.ownListings?.get(r.key) || settings.ownListings?.get(String(r.name || "").toLowerCase()) || [];
-  const a = suggestListing(r, { breakEven: r.cost > 0 && keep > 0 ? r.cost / keep : 0, ownListings: own });
+  const a = suggestListing(r, { breakEven: r.cost > 0 && keep > 0 ? r.cost / keep : 0, ownListings: own, keep,
+    feePct: settings.listingFeePct ?? DEFAULT_SETTINGS.listingFeePct, pool: r.undercutPool });
   return a.price != null ? a : { ...a, price: r.price ?? null, basis: "price", note: "No listings or recent sales to price from; using the dashboard's sell price." };
 }
 
@@ -670,27 +692,47 @@ function weightedMedian(events) {
 
 export const LISTING_ADVICE = {
   thinListings: 2, minThinSales: 2, maxPremium: 1.5,
-  minUndercuts: 2,      // undercuts seen in the window before judging the risk
-  safeOdds: 0.6,        // below this chance of selling before an undercut, price deeper for a surer sale
-  depthPercentile: 0.75, maxDepth: 0.15, minDepth: 0.02,
+  minUndercuts: 2,      // undercuts by others seen in the window before the undercut model is used for an item
+  priorWeight: 6,       // an item's own undercut record counts against this many server-wide observations
+  // Price levels relative to the usual sale price, for "what happens when you list here": above it, at it,
+  // a deal (6-15% under) or deep (more than 15% under).
+  bands: [["deep", -0.15], ["deal", -0.06], ["usual", 0.02], ["above", Infinity]],
+  dealCuts: [0.1, 0.2], // the deal / deep prices tried: this far under the usual sale price
 };
 
-// Chance the cheapest listing sells before someone undercuts it, and how deep undercutters usually go.
-export function undercutRisk(est, o = LISTING_ADVICE, own = []) {
-  // Undercuts that match one of your own logged listings (same item, appeared within the hour around when you logged
-  // it, price within 1%) are you, not a competitor: leave them out.
-  const all = est?.undercuts || [];
-  const isOwn = ([t, prevT, low]) => own.some((l) => l.t >= prevT - 60 && l.t <= t + 60 && Math.abs(l.price - low) <= low * 0.01);
-  const theirs = all.filter((u) => !isOwn(u));
-  const depths = theirs.map((u) => u[3]);
-  const days = est?.days;
-  const U = days > 0 && est?.undercutsPerDay != null ? theirs.length / days : null, S = est?.cheapestSoldPerDay;
-  if (!(depths.length >= o.minUndercuts) || U == null || S == null || !(U + S > 0)) return null;
-  const sorted = [...depths].sort((a, b) => a - b);
-  const at = (q) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
-  return { sellFirst: S / (U + S), undercutsPerDay: U, cheapestSoldPerDay: S, typicalDepth: at(0.5),
-    secureDepth: Math.min(o.maxDepth, Math.max(o.minDepth, at(o.depthPercentile))), count: depths.length, ownExcluded: all.length - theirs.length };
+const bandOf = (p, typical, o) => o.bands.find(([, edge]) => p / typical - 1 < edge)[0];
+
+/** The usual sale price: the median of recent sales in a normal (not thin) market, else of all sales, else the average. */
+function typicalPrice(r, o) {
+  const events = r.est?.events || [];
+  const normalEvents = events.filter(([, n]) => n > o.thinListings);
+  const normalUnits = normalEvents.reduce((t, e) => t + e[2], 0);
+  return (normalUnits >= 2 ? weightedMedian(normalEvents) : weightedMedian(events)) ?? (r.soldAvg > 0 ? r.soldAvg : null);
 }
+
+/**
+ * Tally what happened after undercuts, by price level vs the usual sale price: { band: { sold, cut, falls[] } }.
+ * `rows` are analyzed crafts; `isOwn(row, undercut)` leaves out your own listings.
+ */
+export function undercutRecord(rows, o = LISTING_ADVICE, isOwn = () => false) {
+  const rec = Object.fromEntries(o.bands.map(([b]) => [b, { sold: 0, cut: 0, falls: [] }]));
+  for (const r of rows) {
+    const typical = typicalPrice(r, o);
+    if (!typical) continue;
+    for (const u of r.est?.undercuts || []) {
+      if (!u[4] || isOwn(r, u)) continue;
+      const b = rec[bandOf(u[2], typical, o)];
+      if (u[4] === "sold") b.sold++; else { b.cut++; b.falls.push(u[5]); }
+    }
+  }
+  return rec;
+}
+
+// Your own logged listings (same item, appeared within the hour around when you logged it, price within 1%) aren't
+// competitors undercutting you.
+const ownMatcher = (own) => ([t, prevT, low]) => own.some((l) => l.t >= prevT - 60 && l.t <= t + 60 && Math.abs(l.price - low) <= low * 0.01);
+
+const median = (xs) => { const a = [...xs].sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : null; };
 
 /**
  * Suggested listing price for one item, from how crowded its market is now and how sales went in the past week.
@@ -699,38 +741,72 @@ export function undercutRisk(est, o = LISTING_ADVICE, own = []) {
  * - Thin (0-2 listed): the median price of sales that happened while the market was similarly thin (2 or fewer
  *   listed), when there are at least 2 of them; scarcity often lets higher prices sell. Capped at 1.5x the typical
  *   sale price. Without that history, just under the cheapest listing, or the typical sale price if nothing's listed.
+ * - Where others undercut: compare listing there, at the usual sale price, and at a "deal" or deep price, using how
+ *   often a listing at each level sold before being undercut (this item's record, steadied by the server's) and how
+ *   far the market fell when it didn't. A small undercut mostly just gets undercut again and drags the price down,
+ *   so it only goes lower when that clearly pays off. Never below break-even.
+ * opts: { ownListings, breakEven, keep (share of the price kept after tax and fee), feePct, pool (undercutRecord of the server) }.
  */
 export function suggestListing(r, opts = LISTING_ADVICE) {
   const o = { ...LISTING_ADVICE, ...opts };
   const base = baseListing(r, o);
-  const risk = undercutRisk(r.est, o, o.ownListings || []);
-  const cheapest = r.listing > 0 ? r.listing : null;
-  if (!risk || base.price == null || !cheapest) return { ...base, risk };
-  const pct = (x) => `${Math.round(x * 100)}%`;
-  const mine = risk.ownExcluded ? ` (not counting ${risk.ownExcluded} of your own listing${risk.ownExcluded > 1 ? "s" : ""} from the Profit Calculator)` : "";
-  const odds = `Undercuts are common here (${risk.undercutsPerDay.toFixed(1)}/day${mine} vs ${risk.cheapestSoldPerDay.toFixed(1)} sales of the cheapest/day), ` +
-    `so a listing that's cheapest sells before being undercut only ~${pct(risk.sellFirst)} of the time.`;
-  if (risk.sellFirst >= o.safeOdds) return { ...base, risk };
-  // A surer sale: below where most undercutters land, but never below break-even.
-  const secure = undercutPrice(cheapest * (1 - risk.secureDepth));
+  const typical = typicalPrice(r, o);
+  if (base.price == null || !typical || base.basis === "thin" || base.basis === "empty") return base;
+  const isOwn = ownMatcher(o.ownListings || []);
+  const all = r.est?.undercuts || [];
+  const theirs = all.filter((u) => !isOwn(u));
+  if (theirs.length < o.minUndercuts) return base;
+  const mine = undercutRecord([r], o, (_, u) => isOwn(u));
+  const pool = o.pool || mine;
+  const pooled = (b) => {
+    const total = Object.values(pool).reduce((t, x) => ({ sold: t.sold + x.sold, cut: t.cut + x.cut }), { sold: 0, cut: 0 });
+    const x = pool[b].sold + pool[b].cut >= 10 ? pool[b] : total;
+    return x.sold + x.cut ? x.sold / (x.sold + x.cut) : 0.5;
+  };
+  const allFalls = Object.values(pool).flatMap((x) => x.falls);
+  const odds = (b) => {
+    const m = mine[b], k = o.priorWeight;
+    return { p: (m.sold + k * pooled(b)) / (m.sold + m.cut + k), sold: m.sold, n: m.sold + m.cut,
+      fall: median(m.falls.length >= 3 ? m.falls : pool[b].falls.length >= 5 ? pool[b].falls : allFalls) ?? 0.1 };
+  };
+  const keep = o.keep ?? 0.88, fee = (o.feePct ?? 2) / 100;
   const floor = o.breakEven > 0 ? Math.ceil(o.breakEven) : 0;
-  if (secure >= base.price) return { ...base, risk, note: `${base.note} ${odds}` };
-  if (secure < floor) {
-    return { ...base, risk, basis: base.basis + "-risky",
-      note: `${base.note} ${odds} Going deep enough to stay ahead of them (~${pct(risk.secureDepth)} under the cheapest) would sell at a loss, so expect to relist.` };
+  // Expected kinah per unit: sells first at p, or gets undercut, and you relist (another fee) where the market fell to.
+  const value = (p, x) => x.p * p * keep + (1 - x.p) * (p * (1 - x.fall) * keep - p * fee);
+  const options = [{ kind: "here", price: base.price }];
+  if (base.price > typical * 1.02) options.push({ kind: "usual", price: undercutPrice(typical + 1) });
+  for (const d of o.dealCuts) options.push({ kind: d === o.dealCuts[0] ? "deal" : "deep", price: undercutPrice(typical * (1 - d)) });
+  const scored = options
+    .filter((c, i) => i === 0 || (c.price < base.price && c.price >= floor))
+    .map((c) => { const x = odds(bandOf(c.price, typical, o)); return { ...c, ...x, value: value(c.price, x) }; });
+  // The best expected value; a lower price has to beat a higher one by 1% to be worth pushing the market down.
+  let pick = scored[0];
+  for (const c of scored.slice(1)) if (c.value > pick.value * 1.01) pick = c;
+  const pc = (x) => `${Math.round(x * 100)}%`;
+  const at = (c) => `${pc(c.p)} (${c.n ? `${c.sold} of ${c.n} for this item, ` : ""}weighed with the server's pattern)`;
+  const own = all.length - theirs.length;
+  const intro = `Undercutters are active (${theirs.length} undercuts in a week${own ? `, not counting ${own} of your own listing${own > 1 ? "s" : ""}` : ""}). ` +
+    `When a listing is undercut, the cheapest falls ~${pc(scored[0].fall)} within a day, so a small cut mostly invites another.`;
+  const here = scored[0];
+  const lower = scored.filter((c) => c !== here);
+  const best = lower.sort((a, b) => b.p - a.p)[0];
+  if (pick === here) {
+    return { ...base, basis: base.basis + "-held", undercut: { here, options: scored },
+      note: `${base.note} ${intro} A listing at this price sold before being undercut ~${at(here)}` +
+        (best ? `; going lower only gets that to ~${pc(best.p)} at ${fmtK(best.price)}, not worth the kinah or the lower market.` : ".") };
   }
-  return { ...base, price: secure, basis: "secure", risk, givenUp: base.price - secure,
-    note: `${odds} Undercutters usually go ~${pct(risk.typicalDepth)} under; listing ${pct(risk.secureDepth)} under the cheapest (${fmtK(cheapest)}) ` +
-      `puts you below most of them for a surer sale, giving up ${fmtK(base.price - secure)} vs the ${fmtK(base.price)} you'd otherwise list at.` };
+  const why = pick.kind === "usual"
+    ? `Listings above the usual sale price (~${fmtK(typical)}) sold before being undercut only ~${at(here)}, vs ~${at(pick)} at it, so list at the usual price instead of just under the cheapest.`
+    : `Priced as a deal (~${pc(1 - pick.price / typical)} under the usual ~${fmtK(typical)}), listings here sold before being undercut ~${at(pick)} vs ~${at(here)} at ${fmtK(here.price)}, enough to be worth the lower price.`;
+  return { ...base, price: pick.price, basis: pick.kind, undercut: { here, pick, options: scored }, givenUp: base.price - pick.price,
+    note: `${intro} ${why} That gives up ${fmtK(base.price - pick.price)} vs ${fmtK(base.price)}.` };
 }
 
 function baseListing(r, o) {
   const events = r.est?.events || [];
   const thinEvents = events.filter(([, n]) => n <= o.thinListings);
-  const normalEvents = events.filter(([, n]) => n > o.thinListings);
   // The usual price: sales in a normal (not thin) market, so the thin-market premium isn't measured against itself.
-  const normalUnits = normalEvents.reduce((t, e) => t + e[2], 0);
-  const typical = (normalUnits >= 2 ? weightedMedian(normalEvents) : weightedMedian(events)) ?? (r.soldAvg > 0 ? r.soldAvg : null);
+  const typical = typicalPrice(r, o);
   const thinUnits = thinEvents.reduce((t, e) => t + e[2], 0);
   const thinMedian = thinUnits >= o.minThinSales ? weightedMedian(thinEvents) : null;
   const cheapest = r.listing > 0 ? r.listing : null;
