@@ -8,7 +8,7 @@ import { ItemIcon } from "./ItemIcon.jsx";
 function listTitle(p) {
   const r = p.row;
   return `${p.listNote || ""} Cheapest listing ${r.listing > 0 ? kinah(r.listing) : "none"} · ${r.listings ?? 0} listed. ` +
-    `List all ${p.units} at this price: going lower on later ones only undercuts your own.`;
+    (p.units > 1 ? `This is the price for each one: list all ${p.units} at it, since going lower on later ones only undercuts your own.` : "This is the price for the one unit.");
 }
 
 /**
@@ -61,7 +61,7 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
     </div>
     <div className="table-scroll">
       <table className="plan-table">
-        <thead><tr>{onList && <th><span className="sr-only">Log a listing</span></th>}<th>Craft</th><th>Verdict</th><th>Make</th><th>Set aside</th><th>Avg spend</th><th>List at</th><th>Profit</th><th>Return</th><th>Sells in</th></tr></thead>
+        <thead><tr>{onList && <th><span className="sr-only">Log a listing</span></th>}<th>Craft</th><th>Verdict</th><th>Make</th><th>Set aside <span className="th-sub">total</span></th><th>Avg spend <span className="th-sub">total</span></th><th>List at <span className="th-sub">each</span></th><th>Profit <span className="th-sub">total</span></th><th>Return</th><th>Sells in</th></tr></thead>
         <tbody>
           {plan.picks.map((p) => (
             <tr key={p.row.key}>
@@ -80,9 +80,9 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
                 {p.myUnits > 0 && <> <span className="dim" title={`You already have ${p.myUnits} listed (Profit Calculator); they take ${p.myUnits === 1 ? "a place" : "places"} in the market's room`}>+{p.myUnits} listed</span></>}
               </td>
               <td title={`Kinah to set aside for 90% odds of making ${p.units} (combo luck included)`}>{kinah(p.capital)}</td>
-              <td title={`Average spend for ${p.units}`}>{kinah(p.spend)}</td>
-              <td title={listTitle(p)}><strong>{kinah(p.listAt)}</strong></td>
-              <td className={p.profit > 0 ? "pos" : "neg"} title={`At ${kinah(p.listAt)} each you keep ${kinah(p.netEach)} after tax and fee`}>{kinah(p.profit, { sign: true })}</td>
+              <td title={`Average spend for ${p.units}${p.units > 1 ? ` (${kinah(p.spend / p.units)} each)` : ""}`}>{kinah(p.spend)}</td>
+              <td title={listTitle(p)}><strong>{kinah(p.listAt)}</strong>{p.units > 1 && <span className="dim"> ×{p.units}</span>}</td>
+              <td className={p.profit > 0 ? "pos" : "neg"} title={`At ${kinah(p.listAt)} each you keep ${kinah(p.netEach)} after tax and fee${p.units > 1 ? `; ${kinah(p.profit / p.units, { sign: true })} profit each, ${p.units} units` : ""}`}>{kinah(p.profit, { sign: true })}</td>
               <td>{pct(p.row.roc)}</td>
               <td title={`When your last one should sell: the current listings and your first at the market's pace, then your ${share}% share of sales for each extra`}>{days(p.daysToSell)} d</td>
             </tr>

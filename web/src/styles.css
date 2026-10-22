@@ -477,3 +477,4 @@ td.over-budget { color: var(--serious); }
 .plan-table td.plan-list { width: 1%; padding-right: 0; }
 .plan-table td.plan-list .mini-btn { margin-left: 0; height: 26px; padding: 0 9px; white-space: nowrap; }
 .mini-btn:disabled { opacity: .45; cursor: default; border-color: var(--border); color: var(--text-2); }
+.th-sub { display: block; font-weight: 500; text-transform: none; letter-spacing: 0; opacity: .75; }
