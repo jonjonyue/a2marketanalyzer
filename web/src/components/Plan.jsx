@@ -97,7 +97,7 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
       : freeAfter > 0 && plan.left > 0 && plan.picks.length === plan.candidates
         ? <p className="muted small">That covers every craft worth making right now at the amount the market can take; the remaining {kinah(plan.left)} has nowhere better to go until listings sell or prices change.</p>
         : null}
-    <p className="muted small">Best return on capital first. "Set aside" covers bad luck on combo crafts (90% odds of making them all); on average you spend less and keep the rest. Each craft is capped at what the market can take in the next 1.5 days, so you stay flexible as prices move: one beyond the current listings, plus extras only where your share of the remaining sales leaves room, since other sellers keep relisting and extra copies compete with your own. Everything planned fits in your free listing slots (the exchange allows {total} at once).</p>
+    <p className="muted small">The mix of crafts with the most expected profit that fits your kinah and your free listing slots (each piece of gear is its own listing), shown best return on capital first. "Set aside" covers bad luck on combo crafts (90% odds of making them all); on average you spend less and keep the rest. Each craft is capped at what the market can take in the next 1.5 days, so you stay flexible as prices move: one beyond the current listings, plus extras only where your share of the remaining sales leaves room, since other sellers keep relisting and extra copies compete with your own. Everything planned fits in your free listing slots (the exchange allows {total} at once).</p>
   </>;
   return { note, body };
 }

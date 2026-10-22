@@ -520,8 +520,8 @@ export function shortenMarketNames(market) {
 }
 
 /**
- * Where to put a kinah budget. Candidates are crafts worth making (Top pick / Craft it), best return on capital
- * first. Each gets as many units as the market has room for within `planDays` (`marketRoom`) and the budget allows, where n units need cost-per-attempt × the attempts for 90% odds of n
+ * Where to put a kinah budget. Candidates are crafts worth making (Top pick / Craft it); the plan is the mix
+ * that earns the most expected profit within your kinah and free listing slots. Each can get up to what the market has room for within `planDays` (`marketRoom`), where n units need cost-per-attempt × the attempts for 90% odds of n
  * successes (never less than n × the average cost). The units planned plus your active listings never exceed the
  * exchange's `maxListings` (10) per character. Returns the picks, totals, listing slots, and the best craft just out of reach.
  */
@@ -568,21 +568,22 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
   if (!(budget > 0)) return null;
   const capitalFor = (r, n) => {
+    if (!n) return 0;
     const k = r.attemptCost != null && r.hitChance ? attemptsForN(r.hitChance, n, s.capitalConfidence) : null;
     const lucky = k != null ? r.attemptCost * k : null;
     return Math.max(lucky ?? 0, n * r.cost);
   };
+  const keep = 1 - (s.salesTaxPct + s.listingFeePct) / 100;
   const candidates = rows
     .filter((r) => isWorthCrafting(r.verdict) && r.cost > 0 && r.profit > 0 && r.perDay > 0)
     .sort((a, b) => (b.roc ?? 0) - (a.roc ?? 0));
-  let left = budget;
   // Listing slots: the exchange allows maxListings at once, and your active listings (all items) already use some.
+  // Gear doesn't stack, so every unit is its own listing.
   const slotsTotal = s.maxListings ?? Infinity;
-  let slotsLeft = Math.max(0, slotsTotal - (s.ownActiveCount ?? 0));
-  let slotCapped = false; // a craft got fewer (or none) because the listing slots ran out
-  const picks = [];
-  const skipped = [];
+  const free = Math.max(0, slotsTotal - (s.ownActiveCount ?? 0));
+
   const covered = []; // crafts your own active listings already fill
+  const options = []; // crafts you could make more of: { r0, r, slots (market room left), myUnits, list, each }
   for (const r0 of candidates) {
     // Your own active listings of this item (from the Profit Calculator). Those posted before the market snapshot are
     // already in its listing count; take them out so they aren't counted twice (once as yours, once as competitors).
@@ -593,30 +594,64 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
     const room = marketRoom(r, s);
     const slots = Math.max(0, room - myUnits); // what's left after your listings take their places
     if (myUnits && !slots) { covered.push({ row: r0, myUnits, room }); continue; }
-    const most = Math.min(slots, slotsLeft); // no more than the listing slots you have free
-    // The slot limit is what's holding this craft back if kinah would have covered another unit.
-    if (most < slots && capitalFor(r, most + 1) <= left) slotCapped = true;
-    if (!most) continue;
-    let n = 0;
-    while (n < most && capitalFor(r, n + 1) <= left) n++;
-    if (!n) { skipped.push({ row: r0, capital: capitalFor(r, 1), myUnits }); continue; }
-    const capital = capitalFor(r, n);
-    left -= capital;
-    slotsLeft -= n;
     const list = suggestedListPrice(r, s);
-    const keep = 1 - (s.salesTaxPct + s.listingFeePct) / 100;
     const each = list.price != null ? list.price * keep - r.cost : r.profit; // profit per unit at the suggested price
-    picks.push({ row: r0, units: n, slots, myUnits, capital, spend: n * r.cost, profit: n * each, listAt: list.price, listBasis: list.basis, listNote: list.note,
-      netEach: list.price != null ? list.price * keep : null, daysToSell: daysForUnits(r, myUnits + n, s) });
+    if (each > 0) options.push({ r0, r, slots, myUnits, list, each });
   }
+
+  // Choose how many of each to make: the most expected profit that fits both your kinah (capital set aside) and
+  // your free listing slots. Exact, over Pareto fronts of (capital, profit) per number of slots used; with at most
+  // 10 slots this stays small. So when slots are short, two cheaper listings can lose to one that earns more.
+  const cap = Math.min(free, options.reduce((t, o) => t + o.slots, 0));
+  let fronts = Array.from({ length: cap + 1 }, (_, k) => (k ? [] : [{ capital: 0, profit: 0, units: [] }]));
+  const prune = (list) => {
+    list.sort((a, b) => a.capital - b.capital || b.profit - a.profit);
+    const out = [];
+    for (const x of list) if (!out.length || x.profit > out[out.length - 1].profit + 1e-6) out.push(x);
+    return out.length > 400 ? out.filter((_, i) => i % Math.ceil(out.length / 400) === 0 || i === out.length - 1) : out;
+  };
+  options.forEach((o, idx) => {
+    const next = fronts.map((f) => [...f]);
+    for (let k = 0; k < fronts.length; k++) {
+      for (const st of fronts[k]) {
+        for (let n = 1; n <= o.slots && k + n <= cap; n++) {
+          const capital = st.capital + capitalFor(o.r, n);
+          if (capital > budget) break;
+          next[k + n].push({ capital, profit: st.profit + n * o.each, units: [...st.units, [idx, n]] });
+        }
+      }
+    }
+    fronts = next.map(prune);
+  });
+  let best = fronts[0][0];
+  for (const f of fronts) for (const x of f) if (x.profit > best.profit + 1e-6 || (Math.abs(x.profit - best.profit) <= 1e-6 && x.capital < best.capital)) best = x;
+  const chosen = new Map(best.units);
+
+  const picks = [];
+  options.forEach((o, idx) => {
+    const n = chosen.get(idx);
+    if (!n) return;
+    picks.push({ row: o.r0, units: n, slots: o.slots, myUnits: o.myUnits, capital: capitalFor(o.r, n), spend: n * o.r.cost, profit: n * o.each,
+      listAt: o.list.price, listBasis: o.list.basis, listNote: o.list.note,
+      netEach: o.list.price != null ? o.list.price * keep : null, daysToSell: daysForUnits(o.r, o.myUnits + n, s) });
+  });
+  picks.sort((a, b) => (b.row.roc ?? 0) - (a.row.roc ?? 0));
   const capital = picks.reduce((t, p) => t + p.capital, 0);
   const profit = picks.reduce((t, p) => t + p.profit, 0);
   const spend = picks.reduce((t, p) => t + p.spend, 0);
-  // The best craft that didn't fit, and what it would take.
-  const nextUp = skipped.sort((a, b) => (b.row.roc ?? 0) - (a.row.roc ?? 0))[0] || null;
-  return { budget, picks, capital, spend, profit, left: budget - capital, roi: capital ? (profit / capital) * 100 : null,
+  const left = budget - capital;
+  const planned = picks.reduce((t, p) => t + p.units, 0);
+  const slotsLeft = free - planned;
+  // What's held back: a craft that could take another unit. If one more would fit your kinah, the slots are what
+  // stopped it; otherwise kinah did, and the best of those is "next up".
+  const more = options.map((o, idx) => ({ o, n: chosen.get(idx) || 0 })).filter(({ o, n }) => n < o.slots);
+  const capped = more.some(({ o, n }) => slotsLeft <= 0 && capitalFor(o.r, n + 1) - capitalFor(o.r, n) <= left);
+  const short = more.filter(({ n }) => !n).map(({ o }) => ({ row: o.r0, capital: capitalFor(o.r, 1), myUnits: o.myUnits }))
+    .filter((x) => x.capital > left).sort((a, b) => (b.row.roc ?? 0) - (a.row.roc ?? 0));
+  const nextUp = slotsLeft > 0 ? short[0] || null : null;
+  return { budget, picks, capital, spend, profit, left, roi: capital ? (profit / capital) * 100 : null,
     nextUp: nextUp && { ...nextUp, short: nextUp.capital - left }, candidates: candidates.length, covered,
-    slots: { total: slotsTotal, yours: s.ownActiveCount ?? 0, planned: picks.reduce((t, p) => t + p.units, 0), capped: slotCapped } };
+    slots: { total: slotsTotal, yours: s.ownActiveCount ?? 0, planned, capped } };
 }
 
 // "1.5m" -> 1500000, "250k" -> 250000, "1,234,567" -> 1234567. Returns NaN if it can't be read.
