@@ -61,13 +61,10 @@ const RecipeTable = ({ rows, perAttempt }) => (
   </table>
 );
 
-// "At your Professional 25, 35 levels above this recipe (Novice 40): " — explains the success rate used.
-function levelNote(player, recipe, cap) {
-  if (player == null || recipe == null) return "";
-  const d = player - recipe;
-  const capped = d >= PROFICIENCY.fullDelta;
-  return `At your ${masteryLabel(player)}, ${d} level${d === 1 ? "" : "s"} above this recipe (${masteryLabel(recipe)})` +
-    `${capped ? `, you're at the success cap${cap != null ? ` (${asPct(cap)})` : ""}` : ""}. `;
+// "96.8% success (cap)": the success rate used, marking when your level has reached the recipe's cap.
+function successNote(rate, player, recipe) {
+  const capped = player != null && recipe != null && player - recipe >= PROFICIENCY.fullDelta;
+  return `${asPct(rate)} success${capped ? " (cap)" : ""}`;
 }
 
 const Crafted = () => <>Crafted <span className="muted">(below)</span></>;
@@ -97,7 +94,7 @@ function StepCard({ chain, index, depth = 0 }) {
     return (
       <div className="recipe-card">
         <RecipeTable rows={rows} perAttempt={perAttempt} />
-        <p className="detail-sum">This recipe needs <strong>{masteryLabel(s.mastery_level)}</strong>; you're {masteryLabel(s.player_level)}, so you can't craft it yet.</p>
+        <p className="detail-sum">Needs <strong>{masteryLabel(s.mastery_level)}</strong> (you're {masteryLabel(s.player_level)}).</p>
       </div>
     );
   }
@@ -105,14 +102,11 @@ function StepCard({ chain, index, depth = 0 }) {
     <div className="recipe-card">
       <RecipeTable rows={rows} perAttempt={perAttempt} />
       <p className="detail-sum">
-        {levelNote(s.player_level, s.mastery_level, s.cap)}A craft succeeds {asPct(s.success_rate ?? 1)} of the time and only the{" "}
-        {asPct(s.combo_probability ?? 1)} combo makes <strong>{s.result_name}</strong>, so one costs{" "}
-        {kinah(perAttempt)} ÷ ({asPct(s.success_rate ?? 1)} × {asPct(s.combo_probability ?? 1)}) = <strong>{kinah(itemCost)}</strong>
-        {" "}(about {(1 / rate).toFixed(1)} attempts each).
+        {successNote(s.success_rate ?? 1, s.player_level, s.mastery_level)} × {asPct(s.combo_probability ?? 1)} combo → <strong>{kinah(itemCost)}</strong> each (~{(1 / rate).toFixed(1)} attempts).
       </p>
       {prevStep && (
         <details className="sub" open={depth < 1 && !bought}>
-          <summary>How {prevStep.result_name} is made{bought ? " (bought here, since that's cheaper)" : ""}</summary>
+          <summary>How {prevStep.result_name} is made{bought ? " (bought: cheaper)" : ""}</summary>
           <StepCard chain={chain} index={index - 1} depth={depth + 1} />
         </details>
       )}
@@ -128,18 +122,16 @@ function TrueDragonCard({ row, chains }) {
     rows.push({ id: m.key, name: m.name, qty: m.qty, market: m.price, crafted: null, used: "market", method: "Bought", cost: m.price == null ? "—" : kinah(m.price * m.qty) });
   }
   const combo = Math.round(d.comboProbability * 100);
-  const lv = levelNote(d.playerLevel, d.recipeLevel, PROFICIENCY.trueDragonCap);
+  const sn = successNote(d.success, d.playerLevel, d.recipeLevel);
   const base = chainOf(chains, d.baseKey);
   return <>
     <div className="recipe-card">
       <RecipeTable rows={rows} perAttempt={d.attempt} />
       {d.success === 0
-        ? <p className="detail-sum">This recipe needs <strong>{masteryLabel(d.recipeLevel)}</strong>; you're {masteryLabel(d.playerLevel)}, so you can't craft it yet.</p>
+        ? <p className="detail-sum">Needs <strong>{masteryLabel(d.recipeLevel)}</strong> (you're {masteryLabel(d.playerLevel)}).</p>
         : d.isCombo
-          ? <p className="detail-sum">{lv}A craft succeeds {asPct(d.success)} of the time and only the {combo}% combo makes this item, so it costs{" "}
-              {kinah(d.attempt)} ÷ ({asPct(d.success)} × {combo}%) = <strong>{kinah(row.cost)}</strong>.</p>
-          : <p className="detail-sum">{lv}A craft succeeds {asPct(d.success)} of the time, so one costs {kinah(d.attempt)} ÷ {asPct(d.success)} ={" "}
-              <strong>{kinah(row.cost)}</strong>. {combo}% of successes make the Splendent version instead.</p>}
+          ? <p className="detail-sum">{sn} × {combo}% combo → <strong>{kinah(row.cost)}</strong> each.</p>
+          : <p className="detail-sum">{sn} → <strong>{kinah(row.cost)}</strong> each.</p>}
       {base && (
         <details className="sub" open>
           <summary>How {d.baseName} is made</summary>
@@ -162,19 +154,17 @@ function TransferCard({ row }) {
   }
   const vs = t.cost == null || row.price == null ? null
     : row.price > t.cost
-      ? <> That's <strong>{kinah(row.price - t.cost)} less</strong> than this item's sell price ({kinah(row.price)}), so a buyer who doesn't need to resell it can transfer one for less, which caps what this item can sell for.</>
-      : <> This item's sell price ({kinah(row.price)}) is already below that, so the transfer route isn't undercutting it.</>;
+      ? <> <strong>{kinah(row.price - t.cost)} under</strong> this item's sell price, which caps what it can sell for.</>
+      : null;
   return (
     <details className="sub transfer" open>
       <summary>Alternative: transfer craft (bound, can't be sold)</summary>
-      <p className="muted small">Recipe {t.recipeId} turns a True Dragon item into a Splendent True Dragon one that's bound to the character.
-        It's not a way to make one to sell, so it doesn't change this item's cost or verdict; it's shown because it's what a buyer can pay instead.
-        questlog lists the materials; the True Dragon item is the gear being transferred, and the recipe's level is assumed to match the True Dragon recipe's.</p>
+      <p className="muted small">What a buyer could pay to make their own instead.</p>
       <div className="recipe-card">
         <RecipeTable rows={rows} perAttempt={t.attempt} />
         {t.cost == null
-          ? <p className="detail-sum">Transfer cost unavailable: an input has no price on this server.</p>
-          : <p className="detail-sum">A transfer craft succeeds about {asPct(t.success)} of the time, so a bound one costs {kinah(t.attempt)} ÷ {asPct(t.success)} = <strong>{kinah(t.cost)}</strong>.{vs}</p>}
+          ? <p className="detail-sum">An input has no price on this server.</p>
+          : <p className="detail-sum">{asPct(t.success)} success → <strong>{kinah(t.cost)}</strong> each.{vs}</p>}
       </div>
     </details>
   );
@@ -194,9 +184,7 @@ export function RecipeDetail({ row, chains }) {
       : c ? <StepCard chain={c.chain} index={c.index} />
         : <p className="muted">No recipe available for this item.</p>}
     {(row.costDetail || c) && (
-      <p className="muted small">Highlighted price is the one used. Gear inputs are bought or crafted, whichever is cheaper; materials use the cheapest way to get them
-        (bought at the cheapest listing, or converted/crafted when that's cheaper). Click a "How … is made" line to open or close a sub-recipe.
-        Recipes from questlog.gg; Splendent costs from aion2.exchange's model.</p>
+      <p className="muted small">Highlighted price is the one used.</p>
     )}
   </>;
 }

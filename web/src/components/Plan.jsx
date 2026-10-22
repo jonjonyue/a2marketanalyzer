@@ -1,14 +1,14 @@
 import { planBudget } from "../lib/metrics.js";
 import { ownListings, ownActiveListings, activeListingCount } from "../lib/ledgerStore.js";
-import { kinah, pct, rate, days } from "../lib/format.js";
+import { kinah, pct, days } from "../lib/format.js";
 import { ItemIcon } from "./ItemIcon.jsx";
 
 // "What to craft with your kinah": shared by Market Analysis and the Profit Calculator.
 
 function listTitle(p) {
   const r = p.row;
-  return `${p.listNote || ""} Cheapest listing ${r.listing > 0 ? kinah(r.listing) : "none"} · ${r.listings ?? 0} listed. ` +
-    (p.units > 1 ? `This is the price for each one: list all ${p.units} at it, since going lower on later ones only undercuts your own.` : "This is the price for the one unit.");
+  return `${p.listNote || ""} Cheapest listing ${r.listing > 0 ? kinah(r.listing) : "none"} · ${r.listings ?? 0} listed.` +
+    (p.units > 1 ? ` List all ${p.units} at this price.` : "");
 }
 
 /**
@@ -24,13 +24,12 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
     snapshotAt: snapshotAt ? Math.floor(new Date(snapshotAt).getTime() / 60000) : null });
   const note = `For ${kinah(budget)} on ${serverName || "this server"}${scope ? `, ${scope}` : ""}.`;
   const icon = (key) => <ItemIcon icon={icons[key]} size="small" />;
-  const coveredUnits = plan.covered.reduce((t, c) => t + c.myUnits, 0);
   const covered = plan.covered.length > 0 && (
     <p className="muted small plan-covered">
-      Already covered by your listings:{" "}
+      Already listed enough:{" "}
       {plan.covered.map((c, i) => (
-        <span key={c.row.key}>{i ? ", " : ""}<strong>{c.row.shortName}</strong> ({c.myUnits} listed, room for {c.room})</span>
-      ))}. Wait for {coveredUnits === 1 ? "it" : "those"} to sell before making more.
+        <span key={c.row.key}>{i ? ", " : ""}<strong>{c.row.shortName}</strong> ({c.myUnits})</span>
+      ))}.
     </p>
   );
   // The exchange's limit on listings at once (per character): yours already up, plus what this plan would list.
@@ -38,21 +37,18 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
   const full = yours >= total;
   const freeAfter = total - yours - planned;
   const slotNote = full
-    ? <p className="plan-empty">All {total} of your listing slots are taken ({yours} active listings in the Profit Calculator). Wait for some to sell before crafting more.</p>
-    : capped
-      ? <p className="muted small plan-slots">Listing slots: the exchange allows {total} listings at once. {yours ? `${yours} are already yours and this plan fills the other ${planned}` : `This plan fills all ${planned}`}; more crafts are worth making, but there's no slot for them until some sell.</p>
-      : yours > 0 || planned > 0
-        ? <p className="muted small plan-slots">Listing slots: {yours + planned} of {total} used ({yours ? `${yours} already listed + ` : ""}{planned} planned).</p>
-        : null;
+    ? <p className="plan-empty">All {total} listing slots are in use. Wait for some to sell.</p>
+    : yours > 0 || planned > 0
+      ? <p className="muted small plan-slots">Listing slots: {yours + planned} of {total}{yours ? ` (${yours} listed, ${planned} planned)` : ""}{capped ? ". Full." : "."}</p>
+      : null;
   if (!plan.picks.length) {
     return { note, body: <>
       {covered}
       {full ? slotNote : plan.nextUp
-        ? <p className="plan-empty">Nothing worth crafting fits {kinah(budget)} yet. The best option, <strong>{plan.nextUp.row.shortName}</strong>, needs about <strong>{kinah(plan.nextUp.capital)}</strong> to be 90% sure of making one.</p>
-        : !plan.covered.length && <p className="plan-empty muted">No craft in view is currently worth making (Top pick or Craft it). Try other filters or a different server.</p>}
+        ? <p className="plan-empty">Nothing fits {kinah(budget)} yet. Cheapest good option: <strong>{plan.nextUp.row.shortName}</strong>, about <strong>{kinah(plan.nextUp.capital)}</strong>.</p>
+        : !plan.covered.length && <p className="plan-empty muted">Nothing worth crafting right now.</p>}
     </> };
   }
-  const share = settings.sharePct;
   const body = <>
     <div className="plan-summary">
       <div><span className="label">Expected profit</span><strong className="pos">{kinah(plan.profit, { sign: true })}</strong><span className="sub">{pct(plan.roi)} on what you set aside</span></div>
@@ -74,17 +70,17 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
               )}
               <td className="name"><span className="item-cell">{icon(p.row.key)}<span>{p.row.shortName}</span></span></td>
               <td><span className={`pill ${p.row.verdict.tone}`}>{p.row.verdict.label}</span></td>
-              <td title={`Room for about ${p.slots} from you in the next ${settings.planDays ?? 1.5} days of sales: your first sells once the ${p.row.listings} current listings clear (${rate(p.row.perDay)}/day); each extra one only gets your ${share}% share of the sales left after that, since other sellers keep relisting and your own listings compete with each other`}>
+              <td title={`Room for ${p.slots} in the next ${settings.planDays ?? 1.5} days of sales`}>
                 {p.units}
                 {p.units < p.slots && <> <span className="dim">of {p.slots}</span></>}
                 {p.myUnits > 0 && <> <span className="dim" title={`You already have ${p.myUnits} listed (Profit Calculator); they take ${p.myUnits === 1 ? "a place" : "places"} in the market's room`}>+{p.myUnits} listed</span></>}
               </td>
-              <td title={`Kinah to set aside for 90% odds of making ${p.units} (combo luck included)`}>{kinah(p.capital)}</td>
+              <td title={`For 90% odds of making ${p.units}`}>{kinah(p.capital)}</td>
               <td title={`Average spend for ${p.units}${p.units > 1 ? ` (${kinah(p.spend / p.units)} each)` : ""}`}>{kinah(p.spend)}</td>
               <td title={listTitle(p)}><strong>{kinah(p.listAt)}</strong>{p.units > 1 && <span className="dim"> ×{p.units}</span>}</td>
               <td className={p.profit > 0 ? "pos" : "neg"} title={`At ${kinah(p.listAt)} each you keep ${kinah(p.netEach)} after tax and fee${p.units > 1 ? `; ${kinah(p.profit / p.units, { sign: true })} profit each, ${p.units} units` : ""}`}>{kinah(p.profit, { sign: true })}</td>
               <td>{pct(p.row.roc)}</td>
-              <td title={`When your last one should sell: the current listings and your first at the market's pace, then your ${share}% share of sales for each extra`}>{days(p.daysToSell)} d</td>
+              <td title="When your last one should sell">{days(p.daysToSell)} d</td>
             </tr>
           ))}
         </tbody>
@@ -93,11 +89,8 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
     {covered}
     {slotNote}
     {freeAfter > 0 && plan.nextUp
-      ? <p className="muted small">Next up: <strong>{plan.nextUp.row.shortName}</strong> ({pct(plan.nextUp.row.roc)} return) needs {kinah(plan.nextUp.capital)} set aside, {kinah(plan.nextUp.short)} more than you have left.</p>
-      : freeAfter > 0 && plan.left > 0 && plan.picks.length === plan.candidates
-        ? <p className="muted small">That covers every craft worth making right now at the amount the market can take; the remaining {kinah(plan.left)} has nowhere better to go until listings sell or prices change.</p>
-        : null}
-    <p className="muted small">The mix of crafts with the most expected profit that fits your kinah and your free listing slots (each piece of gear is its own listing), shown best return on capital first. "Set aside" covers bad luck on combo crafts (90% odds of making them all); on average you spend less and keep the rest. Each craft is capped at what the market can take in the next 1.5 days, so you stay flexible as prices move: one beyond the current listings, plus extras only where your share of the remaining sales leaves room, since other sellers keep relisting and extra copies compete with your own. Everything planned fits in your free listing slots (the exchange allows {total} at once).</p>
+      ? <p className="muted small">Next up: <strong>{plan.nextUp.row.shortName}</strong> needs {kinah(plan.nextUp.short)} more.</p>
+      : null}
   </>;
   return { note, body };
 }

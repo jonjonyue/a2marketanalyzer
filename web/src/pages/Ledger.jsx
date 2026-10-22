@@ -467,8 +467,8 @@ export default function Ledger() {
   }
   const plan = planRows && planView({
     rows: planRows, budget: have > 0 ? have : null, settings, serverName: srv?.name, snapshotAt: market.captured_at, icons: market.icons, entries, onList: listFromPlan,
-    scope: `with your Market Analysis settings${filters ? ` (${filters})` : ""}`,
-    emptyHint: "Enter your kinah below (next to the tax and fee settings) to see what to craft with it.",
+    scope: filters,
+    emptyHint: "Enter your kinah below to see what to craft.",
   });
 
   // ---------- derived views ----------
@@ -484,7 +484,7 @@ export default function Ledger() {
         <span className="wip-icon" aria-hidden="true">!</span>
         <div>
           <strong>Work in progress</strong>
-          <p>This page is still being built. Features may change, so export a backup of anything you log here.</p>
+          <p>Features may change; export a backup of anything you log.</p>
         </div>
       </div>
     </div>
@@ -494,9 +494,9 @@ export default function Ledger() {
         <div>
           <p className="eyebrow">Aion 2 · Transaction tracker · <span id="serverName" title="Item prices are from this server; change it on the Market Analysis page">{srv ? serverLabel(srv) : "Siel · Elyos · North America West"}</span></p>
           <h1>Profit calculator</h1>
-          <p className="lede">Log what you buy and sell at the price you listed or paid. Sales tax and the listing fee are taken off sales for you, so the totals are the kinah you actually made or lost.</p>
+          <p className="lede">Log what you buy, list and sell. Tax and fees are worked out for you.</p>
         </div>
-        <div className="freshness" title="Entries are saved in this browser only. Use Export below to back them up or move them to another device."><span className="dot"></span>Saved in this browser</div>
+        <div className="freshness" title="Entries are saved in this browser only."><span className="dot"></span>Saved in this browser</div>
       </div>
     </header>
 
@@ -573,7 +573,7 @@ export default function Ledger() {
               }} />
           </label>
         ))}
-        <p className="muted fee-note">Tax and fee apply to new entries; each entry keeps the rates it was logged with.</p>
+        <p className="muted fee-note">Applies to new entries.</p>
       </section>
 
       <section className="kpis" id="kpis" aria-label="Totals">
@@ -590,7 +590,7 @@ export default function Ledger() {
       <section className="panel table-panel">
         <div className="table-head">
           <h2>By item</h2>
-          <p className="muted">Profit = kinah received from sales − kinah spent buying − listing fees. "Listed" is what is on the market now; "On hand" is bought − sold − listed.</p>
+          <p className="muted">On hand = bought − sold − listed.</p>
         </div>
         <div className="table-scroll"><ByItem inView={inView} entries={entries} /></div>
       </section>
@@ -598,7 +598,7 @@ export default function Ledger() {
       <section className="panel table-panel">
         <div className="table-head">
           <h2>Transactions</h2>
-          <p className="muted" id="txNote">{inView.length ? `${inView.length} of ${entries.length} entries. Hover an amount for the exact figure.` : ""}</p>
+          <p className="muted" id="txNote">{inView.length ? `${inView.length} of ${entries.length} entries` : ""}</p>
         </div>
         <div className="table-scroll">
           <Transactions inView={inView} entries={entries} sort={sort} setSort={setSort} editing={editing} onEdit={startEdit} onDelete={remove} />
@@ -608,7 +608,7 @@ export default function Ledger() {
       <section className="panel backup">
         <div>
           <h2>Back up or move your log</h2>
-          <p className="muted">Your entries live only in this browser. Export a file to keep a backup or to load them on another device; importing adds entries you don't already have.</p>
+          <p className="muted">Entries are saved in this browser only.</p>
         </div>
         <div className="backup-actions">
           <button type="button" className="ext-button" id="exportJson" onClick={exportJson}>Export backup (.json)</button>
@@ -670,9 +670,9 @@ function KinahField({ have, lastDelta }) {
       <input id="kinah" ref={ref} type="text" inputMode="decimal" placeholder="e.g. 250m" autoComplete="off" value={text} aria-invalid={invalid || undefined}
         onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") commit(); }} />
       <p className="muted kinah-note" id="kinahNote">
-        {have == null ? "Set it to have every entry here update the Market Analysis plan."
-          : lastDelta ? <>Last change: <strong className={signClass(lastDelta)}>{kinah(lastDelta, { sign: true })}</strong>. Used by the Market Analysis plan.</>
-            : "Moves with every entry here; used by the Market Analysis plan."}
+        {have == null ? "Updates with every entry once set."
+          : lastDelta ? <>Last change: <strong className={signClass(lastDelta)}>{kinah(lastDelta, { sign: true })}</strong></>
+            : "Updates with every entry."}
       </p>
     </div>
   );
@@ -714,7 +714,7 @@ function Listings({ active, entries, now, onSold, onExpire, onRelist }) {
     <section className="panel table-panel" id="listingsPanel">
       <div className="table-head">
         <h2>Active listings</h2>
-        <p className="muted" id="listingsNote">{units.toLocaleString()} unit{units === 1 ? "" : "s"} on the market, worth {kinah(value)} after tax if they all sell · {Math.min(units, DEFAULT_SETTINGS.maxListings)} of {DEFAULT_SETTINGS.maxListings} listing slots used.</p>
+        <p className="muted" id="listingsNote">{units.toLocaleString()} of {DEFAULT_SETTINGS.maxListings} slots used · worth {kinah(value)} after tax</p>
       </div>
       <div className="table-scroll">
         <table className="ledger-table listings-table" id="listings">

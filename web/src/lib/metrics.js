@@ -583,7 +583,7 @@ export function suggestedListPrice(r, settings = DEFAULT_SETTINGS) {
   const own = settings.ownListings?.get(r.key) || settings.ownListings?.get(String(r.name || "").toLowerCase()) || [];
   const a = suggestListing(r, { breakEven: r.cost > 0 && keep > 0 ? r.cost / keep : 0, ownListings: own, keep,
     feePct: settings.listingFeePct ?? DEFAULT_SETTINGS.listingFeePct, pool: r.undercutPool });
-  return a.price != null ? a : { ...a, price: r.price ?? null, basis: "price", note: "No listings or recent sales to price from; using the dashboard's sell price." };
+  return a.price != null ? a : { ...a, price: r.price ?? null, basis: "price", note: "No market data; using the sell price." };
 }
 
 export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
@@ -785,23 +785,15 @@ export function suggestListing(r, opts = LISTING_ADVICE) {
   let pick = scored[0];
   for (const c of scored.slice(1)) if (c.value > pick.value * 1.01) pick = c;
   const pc = (x) => `${Math.round(x * 100)}%`;
-  const at = (c) => `${pc(c.p)} (${c.n ? `${c.sold} of ${c.n} for this item, ` : ""}weighed with the server's pattern)`;
-  const own = all.length - theirs.length;
-  const intro = `Undercutters are active (${theirs.length} undercuts in a week${own ? `, not counting ${own} of your own listing${own > 1 ? "s" : ""}` : ""}). ` +
-    `When a listing is undercut, the cheapest falls ~${pc(scored[0].fall)} within a day, so a small cut mostly invites another.`;
   const here = scored[0];
-  const lower = scored.filter((c) => c !== here);
-  const best = lower.sort((a, b) => b.p - a.p)[0];
   if (pick === here) {
     return { ...base, basis: base.basis + "-held", undercut: { here, options: scored },
-      note: `${base.note} ${intro} A listing at this price sold before being undercut ~${at(here)}` +
-        (best ? `; going lower only gets that to ~${pc(best.p)} at ${fmtK(best.price)}, not worth the kinah or the lower market.` : ".") };
+      note: `${base.note} Undercutters active: ~${pc(here.p)} sell before being cut, and going lower barely helps.` };
   }
   const why = pick.kind === "usual"
-    ? `Listings above the usual sale price (~${fmtK(typical)}) sold before being undercut only ~${at(here)}, vs ~${at(pick)} at it, so list at the usual price instead of just under the cheapest.`
-    : `Priced as a deal (~${pc(1 - pick.price / typical)} under the usual ~${fmtK(typical)}), listings here sold before being undercut ~${at(pick)} vs ~${at(here)} at ${fmtK(here.price)}, enough to be worth the lower price.`;
-  return { ...base, price: pick.price, basis: pick.kind, undercut: { here, pick, options: scored }, givenUp: base.price - pick.price,
-    note: `${intro} ${why} That gives up ${fmtK(base.price - pick.price)} vs ${fmtK(base.price)}.` };
+    ? `Undercutters active: above the usual ~${fmtK(typical)} only ~${pc(here.p)} sell before being cut, vs ~${pc(pick.p)} at it.`
+    : `Undercutters active: a deal price sells first ~${pc(pick.p)} of the time, vs ~${pc(here.p)} at ${fmtK(here.price)}.`;
+  return { ...base, price: pick.price, basis: pick.kind, undercut: { here, pick, options: scored }, givenUp: base.price - pick.price, note: why };
 }
 
 function baseListing(r, o) {
@@ -817,10 +809,10 @@ function baseListing(r, o) {
   if (listings > o.thinListings && cheapest) {
     if (typical && cheapest > typical * 1.1) {
       return { price: undercutPrice(typical), basis: "crowded-high", typical, thinMedian, premium, thinSales: thinUnits,
-        note: `${listings} listed, but the cheapest (${fmtK(cheapest)}) is well above what's been selling (~${fmtK(typical)}), so list near recent sales.` };
+        note: `Cheapest (${fmtK(cheapest)}) is above recent sales (~${fmtK(typical)}).` };
     }
     return { price: undercutPrice(cheapest), basis: "crowded", typical, thinMedian, premium, thinSales: thinUnits,
-      note: `${listings} listed: undercut the cheapest (${fmtK(cheapest)}) slightly to sell first.` };
+      note: `Just under the cheapest (${fmtK(cheapest)}).` };
   }
   if (thinMedian) {
     const cap = typical ? typical * o.maxPremium : Infinity;
@@ -832,24 +824,23 @@ function baseListing(r, o) {
     const chase = cheapest && undercutPrice(cheapest) > targetPrice;
     const price = chase ? Math.max(targetPrice, Math.min(undercutPrice(cheapest), undercutPrice(ceiling + 1))) : targetPrice;
     const capped = chase && price < undercutPrice(cheapest);
-    const behind = cheapest && cheapest < price ? ` The ${fmtK(cheapest)} listing will likely sell before yours.`
-      : capped ? ` The cheapest listing (${fmtK(cheapest)}) is above that; in thin markets, listings that far over the usual price mostly get undercut before they sell, so don't follow it up.` : "";
+    const behind = cheapest && cheapest < price ? ` The ${fmtK(cheapest)} listing sells first.`
+      : capped ? ` Not following the ${fmtK(cheapest)} listing up.` : "";
     return { price, basis: "thin", typical, thinMedian, premium, thinSales: thinUnits,
-      note: `${listings ? `Only ${listings} listed` : "Nothing listed"}. When it was this thin over the past week, ${thinUnits} sold at a median ${fmtK(thinMedian)}` +
-        `${premium != null ? ` (${premium >= 0 ? "+" : ""}${Math.round(premium * 100)}% vs the usual ~${fmtK(typical)})` : ""}${thinMedian > cap ? `; capped at 1.5× the usual price` : ""}.${behind}` };
+      note: `Thin market: sold for ~${fmtK(thinMedian)} when this thin${premium != null ? ` (usual ~${fmtK(typical)})` : ""}.${behind}` };
   }
   if (cheapest) {
     // No thin-market record: just under the cheapest, but not above the usual sale price.
     if (typical && undercutPrice(cheapest) > undercutPrice(typical + 1)) {
       return { price: undercutPrice(typical + 1), basis: "thin-no-history", typical, thinMedian, premium, thinSales: thinUnits,
-        note: `Only ${listings} listed, but too few sales in a thin market last week to judge a premium. The cheapest (${fmtK(cheapest)}) is above the usual ~${fmtK(typical)}, and listings that far over mostly get undercut before they sell, so list at the usual price.` };
+        note: `Cheapest (${fmtK(cheapest)}) is above the usual ~${fmtK(typical)}.` };
     }
     return { price: undercutPrice(cheapest), basis: "thin-no-history", typical, thinMedian, premium, thinSales: thinUnits,
-      note: `Only ${listings} listed, but too few sales in a thin market last week to judge a premium; undercut the cheapest (${fmtK(cheapest)}).` };
+      note: `Just under the cheapest (${fmtK(cheapest)}).` };
   }
   if (typical) {
     return { price: undercutPrice(typical + 1), basis: "empty", typical, thinMedian, premium, thinSales: thinUnits,
-      note: `Nothing listed; recent sales went for ~${fmtK(typical)}.` };
+      note: `Nothing listed; recent sales ~${fmtK(typical)}.` };
   }
   return { price: null, basis: "none", note: "No listings or recent sales to price from." };
 }

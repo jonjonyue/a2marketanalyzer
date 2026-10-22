@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { analyzeMarket, DEFAULT_SETTINGS, ESTIMATOR, VERDICT_ORDER, byRank, isWorthCrafting, SKILLS as CRAFT_SKILLS, masteryLabel, shortenName, parseKinah } from "../lib/metrics.js";
+import { analyzeMarket, DEFAULT_SETTINGS, VERDICT_ORDER, byRank, isWorthCrafting, SKILLS as CRAFT_SKILLS, shortenName, parseKinah } from "../lib/metrics.js";
 import { kinah, pct, rate, days, ago, asPct, cx } from "../lib/format.js";
 import { KEYS, readJson, readRaw, writeRaw, useKinah, useStoredRaw } from "../lib/storage.js";
 import { entriesOf, listOne, unlistOne, listingFee } from "../lib/ledgerStore.js";
@@ -207,35 +207,21 @@ function Kpis({ rows, sharePct }) {
 // ---------- table ----------
 function costTitle(r) {
   const d = r.costDetail;
-  if (!d) return r.cost == null ? "No crafting cost known" : `Expected cost per item at your ${masteryLabel(r.playerLevel)} (success ${r.success != null ? asPct(r.success) : "—"}), cheapest path; expand the row for the recipe`;
-  const base = `${d.baseName} ${kinah(d.base)} (${d.baseMethod === "craft" ? "crafted" : "bought"}; craft ${kinah(d.baseCraft)}, listing ${kinah(d.baseListing)})`;
-  const mats = d.materials.map((m) => `${m.qty}× ${m.name} @ ${kinah(m.price)}`).join(", ");
-  const per = `= ${kinah(d.attempt)} per craft attempt`;
-  // Plain True Dragon divides by the success rate; the Splendent version by success × the combo chance.
-  const pctOf = (x) => `${(x * 100).toFixed(x * 100 % 1 ? 1 : 0)}%`;
-  const combo = d.factor === 1 ? ""
-    : d.isCombo
-      ? `; ÷ (${pctOf(d.success)} success × ${Math.round(d.comboProbability * 100)}% combo) = ${kinah(r.cost)}`
-      : `; ÷ ${pctOf(d.success)} success = ${kinah(r.cost)}`;
-  return `${base} + materials ${kinah(d.matsCost)} (${mats}) ${per}${combo}`;
+  if (!d) return r.cost == null ? "No crafting cost known" : `Average cost at your proficiency (${r.success != null ? asPct(r.success) : "—"} success)`;
+  return `${kinah(d.attempt)} per attempt (${d.baseName} ${kinah(d.base)} + materials ${kinah(d.matsCost)})`;
 }
 function capitalTitle(r) {
   if (r.capital == null) return "Needs a crafting cost";
   const n = r.attempts90;
-  if (n == null || n <= 1 || r.hitChance == null || r.hitChance >= 1)
-    return `Every attempt makes one, so the capital needed is one attempt: ${kinah(r.capital)}. Return on capital = profit ÷ that.`;
-  return `Each attempt makes this only ${(r.hitChance * 100).toFixed(1)}% of the time (success × combo), so on average it takes ` +
-    `${(1 / r.hitChance).toFixed(1)} attempts (${kinah(r.cost)}), but you need ${n} attempts' worth (${kinah(r.capital)}) ` +
-    `for a 90% chance of making one. Return on capital = profit ÷ that.`;
+  if (n == null || n <= 1 || r.hitChance == null || r.hitChance >= 1) return "One attempt";
+  return `${n} attempts for 90% odds of making one`;
 }
 function salesTitle(r) {
-  if (r.salesSource === "official") return `${r.sold28} sold in 28 days (official game statistics)`;
+  if (r.salesSource === "official") return `${r.sold28} sold in 28 days`;
   const e = r.est;
   if (!e) return "No listing history";
-  if (e.perDay == null) return `Only ${e.days.toFixed(1)} days of listing history; need ${ESTIMATOR.minDays}+`;
-  return `Estimated from listing history: ${e.sales} sales seen over ${e.days.toFixed(1)} days ` +
-    `(${rate(e.observedPerDay)}/day), × ${ESTIMATOR.captureAdjust} for sales between hourly snapshots. ` +
-    `At least ${rate(e.lowerPerDay)}/day where the cheapest listing clearly sold.`;
+  if (e.perDay == null) return "Not enough history yet";
+  return `Estimated: ${e.sales} sales seen in ${e.days.toFixed(1)} days`;
 }
 const overTransfer = (r) => r.transfer?.cost != null && r.price != null && r.price > r.transfer.cost;
 
@@ -259,21 +245,21 @@ const COLUMNS = [
   { key: "cost", label: "Cost", fmt: (r) => (r.costDetail && r.cost != null ? "≈" : "") + kinah(r.cost), title: costTitle },
   { key: "price", label: "Sell price",
     fmt: (r) => <>{kinah(r.price)}{overTransfer(r) && <span className="over-transfer" aria-label="above the transfer-craft cost">▲</span>}</>,
-    title: (r) => `Cheapest listing ${kinah(r.listing)} · avg sale ${kinah(r.soldAvg)}${r.priceSource === "estimate" ? " (estimated from listings that sold)" : r.priceSource === "official" ? " (28-day official)" : ""}` +
-      (r.transfer?.cost != null ? `. Transfer craft makes a bound one for ${kinah(r.transfer.cost)}${overTransfer(r) ? ": buyers can make their own for less than this price" : ""}` : "") },
+    title: (r) => `Cheapest listing ${kinah(r.listing)} · avg sale ${kinah(r.soldAvg)}` +
+      (overTransfer(r) ? ` · ▲ buyers can transfer-craft one for ${kinah(r.transfer.cost)}` : "") },
   { key: "profit", label: "Profit / craft", fmt: (r) => kinah(r.profit, { sign: true }), tone: (r) => (r.profit == null ? "dim" : r.profit > 0 ? "pos" : "neg") },
-  { key: "marginPct", label: "Margin", fmt: (r) => pct(r.marginPct), title: () => "Profit ÷ average cost per item", tone: (r) => (r.marginPct == null ? "dim" : r.marginPct > 0 ? "pos" : "neg") },
+  { key: "marginPct", label: "Margin", fmt: (r) => pct(r.marginPct), tone: (r) => (r.marginPct == null ? "dim" : r.marginPct > 0 ? "pos" : "neg") },
   { key: "capital", label: "Capital needed", fmt: (r) => kinah(r.capital),
-    title: (r, { budget }) => capitalTitle(r) + (budget > 0 && r.capital > budget ? `. More than your ${kinah(budget)}` : ""),
+    title: (r, { budget }) => capitalTitle(r) + (budget > 0 && r.capital > budget ? ` · more than your ${kinah(budget)}` : ""),
     tone: (r, { budget }) => (budget > 0 && r.capital != null && r.capital > budget ? "over-budget" : "") },
-  { key: "roc", label: "Return on capital", fmt: (r) => pct(r.roc), title: capitalTitle, tone: (r) => (r.roc == null ? "dim" : r.roc > 0 ? "pos" : "neg") },
+  { key: "roc", label: "Return on capital", fmt: (r) => pct(r.roc), title: () => "Profit ÷ capital needed", tone: (r) => (r.roc == null ? "dim" : r.roc > 0 ? "pos" : "neg") },
   { key: "perDay", label: "Sold / day", fmt: (r) => (r.salesSource === "estimate" ? "~" : "") + rate(r.perDay), title: salesTitle },
   { key: "listings", label: "Listings", fmt: (r) => r.listings },
   { key: "supplyDays", label: "Days supply", fmt: (r) => days(r.supplyDays),
-    title: (r) => (r.daysToSell == null ? "No sales estimate" : `Current listings ÷ sold per day. A listing you post now would take about ${days(r.daysToSell)} days to sell (listings + 1 ÷ sold/day); listings expire after 3.`) },
+    title: () => "Listings ÷ sold per day" },
   { key: "dailyPool", label: "Daily pool", fmt: (r) => kinah(r.dailyPool, { sign: true }), tone: (r) => (r.dailyPool == null ? "dim" : r.dailyPool < 0 ? "neg" : "") },
   { key: "turnover", label: "Turnover / day", fmt: (r) => kinah(r.turnover), tone: (r) => (r.turnover == null ? "dim" : ""),
-    title: () => "Sell price after fees × sold per day: the size of the market, before crafting cost" },
+    title: () => "Sell price after fees × sold per day" },
   { key: "yourDaily", label: "Your daily", fmt: (r) => kinah(r.yourDaily, { sign: true }), tone: (r) => (r.yourDaily == null ? "dim" : r.yourDaily < 0 ? "neg" : "") },
 ];
 
@@ -388,8 +374,7 @@ export default function Market() {
   const icons = market?.icons || {};
   const plan = market && planView({
     rows, budget, settings, icons, snapshotAt: market.captured_at, serverName: srv?.name, entries: entriesOf(ledgerRaw), onList: listFromPlan,
-    scope: "using the filters above and your proficiency",
-    emptyHint: "Enter how much kinah you have above to see what to craft with it.",
+    emptyHint: "Enter your kinah above to see what to craft.",
   });
 
   const banner = snapError ? "Couldn't load market data. The snapshot hasn't been built yet, or the site is unreachable."
@@ -398,7 +383,6 @@ export default function Market() {
   const stale = gen && Date.now() - new Date(gen).getTime() > 3 * 3600e3;
   const regions = [...new Set(servers.map((x) => x.region_name || x.region))];
   const turnoverMode = noCostsInView(rows);
-  const basis = { conservative: "lower of cheapest listing and average sale price", listing: "cheapest current listing", sold: "average sale price" }[ui.priceBasis];
   const model = snapshot?.model;
 
   return <>
@@ -505,15 +489,15 @@ export default function Market() {
           <figcaption>
             <h2 id="barTitle">{turnoverMode ? "Turnover per day, whole market" : "Expected daily profit, whole market"}</h2>
             <p id="barNote">{turnoverMode
-              ? "Sell price after fees × units sold per day. Crafting cost isn't known for these tiers yet, so this is market size, not profit."
-              : "Profit per craft × units sold per day. This is the pool every crafter on the server is competing for."}</p>
+              ? "Sell price after fees × sold per day."
+              : "Profit per craft × sold per day."}</p>
           </figcaption>
           <div className="chart" id="barChart">{market && <BarChart rows={rows} tipFor={tipFor} />}</div>
         </figure>
         <figure className="panel">
           <figcaption>
             <h2>Margin vs. how fast it sells</h2>
-            <p>Top right is where you want to be. The dashed line marks break-even; solid dots are Top pick or Craft it; crafts with no sales in the last 7 days are left out.</p>
+            <p>Top right is best. Solid dots are worth crafting.</p>
           </figcaption>
           <div className="chart" id="scatter">{market && <Scatter rows={rows} tipFor={tipFor} />}</div>
         </figure>
@@ -522,7 +506,7 @@ export default function Market() {
       <section className="panel table-panel">
         <div className="table-head">
           <h2>All crafts</h2>
-          <p className="muted" id="tableNote">{market && `${rows.length} crafts · ~ = estimated from listing history · sell price = ${basis}${ui.salesTaxPct + ui.listingFeePct ? `, minus ${ui.salesTaxPct}% tax and ${ui.listingFeePct}% listing fee` : ""}`}</p>
+          <p className="muted" id="tableNote">{market && `${rows.length} crafts · click a row for its recipe`}</p>
         </div>
         <div className="table-scroll">
           {market ? <CraftTable rows={rows} ui={ui} setUi={setUi} budget={budget} icons={icons} chains={all?.chains || market.chains} />

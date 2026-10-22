@@ -1,8 +1,17 @@
+import { Method } from "../components/Method.jsx";
+
 // The "How this is calculated" notes for Market Analysis.
 export function MarketMethod({ modelNote }) {
   return (
-    <section className="panel method">
-      <h2>How this is calculated</h2>
+    <Method summary={<>
+      <ul>
+        <li><strong>Profit</strong> = sell price after the 10% tax and 2% listing fee − crafting cost. Costs use the cheapest way to get each input (buy, convert or craft) at your proficiency.</li>
+        <li><strong>Sold / day</strong> is estimated from hourly listing snapshots; NA has no official sales data.</li>
+        <li><strong>Capital needed</strong> covers 90% odds of making one (combo luck included); <strong>return on capital</strong> = profit ÷ that.</li>
+        <li><strong>Top pick</strong> and <strong>Craft it</strong> are profitable and selling; <strong>Low return</strong>, <strong>Slow seller</strong>, <strong>Oversupplied</strong> and <strong>Loss</strong> aren't worth it.</li>
+        <li><strong>What to craft</strong> is the most profitable mix for your kinah and 10 listing slots, sized to about 1.5 days of sales. <strong>List at</strong> avoids prices that usually get undercut.</li>
+      </ul>
+    </>}>
       <ul>
         <li><strong>Cost per craft</strong> comes from aion2.exchange's crafting model: expected value over many crafts at mastery 100, with each material priced at the cheapest of buying it, converting Odyle, or crafting it from cheaper inputs. The gear each step consumes (the Splendent item for Expert's Splendent, the Expert's Splendent for Artisan's Splendent) is likewise bought at its cheapest listing or crafted, whichever is cheaper, recalculated at your proficiency. "Buy everything" uses the site's all-market cost instead.</li>
         <li><strong>Sell price</strong>: "Conservative" takes the lower of the cheapest current listing and the average sale price, so a single overpriced listing can't inflate the margin. The average sale price is the price of each listing just before it sold, over the last 7 days.</li>
@@ -17,6 +26,6 @@ export function MarketMethod({ modelNote }) {
         <li>Verdicts, checked in this order: <em>Loss</em> (profit ≤ 0) · <em>Oversupplied</em> (more than 5 days of supply, i.e. listings ÷ sold per day; listings only last 3 days) · <em>Slow seller</em> (a listing you post now would wait more than 3 days to sell: (listings + 1) ÷ sold per day, so it would likely expire first) · <em>Low return</em> (under 15% return on capital: profitable, but a run of bad luck on the combo wipes it out) · <em>Top pick</em> (at least 50% return on capital, 1+ sold/day and at most 3 days of supply) · <em>Craft it</em> (everything else that's profitable and selling). <em>Needs …</em>, <em>Cost TBD</em>, <em>No sales data</em> and <em>No price</em> mean the item can't be judged yet.</li>
       </ul>
       <p className="muted" id="modelNote">{modelNote}</p>
-    </section>
+    </Method>
   );
 }

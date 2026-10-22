@@ -1,8 +1,14 @@
+import { Method } from "../components/Method.jsx";
+
 // The "How this is calculated" notes for the Profit Calculator.
 export function LedgerMethod() {
   return (
-    <section className="panel method">
-      <h2>How this is calculated</h2>
+    <Method summary={<>
+      <ul>
+        <li>Sales lose the 10% tax and 2% listing fee (a listing pays the fee once, when posted); purchases cost the full price.</li>
+        <li>Your kinah moves with every entry. Entries stay in this browser, so export a backup.</li>
+      </ul>
+    </>}>
       <ul>
         <li><strong>Sold</strong>: you receive price × quantity, minus the sales tax (default 10%) and the listing fee (default 2%). Enter the price you listed it at; the deductions are worked out per entry and rounded to the nearest kinah.</li>
         <li><strong>Bought</strong>: you pay price × quantity. The buyer pays no tax on the exchange.</li>
@@ -12,6 +18,6 @@ export function LedgerMethod() {
         <li><strong>Your kinah</strong> is the same amount as on the Market Analysis page, where it sizes the "what to craft" plan. Once it's set, every entry moves it: a purchase takes the price paid, a listing takes its fee, a sale adds what you receive after tax, and editing, deleting or undoing an entry reverses its effect. Importing a backup doesn't change it, since that history is already in your balance. You can correct it by typing a new amount at any time.</li>
         <li>Prices accept shorthand: <code>250k</code>, <code>1.5m</code>, <code>2b</code>, or plain numbers with commas.</li>
       </ul>
-    </section>
+    </Method>
   );
 }
