@@ -10,6 +10,7 @@ export const DEFAULT_SETTINGS = {
   sharePct: 25,               // share of daily sales you expect to capture
   listingDays: 3,             // listings expire after 3 days
   planDays: 1.5,              // the kinah plan only makes what the market can take within this many days
+  maxListings: 10,            // the exchange lets one character have this many listings up at once
   maxSupplyDays: 5,           // more days of supply than this (listings ÷ sold/day) is "Oversupplied"
                               // "Slow seller": a new listing would wait (listings + 1) ÷ sold/day > listingDays to sell
   minRoc: 15,                 // return on capital (%) below this is "Low return"
@@ -521,7 +522,8 @@ export function shortenMarketNames(market) {
 /**
  * Where to put a kinah budget. Candidates are crafts worth making (Top pick / Craft it), best return on capital
  * first. Each gets as many units as the market has room for within `planDays` (`marketRoom`) and the budget allows, where n units need cost-per-attempt × the attempts for 90% odds of n
- * successes (never less than n × the average cost). Returns the picks, totals, and the best craft just out of reach.
+ * successes (never less than n × the average cost). The units planned plus your active listings never exceed the
+ * exchange's `maxListings` (10) per character. Returns the picks, totals, listing slots, and the best craft just out of reach.
  */
 /**
  * How many of one item to make without flooding it or competing with yourself, looking `planDays` (1.5) ahead
@@ -574,6 +576,10 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
     .filter((r) => isWorthCrafting(r.verdict) && r.cost > 0 && r.profit > 0 && r.perDay > 0)
     .sort((a, b) => (b.roc ?? 0) - (a.roc ?? 0));
   let left = budget;
+  // Listing slots: the exchange allows maxListings at once, and your active listings (all items) already use some.
+  const slotsTotal = s.maxListings ?? Infinity;
+  let slotsLeft = Math.max(0, slotsTotal - (s.ownActiveCount ?? 0));
+  let slotCapped = false; // a craft got fewer (or none) because the listing slots ran out
   const picks = [];
   const skipped = [];
   const covered = []; // crafts your own active listings already fill
@@ -587,11 +593,16 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
     const room = marketRoom(r, s);
     const slots = Math.max(0, room - myUnits); // what's left after your listings take their places
     if (myUnits && !slots) { covered.push({ row: r0, myUnits, room }); continue; }
+    const most = Math.min(slots, slotsLeft); // no more than the listing slots you have free
+    // The slot limit is what's holding this craft back if kinah would have covered another unit.
+    if (most < slots && capitalFor(r, most + 1) <= left) slotCapped = true;
+    if (!most) continue;
     let n = 0;
-    while (n < slots && capitalFor(r, n + 1) <= left) n++;
+    while (n < most && capitalFor(r, n + 1) <= left) n++;
     if (!n) { skipped.push({ row: r0, capital: capitalFor(r, 1), myUnits }); continue; }
     const capital = capitalFor(r, n);
     left -= capital;
+    slotsLeft -= n;
     const list = suggestedListPrice(r, s);
     const keep = 1 - (s.salesTaxPct + s.listingFeePct) / 100;
     const each = list.price != null ? list.price * keep - r.cost : r.profit; // profit per unit at the suggested price
@@ -604,7 +615,8 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
   // The best craft that didn't fit, and what it would take.
   const nextUp = skipped.sort((a, b) => (b.row.roc ?? 0) - (a.row.roc ?? 0))[0] || null;
   return { budget, picks, capital, spend, profit, left: budget - capital, roi: capital ? (profit / capital) * 100 : null,
-    nextUp: nextUp && { ...nextUp, short: nextUp.capital - left }, candidates: candidates.length, covered };
+    nextUp: nextUp && { ...nextUp, short: nextUp.capital - left }, candidates: candidates.length, covered,
+    slots: { total: slotsTotal, yours: s.ownActiveCount ?? 0, planned: picks.reduce((t, p) => t + p.units, 0), capped: slotCapped } };
 }
 
 // "1.5m" -> 1500000, "250k" -> 250000, "1,234,567" -> 1234567. Returns NaN if it can't be read.

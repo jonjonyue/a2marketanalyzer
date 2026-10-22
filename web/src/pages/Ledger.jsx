@@ -714,7 +714,7 @@ function Listings({ active, entries, now, onSold, onExpire, onRelist }) {
     <section className="panel table-panel" id="listingsPanel">
       <div className="table-head">
         <h2>Active listings</h2>
-        <p className="muted" id="listingsNote">{units.toLocaleString()} unit{units === 1 ? "" : "s"} on the market, worth {kinah(value)} after tax if they all sell.</p>
+        <p className="muted" id="listingsNote">{units.toLocaleString()} unit{units === 1 ? "" : "s"} on the market, worth {kinah(value)} after tax if they all sell · {Math.min(units, DEFAULT_SETTINGS.maxListings)} of {DEFAULT_SETTINGS.maxListings} listing slots used.</p>
       </div>
       <div className="table-scroll">
         <table className="ledger-table listings-table" id="listings">

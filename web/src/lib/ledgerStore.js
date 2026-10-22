@@ -38,6 +38,14 @@ export function ownActiveListings(entries = [], now = Date.now()) {
   return map;
 }
 
+/** How many units you have listed right now (active, under 3 days old): each takes one of the exchange's listing slots. */
+export function activeListingCount(entries = [], now = Date.now()) {
+  const sold = new Map();
+  for (const e of entries) if (e.side === "sell" && e.listingId) sold.set(e.listingId, (sold.get(e.listingId) || 0) + (e.qty || 0));
+  return entries.reduce((t, e) => (e.side !== "list" || e.expired || !Number.isFinite(e.ts) || now - e.ts > 72 * 3600e3 ? t
+    : t + Math.max(0, (e.qty || 0) - (sold.get(e.id) || 0))), 0);
+}
+
 /** The ledger's entries straight from a stored string (no validation; the plan only reads them). */
 export function entriesOf(raw) {
   try { return JSON.parse(raw || "null")?.entries || []; } catch { return []; }

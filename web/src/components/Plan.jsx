@@ -1,5 +1,5 @@
 import { planBudget } from "../lib/metrics.js";
-import { ownListings, ownActiveListings } from "../lib/ledgerStore.js";
+import { ownListings, ownActiveListings, activeListingCount } from "../lib/ledgerStore.js";
 import { kinah, pct, rate, days } from "../lib/format.js";
 import { ItemIcon } from "./ItemIcon.jsx";
 
@@ -20,7 +20,7 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
   if (!budget) {
     return { note: "", body: <p className="muted plan-empty">{emptyHint || "Enter how much kinah you have to see what to craft with it."}</p> };
   }
-  const plan = planBudget(rows, budget, { ...settings, ownListings: ownListings(entries), ownActive: ownActiveListings(entries),
+  const plan = planBudget(rows, budget, { ...settings, ownListings: ownListings(entries), ownActive: ownActiveListings(entries), ownActiveCount: activeListingCount(entries),
     snapshotAt: snapshotAt ? Math.floor(new Date(snapshotAt).getTime() / 60000) : null });
   const note = `For ${kinah(budget)} on ${serverName || "this server"}${scope ? `, ${scope}` : ""}.`;
   const icon = (key) => <ItemIcon icon={icons[key]} size="small" />;
@@ -33,10 +33,21 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
       ))}. Wait for {coveredUnits === 1 ? "it" : "those"} to sell before making more.
     </p>
   );
+  // The exchange's limit on listings at once (per character): yours already up, plus what this plan would list.
+  const { total, yours, planned, capped } = plan.slots;
+  const full = yours >= total;
+  const freeAfter = total - yours - planned;
+  const slotNote = full
+    ? <p className="plan-empty">All {total} of your listing slots are taken ({yours} active listings in the Profit Calculator). Wait for some to sell before crafting more.</p>
+    : capped
+      ? <p className="muted small plan-slots">Listing slots: the exchange allows {total} listings at once. {yours ? `${yours} are already yours and this plan fills the other ${planned}` : `This plan fills all ${planned}`}; more crafts are worth making, but there's no slot for them until some sell.</p>
+      : yours > 0 || planned > 0
+        ? <p className="muted small plan-slots">Listing slots: {yours + planned} of {total} used ({yours ? `${yours} already listed + ` : ""}{planned} planned).</p>
+        : null;
   if (!plan.picks.length) {
     return { note, body: <>
       {covered}
-      {plan.nextUp
+      {full ? slotNote : plan.nextUp
         ? <p className="plan-empty">Nothing worth crafting fits {kinah(budget)} yet. The best option, <strong>{plan.nextUp.row.shortName}</strong>, needs about <strong>{kinah(plan.nextUp.capital)}</strong> to be 90% sure of making one.</p>
         : !plan.covered.length && <p className="plan-empty muted">No craft in view is currently worth making (Top pick or Craft it). Try other filters or a different server.</p>}
     </> };
@@ -56,8 +67,8 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
             <tr key={p.row.key}>
               {onList && (
                 <td className="plan-list">
-                  <button type="button" className="mini-btn" disabled={!(p.listAt > 0)} onClick={() => onList(p)}
-                    title={p.listAt > 0 ? `Log a listing of 1 ${p.row.shortName} at ${kinah(p.listAt)} in the Profit Calculator (listing fee ${kinah(p.listAt * settings.listingFeePct / 100)})` : "No suggested price"}
+                  <button type="button" className="mini-btn" disabled={!(p.listAt > 0) || full} onClick={() => onList(p)}
+                    title={full ? `All ${total} listing slots are in use` : p.listAt > 0 ? `Log a listing of 1 ${p.row.shortName} at ${kinah(p.listAt)} in the Profit Calculator (listing fee ${kinah(p.listAt * settings.listingFeePct / 100)})` : "No suggested price"}
                     aria-label={`List 1 ${p.row.shortName} at ${kinah(p.listAt)}`}>+ List</button>
                 </td>
               )}
@@ -80,12 +91,13 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
       </table>
     </div>
     {covered}
-    {plan.nextUp
+    {slotNote}
+    {freeAfter > 0 && plan.nextUp
       ? <p className="muted small">Next up: <strong>{plan.nextUp.row.shortName}</strong> ({pct(plan.nextUp.row.roc)} return) needs {kinah(plan.nextUp.capital)} set aside, {kinah(plan.nextUp.short)} more than you have left.</p>
-      : plan.left > 0 && plan.picks.length === plan.candidates
+      : freeAfter > 0 && plan.left > 0 && plan.picks.length === plan.candidates
         ? <p className="muted small">That covers every craft worth making right now at the amount the market can take; the remaining {kinah(plan.left)} has nowhere better to go until listings sell or prices change.</p>
         : null}
-    <p className="muted small">Best return on capital first. "Set aside" covers bad luck on combo crafts (90% odds of making them all); on average you spend less and keep the rest. Each craft is capped at what the market can take in the next 1.5 days, so you stay flexible as prices move: one beyond the current listings, plus extras only where your share of the remaining sales leaves room, since other sellers keep relisting and extra copies compete with your own.</p>
+    <p className="muted small">Best return on capital first. "Set aside" covers bad luck on combo crafts (90% odds of making them all); on average you spend less and keep the rest. Each craft is capped at what the market can take in the next 1.5 days, so you stay flexible as prices move: one beyond the current listings, plus extras only where your share of the remaining sales leaves room, since other sellers keep relisting and extra copies compete with your own. Everything planned fits in your free listing slots (the exchange allows {total} at once).</p>
   </>;
   return { note, body };
 }
