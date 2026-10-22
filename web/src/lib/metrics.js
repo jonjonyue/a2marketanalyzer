@@ -741,6 +741,8 @@ const median = (xs) => { const a = [...xs].sort((x, y) => x - y); return a.lengt
  * - Thin (0-2 listed): the median price of sales that happened while the market was similarly thin (2 or fewer
  *   listed), when there are at least 2 of them; scarcity often lets higher prices sell. Capped at 1.5x the typical
  *   sale price. Without that history, just under the cheapest listing, or the typical sale price if nothing's listed.
+ *   Either way a higher cheapest listing is never followed up past the higher of the usual price and that thin-market
+ *   median (on live data, thin-market listings 20%+ over the usual price sold before being undercut only ~1 in 5 times).
  * - Where others undercut: compare listing there, at the usual sale price, and at a "deal" or deep price, using how
  *   often a listing at each level sold before being undercut (this item's record, steadied by the server's) and how
  *   far the market fell when it didn't. A small undercut mostly just gets undercut again and drags the price down,
@@ -823,14 +825,25 @@ function baseListing(r, o) {
   if (thinMedian) {
     const cap = typical ? typical * o.maxPremium : Infinity;
     const target = Math.min(thinMedian, cap);
-    // Never further below the cheapest listing than needed to sell first.
-    const price = Math.max(undercutPrice(target + 1) || target, cheapest ? undercutPrice(cheapest) : 0);
-    const behind = cheapest && cheapest < price ? ` The ${fmtK(cheapest)} listing will likely sell before yours.` : "";
+    const targetPrice = undercutPrice(target + 1) || target;
+    // A higher cheapest listing lets you list above that, but only up to the higher of the usual price and what thin
+    // markets actually paid: overpriced listings in thin markets mostly get undercut before they sell.
+    const ceiling = typical ? Math.max(typical, target) : target;
+    const chase = cheapest && undercutPrice(cheapest) > targetPrice;
+    const price = chase ? Math.max(targetPrice, Math.min(undercutPrice(cheapest), undercutPrice(ceiling + 1))) : targetPrice;
+    const capped = chase && price < undercutPrice(cheapest);
+    const behind = cheapest && cheapest < price ? ` The ${fmtK(cheapest)} listing will likely sell before yours.`
+      : capped ? ` The cheapest listing (${fmtK(cheapest)}) is above that; in thin markets, listings that far over the usual price mostly get undercut before they sell, so don't follow it up.` : "";
     return { price, basis: "thin", typical, thinMedian, premium, thinSales: thinUnits,
       note: `${listings ? `Only ${listings} listed` : "Nothing listed"}. When it was this thin over the past week, ${thinUnits} sold at a median ${fmtK(thinMedian)}` +
         `${premium != null ? ` (${premium >= 0 ? "+" : ""}${Math.round(premium * 100)}% vs the usual ~${fmtK(typical)})` : ""}${thinMedian > cap ? `; capped at 1.5× the usual price` : ""}.${behind}` };
   }
   if (cheapest) {
+    // No thin-market record: just under the cheapest, but not above the usual sale price.
+    if (typical && undercutPrice(cheapest) > undercutPrice(typical + 1)) {
+      return { price: undercutPrice(typical + 1), basis: "thin-no-history", typical, thinMedian, premium, thinSales: thinUnits,
+        note: `Only ${listings} listed, but too few sales in a thin market last week to judge a premium. The cheapest (${fmtK(cheapest)}) is above the usual ~${fmtK(typical)}, and listings that far over mostly get undercut before they sell, so list at the usual price.` };
+    }
     return { price: undercutPrice(cheapest), basis: "thin-no-history", typical, thinMedian, premium, thinSales: thinUnits,
       note: `Only ${listings} listed, but too few sales in a thin market last week to judge a premium; undercut the cheapest (${fmtK(cheapest)}).` };
   }
