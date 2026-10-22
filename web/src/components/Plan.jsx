@@ -63,7 +63,7 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
               )}
               <td className="name"><span className="item-cell">{icon(p.row.key)}<span>{p.row.shortName}</span></span></td>
               <td><span className={`pill ${p.row.verdict.tone}`}>{p.row.verdict.label}</span></td>
-              <td title={`Room for about ${p.slots} from you in one 3-day listing: your first sells once the ${p.row.listings} current listings clear (${rate(p.row.perDay)}/day); each extra one only gets your ${share}% share of the sales left after that, since other sellers keep relisting and your own listings compete with each other`}>
+              <td title={`Room for about ${p.slots} from you in the next ${settings.planDays ?? 1.5} days of sales: your first sells once the ${p.row.listings} current listings clear (${rate(p.row.perDay)}/day); each extra one only gets your ${share}% share of the sales left after that, since other sellers keep relisting and your own listings compete with each other`}>
                 {p.units}
                 {p.units < p.slots && <> <span className="dim">of {p.slots}</span></>}
                 {p.myUnits > 0 && <> <span className="dim" title={`You already have ${p.myUnits} listed (Profit Calculator); they take ${p.myUnits === 1 ? "a place" : "places"} in the market's room`}>+{p.myUnits} listed</span></>}
@@ -85,7 +85,7 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
       : plan.left > 0 && plan.picks.length === plan.candidates
         ? <p className="muted small">That covers every craft worth making right now at the amount the market can take; the remaining {kinah(plan.left)} has nowhere better to go until listings sell or prices change.</p>
         : null}
-    <p className="muted small">Best return on capital first. "Set aside" covers bad luck on combo crafts (90% odds of making them all); on average you spend less and keep the rest. Each craft is capped at what one 3-day listing can sell: one beyond the current listings, plus extras only where your share of the remaining sales leaves room, since other sellers keep relisting and extra copies compete with your own.</p>
+    <p className="muted small">Best return on capital first. "Set aside" covers bad luck on combo crafts (90% odds of making them all); on average you spend less and keep the rest. Each craft is capped at what the market can take in the next 1.5 days, so you stay flexible as prices move: one beyond the current listings, plus extras only where your share of the remaining sales leaves room, since other sellers keep relisting and extra copies compete with your own.</p>
   </>;
   return { note, body };
 }

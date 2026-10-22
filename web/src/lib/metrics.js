@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS = {
   listingFeePct: 2,           // fee charged on the listing price when you list, in percent
   sharePct: 25,               // share of daily sales you expect to capture
   listingDays: 3,             // listings expire after 3 days
+  planDays: 1.5,              // the kinah plan only makes what the market can take within this many days
   maxSupplyDays: 5,           // more days of supply than this (listings ÷ sold/day) is "Oversupplied"
                               // "Slow seller": a new listing would wait (listings + 1) ÷ sold/day > listingDays to sell
   minRoc: 15,                 // return on capital (%) below this is "Low return"
@@ -519,20 +520,20 @@ export function shortenMarketNames(market) {
 
 /**
  * Where to put a kinah budget. Candidates are crafts worth making (Top pick / Craft it), best return on capital
- * first. Each gets as many units as the market has room for in one listing period (`marketRoom`) and the budget allows, where n units need cost-per-attempt × the attempts for 90% odds of n
+ * first. Each gets as many units as the market has room for within `planDays` (`marketRoom`) and the budget allows, where n units need cost-per-attempt × the attempts for 90% odds of n
  * successes (never less than n × the average cost). Returns the picks, totals, and the best craft just out of reach.
  */
 /**
- * How many of one item you can sell in a listing period without flooding it or competing with yourself.
- * Your first unit, priced at the cheapest, sells once the market clears what's already listed (the verdicts
- * already require that within 3 days). Every extra unit sits behind your own first one while other sellers keep
- * relisting, so you only win your share of the sales left after current listings:
- *   n = 1 + floor(share × (sold/day × 3 − listings − 1)), at least 1.
+ * How many of one item to make without flooding it or competing with yourself, looking `planDays` (1.5) ahead
+ * so the plan stays flexible as the market moves. Your first unit, priced at the cheapest, sells once the market
+ * clears what's already listed (the verdicts already require that within 3 days). Every extra unit sits behind your
+ * own first one while other sellers keep relisting, so you only win your share of the sales left after current listings:
+ *   n = 1 + floor(share × (sold/day × 1.5 − listings − 1)), at least 1.
  */
 export function marketRoom(r, settings = DEFAULT_SETTINGS) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
   if (!(r.perDay > 0)) return 1;
-  const spare = r.perDay * s.listingDays - (r.listings ?? 0) - 1; // sales left once current listings and your first sell
+  const spare = r.perDay * s.planDays - (r.listings ?? 0) - 1; // sales left once current listings and your first sell
   return 1 + Math.max(0, Math.floor((s.sharePct / 100) * spare + 1e-9));
 }
 
