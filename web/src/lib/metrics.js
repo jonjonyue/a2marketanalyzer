@@ -64,7 +64,7 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
   const start = Math.max(first, end - o.windowDays * 1440);
   const expiries = []; // predicted expiry times (epoch minutes) of listings we saw appear
   let sales = 0, cheapestSold = 0, priceSum = 0, priceN = 0;
-  const events = []; // each inferred sale: [price (cheapest listing before it), listings up at the time, units]
+  const events = []; // each inferred sale: [price (cheapest listing before it), listings up at the time, units, time (epoch minutes)]
   // Each time a new listing went in below the cheapest: [snapshot time, previous snapshot time, new cheapest, depth,
   // outcome ("sold" before anyone went lower, "cut" by an even lower listing, null if neither within 72h),
   // fall (when cut: how far below this price the cheapest got within 24h)].
@@ -94,7 +94,7 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
       cheapestSold += sLow;
       priceSum += a.low * s;
       priceN += s;
-      if (a.low > 0) events.push([a.low, a.n, s]);
+      if (a.low > 0) events.push([a.low, a.n, s, b.t]);
     }
   }
 
@@ -111,6 +111,7 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
     lowerPerDay: enough ? cheapestSold / days : null,
     avgSalePrice: priceN ? priceSum / priceN : null,
     events,
+    end, // the latest snapshot (epoch minutes)
     undercuts,
     undercutDepths: undercuts.map((u) => u[3]),
     // Per day, as observed (no capture adjustment): undercuts vs sales of the cheapest listing. Their ratio says how
@@ -685,9 +686,17 @@ export function parseKinah(text) {
   return Math.round(parseFloat(m[1]) * mult);
 }
 
-function weightedMedian(events) {
-  const xs = events.flatMap(([price, , units]) => Array(Math.max(1, Math.min(units, 20))).fill(price)).sort((a, b) => a - b);
-  return xs.length ? xs[Math.floor(xs.length / 2)] : null;
+// Recent sales count more: a sale's weight halves every RECENCY_HALF_LIFE_H hours, so a price that has been sliding
+// all week is priced off the last day or two rather than the week's median.
+export const RECENCY_HALF_LIFE_H = 36;
+function weightedMedian(events, now = null) {
+  const w = events.map(([price, , units, t]) => [price, Math.max(1, Math.min(units, 20)) *
+    (now != null && t != null ? Math.pow(0.5, Math.max(0, now - t) / 60 / RECENCY_HALF_LIFE_H) : 1)]).sort((a, b) => a[0] - b[0]);
+  const total = w.reduce((s, x) => s + x[1], 0);
+  if (!total) return null;
+  let acc = 0;
+  for (const [price, weight] of w) { acc += weight; if (acc >= total / 2) return price; }
+  return w[w.length - 1][0];
 }
 
 export const LISTING_ADVICE = {
@@ -707,7 +716,8 @@ function typicalPrice(r, o) {
   const events = r.est?.events || [];
   const normalEvents = events.filter(([, n]) => n > o.thinListings);
   const normalUnits = normalEvents.reduce((t, e) => t + e[2], 0);
-  return (normalUnits >= 2 ? weightedMedian(normalEvents) : weightedMedian(events)) ?? (r.soldAvg > 0 ? r.soldAvg : null);
+  const now = r.est?.end ?? null;
+  return (normalUnits >= 2 ? weightedMedian(normalEvents, now) : weightedMedian(events, now)) ?? (r.soldAvg > 0 ? r.soldAvg : null);
 }
 
 /**
@@ -802,7 +812,7 @@ function baseListing(r, o) {
   // The usual price: sales in a normal (not thin) market, so the thin-market premium isn't measured against itself.
   const typical = typicalPrice(r, o);
   const thinUnits = thinEvents.reduce((t, e) => t + e[2], 0);
-  const thinMedian = thinUnits >= o.minThinSales ? weightedMedian(thinEvents) : null;
+  const thinMedian = thinUnits >= o.minThinSales ? weightedMedian(thinEvents, r.est?.end ?? null) : null;
   const cheapest = r.listing > 0 ? r.listing : null;
   const listings = r.listings ?? 0;
   const premium = thinMedian && typical ? thinMedian / typical - 1 : null;
