@@ -11,7 +11,12 @@ Writes one file per server (site/data/servers/<id>.json, about 96 requests each)
 (site/data/snapshot.json) listing the servers and when each was refreshed.
 
 Usage: python scripts/fetch_snapshot.py [--out site/data/snapshot.json] [--base URL] [--servers 11201,12201] [--regions NAE,NAW]
+       [--fallback URL] [--skip-unchanged]
 Stdlib only, so the GitHub Action needs no installs.
+
+With --skip-unchanged (and --fallback), it first asks /api/health: if the API is down, or no server has a snapshot newer
+than the data already published, it makes no other requests and exits with SKIP_EXIT (3) so the workflow can skip
+the deploy.
 """
 from __future__ import annotations
 
@@ -28,6 +33,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 DEFAULT_BASE = "https://aion2.exchange"
+SKIP_EXIT = 3  # --skip-unchanged: nothing to do this run (API down, or no new snapshot since the published data)
+MAX_SKIP_AGE = timedelta(hours=3)  # refresh anyway once the published data is this old, in case health misreports
 DEFAULT_SERVER = 11201  # Siel · Elyos · North America West (the page's default)
 DEFAULT_SERVERS = (11201, 12201)  # NA West: Siel (Elyos) and Israphel (Asmodian)
 WORKERS = 3  # servers fetched in parallel; each still waits DELAY_S between its own requests
@@ -242,6 +249,47 @@ def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tup
 SERVER_FIELDS = ("server_id", "name", "region", "region_name", "faction")
 
 
+def parse_time(v) -> datetime | None:
+    try:
+        t = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+        return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def needs_refresh(base: str, site: str | None, servers: list[int] | None) -> bool:
+    """False when this run has nothing to do: the API is down, or no server has a snapshot newer than what's published."""
+    try:
+        get_json(base, "/api/health", retries=2)
+    except Exception as err:
+        print(f"aion2.exchange is unavailable ({err}); skipping this refresh and keeping the published data.")
+        return False
+    if not site:
+        return True
+    try:
+        published = {s["server_id"]: s for s in (get_json(site, "/data/snapshot.json", {"run": int(time.time())}, retries=2) or {}).get("servers", [])}
+    except Exception as err:
+        print(f"Couldn't read the published data ({err}); refreshing.")
+        return True
+    now = datetime.now(timezone.utc)
+    for sid in servers or list(published):
+        pub = published.get(sid) or {}
+        have, built = parse_time(pub.get("captured_at")), parse_time(pub.get("generated_at"))
+        if pub.get("stale") or have is None or built is None or now - built > MAX_SKIP_AGE:
+            print(f"server {sid}: published data is missing, stale or over {MAX_SKIP_AGE} old; refreshing.")
+            return True
+        try:
+            latest = parse_time((get_json(base, "/api/health", {"server": sid}, retries=2) or {}).get("latest_snapshot_at"))
+        except Exception as err:
+            print(f"server {sid}: health check failed ({err}); skipping this refresh and keeping the published data.")
+            return False
+        if latest is None or latest > have + timedelta(seconds=60):
+            print(f"server {sid}: new snapshot ({latest} vs published {have}); refreshing.")
+            return True
+    print("No new snapshots since the published data; skipping this refresh.")
+    return False
+
+
 def reuse_published(site: str, out: Path) -> int:
     """Copy the published index and every server file it lists, unchanged. All or nothing."""
     run = {"run": int(time.time())}
@@ -278,9 +326,15 @@ def main() -> int:
     ap.add_argument("--fallback", help="the published dashboard's URL: a server that fails this run keeps its last published file from there")
     ap.add_argument("--reuse", metavar="URL", help="don't call the API: copy the data already published at this dashboard URL "
                     "(for deploys that only change the site's code); exits 1 if any of it can't be read")
+    ap.add_argument("--skip-unchanged", action="store_true", help="check /api/health first and exit 3 without fetching if the "
+                    "API is down or has nothing newer than the data published at --fallback")
     args = ap.parse_args()
     if args.reuse:
         return reuse_published(args.reuse, Path(args.out))
+    if args.skip_unchanged:
+        wanted = [int(x) for x in args.servers.split(",") if x.strip()] if not args.regions else None
+        if not needs_refresh(args.base, args.fallback, wanted):
+            return SKIP_EXIT
 
     try:
         all_servers = get_json(args.base, "/api/servers").get("servers", [])

@@ -19,12 +19,74 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Fetch the data and build the site. Runs outside the github-pages environment, so it never waits at its gate, and
+  # a refresh with nothing new to publish stops here (skip=true) without touching the deployment queue.
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    outputs:
+      skip: ${{ steps.fetch.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch market snapshot from aion2.exchange
+        id: fetch
+        # A push only changes the site's code, so it redeploys the data already live instead of calling the API
+        # (the scheduled / cron-job.org runs keep it fresh); if that can't be read, it fetches as usual.
+        # A scheduled refresh first asks /api/health: if aion2.exchange is down or has no snapshot newer than the
+        # published data, it makes no other requests and the rest of the run is skipped (exit 3).
+        # On a full fetch, a server that fails keeps its last published data (read back from the live site).
+        run: |
+          site="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            if python scripts/fetch_snapshot.py --out site/data/snapshot.json --reuse "$site"; then exit 0; fi
+            python scripts/fetch_snapshot.py --out site/data/snapshot.json --fallback "$site"
+            exit $?
+          fi
+          set +e
+          python scripts/fetch_snapshot.py --out site/data/snapshot.json --fallback "$site" --skip-unchanged
+          code=$?
+          set -e
+          if [ "$code" -eq 3 ]; then echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          exit $code
+
+      # The site is a Vite + React app in web/. Its build copies site/ (the fresh data/ and the ledger.html redirect)
+      # into web/dist; script and style file names carry a content hash, so a deploy shows up immediately.
+      - uses: actions/setup-node@v4
+        if: steps.fetch.outputs.skip != 'true'
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build site
+        if: steps.fetch.outputs.skip != 'true'
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+          test -f dist/data/snapshot.json
+
+      - uses: actions/configure-pages@v5
+        if: steps.fetch.outputs.skip != 'true'
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.fetch.outputs.skip != 'true'
+        with:
+          path: web/dist
+
   # GitHub only lets one github-pages deployment through at a time and holds a new run at the environment gate until
   # the previous deployment record finishes. A cancelled or glitched run can leave its record stuck ("waiting" /
   # "queued") with nothing behind it, which then blocks every later run. This job runs before the gate: it marks any
   # unfinished github-pages deployment record as inactive (only one run in the "pages" group runs at a time, so none
   # of them belongs to a live run) and cancels stuck Pages deployments.
   unblock:
+    needs: build
+    if: needs.build.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -48,51 +110,14 @@ jobs:
           done
 
   deploy:
-    needs: unblock
+    needs: [build, unblock]
+    if: needs.build.outputs.skip != 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Fetch market snapshot from aion2.exchange
-        # A push only changes the site's code, so it redeploys the data already live instead of calling the API
-        # (the scheduled / cron-job.org runs keep it fresh); if that can't be read, it fetches as usual.
-        # On a full fetch, a server that fails keeps its last published data (read back from the live site).
-        run: |
-          site="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
-          if [ "$GITHUB_EVENT_NAME" = "push" ] && python scripts/fetch_snapshot.py --out site/data/snapshot.json --reuse "$site"; then
-            exit 0
-          fi
-          python scripts/fetch_snapshot.py --out site/data/snapshot.json --fallback "$site"
-
-      # The site is a Vite + React app in web/. Its build copies site/ (the fresh data/ and the ledger.html redirect)
-      # into web/dist; script and style file names carry a content hash, so a deploy shows up immediately.
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-
-      - name: Build site
-        working-directory: web
-        run: |
-          npm ci
-          npm run build
-          test -f dist/data/snapshot.json
-
-      - uses: actions/configure-pages@v5
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: web/dist
-
       # GitHub sometimes leaves a Pages deployment stuck "in progress", which blocks every later deploy.
       # Only one run deploys at a time (concurrency group), so anything else still in progress here is stuck: cancel it
       # (skipping this run's own commit, which the job's environment has already registered).
