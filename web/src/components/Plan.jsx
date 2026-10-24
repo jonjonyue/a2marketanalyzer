@@ -2,6 +2,7 @@ import { planBudget } from "../lib/metrics.js";
 import { ownListings, ownActiveListings, activeListingCount } from "../lib/ledgerStore.js";
 import { kinah, pct, days } from "../lib/format.js";
 import { ItemIcon } from "./ItemIcon.jsx";
+import { SupplyTag } from "./Supply.jsx";
 
 // "What to craft with your kinah": shared by Market Analysis and the Profit Calculator.
 
@@ -42,7 +43,7 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
       ? <p className="muted small plan-slots">Listing slots: {yours + planned} of {total}{yours ? ` (${yours} listed, ${planned} planned)` : ""}{capped ? ". Full." : "."}</p>
       : null;
   if (!plan.picks.length) {
-    return { note, body: <>
+    return { note, plan, body: <>
       {covered}
       {full ? slotNote : plan.nextUp
         ? <p className="plan-empty">Nothing fits {kinah(budget)} yet. Cheapest good option: <strong>{plan.nextUp.row.shortName}</strong>, about <strong>{kinah(plan.nextUp.capital)}</strong>.</p>
@@ -68,7 +69,7 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
                     aria-label={`List 1 ${p.row.shortName} at ${kinah(p.listAt)}`}>+ List</button>
                 </td>
               )}
-              <td className="name"><span className="item-cell">{icon(p.row.key)}<span>{p.row.shortName}</span></span></td>
+              <td className="name"><span className="item-cell">{icon(p.row.key)}<span>{p.row.shortName}</span> <SupplyTag influx={p.row.influx} /></span></td>
               <td><span className={`pill ${p.row.verdict.tone}`}>{p.row.verdict.label}</span></td>
               <td title={`Room for ${p.slots} in the next ${settings.planDays ?? 1.5} days of sales`}>
                 {p.units}
@@ -92,5 +93,5 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
       ? <p className="muted small">Next up: <strong>{plan.nextUp.row.shortName}</strong> needs {kinah(plan.nextUp.short)} more.</p>
       : null}
   </>;
-  return { note, body };
+  return { note, body, plan };
 }

@@ -64,6 +64,10 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
   const start = Math.max(first, end - o.windowDays * 1440);
   const expiries = []; // predicted expiry times (epoch minutes) of listings we saw appear
   let sales = 0, cheapestSold = 0, priceSum = 0, priceN = 0;
+  // New supply: listings that appeared (count went up, or a cheaper one showed up while the count held or fell),
+  // in the last 24h vs before it, plus sales in the last 24h and the listing count 24h ago.
+  const dayAgo = end - 1440;
+  let newRecent = 0, newBefore = 0, soldRecent = 0, listedDayAgo = null;
   const events = []; // each inferred sale: [price (cheapest listing before it), listings up at the time, units, time (epoch minutes)]
   // Each time a new listing went in below the cheapest: [snapshot time, previous snapshot time, new cheapest, depth,
   // outcome ("sold" before anyone went lower, "cut" by an even lower listing, null if neither within 72h),
@@ -89,6 +93,10 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
     }
     // An undercut: the cheapest price dropped while no listing disappeared (a new, cheaper listing went up).
     if (b.t > start && d >= 0 && a.low > 0 && b.low > 0 && b.low < a.low) undercuts.push([b.t, a.t, b.low, 1 - b.low / a.low, ...afterUndercut(timeline, i)]);
+    if (b.t > start) {
+      const arrived = Math.max(0, d) + (d <= 0 && a.low > 0 && b.low > 0 && b.low < a.low ? 1 : 0);
+      if (b.t > dayAgo) { newRecent += arrived; soldRecent += s; } else { newBefore += arrived; listedDayAgo = b.n; }
+    }
     if (b.t > start && s > 0) {
       sales += s;
       cheapestSold += sLow;
@@ -117,6 +125,10 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
     // Per day, as observed (no capture adjustment): undercuts vs sales of the cheapest listing. Their ratio says how
     // often a listing that's just become the cheapest sells before someone undercuts it.
     undercutsPerDay: enough ? undercuts.length / days : null,
+    supply: {
+      newRecent, soldRecent, listedNow: timeline[timeline.length - 1].n, listedDayAgo,
+      newPerDayBefore: (() => { const d0 = (dayAgo - Math.max(start, first)) / 1440; return d0 >= 1 ? newBefore / d0 : null; })(),
+    },
     cheapestSoldPerDay: enough ? cheapestSold / days : null,
   };
 }
@@ -134,6 +146,23 @@ function afterUndercut(timeline, i) {
     if (d.low == null || d.low > p) return ["sold", 0];
   }
   return [null, 0];
+}
+
+/**
+ * Crafters entering a market: new listings in the last 24h well above the item's usual pace, with supply building
+ * (listings up, or new listings outpacing sales). Returns null, or { level: "rising" | "flood", ... } where "flood" means
+ * listings at least doubled (by 3+) and new ones came in at least twice as fast as sales.
+ */
+export const INFLUX = { minNew: 3, minRatio: 1.75, floodRatio: 2 };
+export function supplyInflux(est, o = INFLUX) {
+  const s = est?.supply;
+  if (!s || s.newPerDayBefore == null) return null;
+  const ratio = s.newRecent / Math.max(s.newPerDayBefore, 0.5);
+  const growth = s.listedDayAgo != null ? s.listedNow - s.listedDayAgo : 0;
+  const building = growth >= 2 || s.newRecent >= Math.max(1, s.soldRecent) * 1.5;
+  if (s.newRecent < o.minNew || ratio < o.minRatio || !building) return null;
+  const flood = growth >= 3 && s.listedNow >= 2 * Math.max(1, s.listedDayAgo ?? 0) && s.newRecent >= o.floodRatio * Math.max(1, s.soldRecent);
+  return { level: flood ? "flood" : "rising", ratio, growth, ...s };
 }
 
 /** All snapshot times seen across a server's items: the market-wide snapshot schedule. */
@@ -249,6 +278,7 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
     capital: entry, roc, attemptCost, attempts90: attemptsFor(target.hitChance, s.capitalConfidence), hitChance: target.hitChance ?? null,
     success: target.success ?? null, recipeLevel: target.recipeLevel ?? null, playerLevel: target.playerLevel ?? null, locked: !!target.locked,
     salesSource, priceSource, est, costDetail: target.costDetail || null, transfer: target.transfer || null,
+    influx: supplyInflux(est),
     missingInputs: num(target.missing) ?? 0,
     verdict: target.locked
       ? { id: "locked", label: `Needs ${masteryLabel(target.recipeLevel)}`, tone: "neutral" }

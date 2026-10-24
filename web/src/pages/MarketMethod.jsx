@@ -9,6 +9,7 @@ export function MarketMethod({ modelNote }) {
         <li><strong>Sold / day</strong> is estimated from hourly listing snapshots; NA has no official sales data.</li>
         <li><strong>Capital needed</strong> covers 90% odds of making one (combo luck included); <strong>return on capital</strong> = profit ÷ that.</li>
         <li><strong>Top pick</strong> and <strong>Craft it</strong> are profitable and selling; <strong>Low return</strong>, <strong>Slow seller</strong>, <strong>Oversupplied</strong> and <strong>Loss</strong> aren't worth it.</li>
+        <li><strong>New supply</strong> flags items where new listings in the last 24h jumped well above their usual pace while supply built up (▲▲ flooding when listings at least doubled), and marks ones you've listed or the plan suggests.</li>
         <li><strong>What to craft</strong> is the most profitable mix for your kinah and 10 listing slots, sized to about 1.5 days of sales. <strong>List at</strong> avoids prices that usually get undercut.</li>
       </ul>
     </>}>

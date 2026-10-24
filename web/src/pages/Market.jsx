@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { analyzeMarket, DEFAULT_SETTINGS, VERDICT_ORDER, byRank, isWorthCrafting, SKILLS as CRAFT_SKILLS, shortenName, parseKinah } from "../lib/metrics.js";
 import { kinah, pct, rate, days, ago, asPct, cx } from "../lib/format.js";
 import { KEYS, readJson, readRaw, writeRaw, useKinah, useStoredRaw } from "../lib/storage.js";
-import { entriesOf, listOne, unlistOne, listingFee } from "../lib/ledgerStore.js";
+import { entriesOf, listOne, unlistOne, listingFee, ownActiveListings } from "../lib/ledgerStore.js";
 import { useToast } from "../components/Toast.jsx";
 import { DEFAULT_SERVER, serverLabel, useServerDoc, useSnapshot } from "../lib/data.js";
 import { ItemIcon } from "../components/ItemIcon.jsx";
 import { planView } from "../components/Plan.jsx";
 import { BarChart, Scatter, Tooltip, noCostsInView, useTip } from "../components/Charts.jsx";
 import { ExtLink, RecipeDetail } from "../components/Recipe.jsx";
+import { SupplyPanel, SupplyTag } from "../components/Supply.jsx";
 import { MarketMethod } from "./MarketMethod.jsx";
 
 const REGION_SHORT = { NAE: "NA East", NAW: "NA West", EU: "EU", LA: "SA", AS: "Asia" };
@@ -236,6 +237,7 @@ const COLUMNS = [
           <button type="button" className="item-toggle" data-toggle={r.key} aria-expanded={open === r.key} title="Show the recipe and what goes into the cost">
             <span className="chev" aria-hidden="true">{open === r.key ? "▾" : "▸"}</span>{r.shortName}
           </button>
+          {r.influx && <> <SupplyTag influx={r.influx} /></>}
           <span className="meta">{r.tier === "Artisan's Splendent" ? "" : `${shortenName(r.tier)} · `}{r.skill} · {r.category}</span>
         </span>
         <ExtLink row={r} icon />
@@ -483,6 +485,14 @@ export default function Market() {
         </div>
         <div id="planBody">{plan?.body}</div>
       </section>
+
+      {all && (() => {
+        // Units you have listed (Profit Calculator) and units the plan suggests, per item, for the overlap column.
+        const act = ownActiveListings(entriesOf(ledgerRaw));
+        const mine = new Map(all.map((r) => [r.key, (act.get(r.key) || act.get(String(r.shortName).toLowerCase()) || []).reduce((t, l) => t + l.units, 0)]));
+        const planned = new Map((plan?.plan?.picks || []).map((p) => [p.row.key, p.units]));
+        return <SupplyPanel rows={all} mine={mine} planned={planned} icons={icons} />;
+      })()}
 
       <section className="charts">
         <figure className="panel">

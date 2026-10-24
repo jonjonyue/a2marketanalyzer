@@ -5,6 +5,7 @@ import { KEYS, readRaw, readJson, writeRaw, writeKinah, useKinah, useStoredRaw }
 import { DEFAULT_SERVER, serverLabel, useServerDoc, useSnapshot } from "../lib/data.js";
 import { ItemIcon } from "../components/ItemIcon.jsx";
 import { listingEntry, ownListings } from "../lib/ledgerStore.js";
+import { SupplyTag } from "../components/Supply.jsx";
 import { planView } from "../components/Plan.jsx";
 import { LedgerMethod } from "./LedgerMethod.jsx";
 
@@ -468,8 +469,8 @@ export default function Ledger() {
   const adviceFor = (l) => {
     const r = (l.key != null && rowFor.get(l.key)) || rowFor.get(String(l.name).toLowerCase());
     if (!r || isMaterials(l.name)) return null;
-    return relistAdvice(r, { price: l.price, t: Math.floor(l.ts / 60000) }, { ...settings, ownListings: ownListings(entries),
-      snapshotAt: market?.captured_at ? Math.floor(new Date(market.captured_at).getTime() / 60000) : null });
+    return { ...relistAdvice(r, { price: l.price, t: Math.floor(l.ts / 60000) }, { ...settings, ownListings: ownListings(entries),
+      snapshotAt: market?.captured_at ? Math.floor(new Date(market.captured_at).getTime() / 60000) : null }), influx: r.influx };
   };
   // The plan's "+ List" button: log one at the suggested price, like adding it with the form.
   function listFromPlan(p) {
@@ -705,7 +706,7 @@ function ListingRow({ l, left, now, advice, feePct, onSold, onExpire, onRelist }
   const tl = timeLeft(l, now);
   return (
     <tr className={tl.over ? "overdue" : undefined}>
-      <td className="name"><span className="item-cell"><EntryIcon e={l} /><span>{l.name}</span></span></td>
+      <td className="name"><span className="item-cell"><EntryIcon e={l} /><span>{l.name}</span> <SupplyTag influx={advice?.influx} /></span></td>
       <td className="dim">{fmtDate(l.ts)}</td>
       <td className={tl.over ? "warn" : "dim"} title="Listings last 3 days">{tl.over ? "Expired " : "Expires "}{tl.text}</td>
       <td>{left.toLocaleString()}{left < l.qty && <> <span className="dim">of {l.qty.toLocaleString()}</span></>}</td>
