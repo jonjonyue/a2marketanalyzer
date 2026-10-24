@@ -165,6 +165,51 @@ export function supplyInflux(est, o = INFLUX) {
   return { level: flood ? "flood" : "rising", ratio, growth, ...s };
 }
 
+/**
+ * When buyers are active, server-wide, in the viewer's local time: per hour of day, sales and undercuts per snapshot
+ * hour, and how often a listing that became the cheapest in that hour sold before being undercut; per weekday, sales
+ * per day. `best` / `worst` are the 3-hour windows with the highest / lowest sell-first rate.
+ */
+export function activityProfile(market) {
+  const histories = market?.history || {};
+  const grid = snapshotGrid(histories);
+  const hours = Array.from({ length: 24 }, () => ({ sales: 0, cuts: 0, first: 0, decided: 0, snaps: 0 }));
+  const days = Array.from({ length: 7 }, () => ({ sales: 0, snaps: 0 }));
+  if (grid.length < 2) return null;
+  for (const t of grid) { const d = new Date(t * 60000); hours[d.getHours()].snaps++; days[d.getDay()].snaps++; }
+  for (const h of Object.values(histories)) {
+    if (!h?.length) continue;
+    const byT = new Map(h.map((p) => [p[0], p]));
+    const tl = grid.filter((t) => t >= h[0][0]).map((t) => { const p = byT.get(t); return p ? { t, n: p[1], low: p[2] } : { t, n: 0, low: null }; });
+    for (let i = 1; i < tl.length; i++) {
+      const a = tl[i - 1], b = tl[i], d = b.n - a.n;
+      const when = new Date(b.t * 60000), H = hours[when.getHours()];
+      const sold = Math.max(0, -d) || (d === 0 && a.low != null && (b.low == null || b.low > a.low) ? 1 : 0);
+      if (sold) { H.sales += sold; days[when.getDay()].sales += sold; }
+      if (d >= 0 && a.low > 0 && b.low > 0 && b.low < a.low) {
+        H.cuts++;
+        const [outcome] = afterUndercut(tl, i);
+        if (outcome) { H.decided++; if (outcome === "sold") H.first++; }
+      }
+    }
+  }
+  const total = hours.reduce((t, x) => ({ first: t.first + x.first, decided: t.decided + x.decided }), { first: 0, decided: 0 });
+  const avg = total.decided ? total.first / total.decided : null;
+  const windows = Array.from({ length: 24 }, (_, s) => {
+    const w = [0, 1, 2].map((k) => hours[(s + k) % 24]);
+    const first = w.reduce((t, x) => t + x.first, 0), decided = w.reduce((t, x) => t + x.decided, 0);
+    const snaps = w.reduce((t, x) => t + x.snaps, 0), sales = w.reduce((t, x) => t + x.sales, 0);
+    return { start: s, end: (s + 3) % 24, rate: decided ? (first + 1) / (decided + 2) : null, decided, salesPerHour: snaps ? sales / snaps : 0 };
+  }).filter((w) => w.rate != null && w.decided >= 20);
+  const by = (f) => [...windows].sort(f)[0] || null;
+  return {
+    hours: hours.map((x) => ({ ...x, salesPerHour: x.snaps ? x.sales / x.snaps : 0, cutsPerHour: x.snaps ? x.cuts / x.snaps : 0, rate: x.decided ? x.first / x.decided : null })),
+    days: days.map((x) => ({ ...x, perDay: x.snaps ? (x.sales / x.snaps) * 24 : null, daysSeen: x.snaps / 24 })),
+    avg, best: by((a, b) => b.rate - a.rate || b.salesPerHour - a.salesPerHour), worst: by((a, b) => a.rate - b.rate),
+    span: [grid[0], grid[grid.length - 1]],
+  };
+}
+
 /** All snapshot times seen across a server's items: the market-wide snapshot schedule. */
 export function snapshotGrid(histories) {
   const set = new Set();

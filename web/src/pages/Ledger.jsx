@@ -1,11 +1,12 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { shortenName, parseKinah, analyzeMarket, relistAdvice, DEFAULT_SETTINGS } from "../lib/metrics.js";
+import { shortenName, parseKinah, analyzeMarket, relistAdvice, activityProfile, DEFAULT_SETTINGS } from "../lib/metrics.js";
 import { kinah, full, signClass, cx } from "../lib/format.js";
 import { KEYS, readRaw, readJson, writeRaw, writeKinah, useKinah, useStoredRaw } from "../lib/storage.js";
 import { DEFAULT_SERVER, serverLabel, useServerDoc, useSnapshot } from "../lib/data.js";
 import { ItemIcon } from "../components/ItemIcon.jsx";
 import { listingEntry, ownListings } from "../lib/ledgerStore.js";
 import { SupplyTag } from "../components/Supply.jsx";
+import { bestTimeNote } from "../components/Activity.jsx";
 import { planView } from "../components/Plan.jsx";
 import { LedgerMethod } from "./LedgerMethod.jsx";
 
@@ -466,6 +467,7 @@ export default function Ledger() {
     for (const r of analyzeMarket(market, settings)) { map.set(r.key, r); map.set(String(r.shortName).toLowerCase(), r); }
     return map;
   }, [market, settings]);
+  const bestTime = useMemo(() => (market ? bestTimeNote(activityProfile(market)) : ""), [market]);
   const adviceFor = (l) => {
     const r = (l.key != null && rowFor.get(l.key)) || rowFor.get(String(l.name).toLowerCase());
     if (!r || isMaterials(l.name)) return null;
@@ -521,6 +523,7 @@ export default function Ledger() {
           <p className="muted"><span id="planNote">{plan?.note}</span> <a href="#/">Change settings on Market Analysis</a></p>
         </div>
         <div id="planBody">{plan ? plan.body : <p className="muted plan-empty">Loading market data…</p>}</div>
+        {plan?.plan?.picks?.length > 0 && bestTime && <p className="muted small plan-time">{bestTime}.</p>}
       </section>
 
       <form className="panel entry-form" id="entryForm" ref={formRef} autoComplete="off" noValidate onSubmit={submit}>
@@ -564,7 +567,7 @@ export default function Ledger() {
       </form>
 
       {active.length > 0 && (
-        <Listings active={active} entries={entries} now={now} adviceFor={adviceFor} feePct={log.settings.feePct}
+        <Listings active={active} entries={entries} now={now} adviceFor={adviceFor} feePct={log.settings.feePct} bestTime={bestTime}
           onSold={markSold} onExpire={(id) => markExpired(id)} onRelist={(id, price) => markExpired(id, { relist: true, price })} />
       )}
 
@@ -730,7 +733,7 @@ function ListingRow({ l, left, now, advice, feePct, onSold, onExpire, onRelist }
   );
 }
 
-function Listings({ active, entries, now, adviceFor, feePct, onSold, onExpire, onRelist }) {
+function Listings({ active, entries, now, adviceFor, feePct, bestTime, onSold, onExpire, onRelist }) {
   let units = 0, value = 0;
   for (const l of active) {
     const left = remaining(entries, l), gross = left * l.price;
@@ -740,7 +743,7 @@ function Listings({ active, entries, now, adviceFor, feePct, onSold, onExpire, o
     <section className="panel table-panel" id="listingsPanel">
       <div className="table-head">
         <h2>Active listings</h2>
-        <p className="muted" id="listingsNote">{units.toLocaleString()} of {DEFAULT_SETTINGS.maxListings} slots used · worth {kinah(value)} after tax</p>
+        <p className="muted" id="listingsNote">{units.toLocaleString()} of {DEFAULT_SETTINGS.maxListings} slots used · worth {kinah(value)} after tax{bestTime ? ` · ${bestTime}` : ""}</p>
       </div>
       <div className="table-scroll">
         <table className="ledger-table listings-table" id="listings">

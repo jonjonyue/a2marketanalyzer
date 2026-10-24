@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { analyzeMarket, DEFAULT_SETTINGS, VERDICT_ORDER, byRank, isWorthCrafting, SKILLS as CRAFT_SKILLS, shortenName, parseKinah } from "../lib/metrics.js";
+import { analyzeMarket, activityProfile, DEFAULT_SETTINGS, VERDICT_ORDER, byRank, isWorthCrafting, SKILLS as CRAFT_SKILLS, shortenName, parseKinah } from "../lib/metrics.js";
 import { kinah, pct, rate, days, ago, asPct, cx } from "../lib/format.js";
 import { KEYS, readJson, readRaw, writeRaw, useKinah, useStoredRaw } from "../lib/storage.js";
 import { entriesOf, listOne, unlistOne, listingFee, ownActiveListings } from "../lib/ledgerStore.js";
@@ -10,6 +10,7 @@ import { planView } from "../components/Plan.jsx";
 import { BarChart, Scatter, Tooltip, noCostsInView, useTip } from "../components/Charts.jsx";
 import { ExtLink, RecipeDetail } from "../components/Recipe.jsx";
 import { SupplyPanel, SupplyTag } from "../components/Supply.jsx";
+import { ActivityPanel, bestTimeNote } from "../components/Activity.jsx";
 import { MarketMethod } from "./MarketMethod.jsx";
 
 const REGION_SHORT = { NAE: "NA East", NAW: "NA West", EU: "EU", LA: "SA", AS: "Asia" };
@@ -363,6 +364,7 @@ export default function Market() {
     rows.forEach((r, i) => (r.rank = i + 1)); // rank within the whole server, before filters
     return rows;
   }, [market, settings]);
+  const activity = useMemo(() => (market ? activityProfile(market) : null), [market]);
   const rows = useMemo(() => (all || []).filter((r) =>
     (ui.tier === "All" || r.tier === ui.tier) && (ui.skill === "All" || r.skill === ui.skill) && !(ui.hideLoss && r.profit != null && r.profit <= 0)),
   [all, ui.tier, ui.skill, ui.hideLoss]);
@@ -484,6 +486,7 @@ export default function Market() {
           <p className="muted" id="planNote">{plan?.note}</p>
         </div>
         <div id="planBody">{plan?.body}</div>
+        {plan?.plan?.picks?.length > 0 && activity?.best && <p className="muted small plan-time">{bestTimeNote(activity)}.</p>}
       </section>
 
       {all && (() => {
@@ -493,6 +496,8 @@ export default function Market() {
         const planned = new Map((plan?.plan?.picks || []).map((p) => [p.row.key, p.units]));
         return <SupplyPanel rows={all} mine={mine} planned={planned} icons={icons} />;
       })()}
+
+      {activity && <ActivityPanel activity={activity} serverName={srv?.name} />}
 
       <section className="charts">
         <figure className="panel">
