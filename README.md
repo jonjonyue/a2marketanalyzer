@@ -82,9 +82,9 @@ The game publishes no sales statistics for NA servers, so sales are inferred fro
 - Listings that disappear between snapshots count as sales, unless they vanish ~72 h (±90 min) after appearing, which is when listings expire.
 - If the count holds but the cheapest price jumps, the cheapest listing sold and was replaced: one sale.
 - Each sale is priced at the cheapest listing just before it disappeared, which gives the estimated average sale price.
-- Hourly snapshots miss listings posted and bought within the same hour, so the count is multiplied by a conservative 1.2 (`ESTIMATOR.captureAdjust`) and rounded to a tenth of a sale per day.
+- Hourly snapshots miss listings posted and bought within the same hour, so the count is multiplied by 1.5 (`ESTIMATOR.captureAdjust`) and rounded to a tenth of a sale per day.
 
-Validation: on EU server 11304, where these items are new enough that the game's daily change in its 28-day total equals that day's sales, the raw count caught 168 of 265 sales over 40 item-days (63%). A 1.5× adjustment would have matched in aggregate (252); the factor is set to 1.2× (202, about −24%) on purpose so the estimates err low. Per item the capture rate ranged from about 50% (Sapphire Ring, a fast seller) to ~100%, so single-item numbers are approximate. Cancelled listings are indistinguishable from sales.
+Validation (Oct 24 2026): on EU server 11304, for the 14 craft items whose 28-day total never fell (so each day's change equals that day's sales), the raw count with pulled and reposted listings left out caught 396 of 1,076 sales over 111 item-days (37%; 56% in thin markets with 3 or fewer listed, 33% with 4+). The factor is set to 1.5× so estimates still err low; EU markets are busier than NA West. Counting pulled and reposted listings as sales tracked the official numbers about as well (48% caught), so that rule rests on observed NA West behaviour rather than this check. Per item the capture rate ranged from about 50% (Sapphire Ring, a fast seller) to ~100%, so single-item numbers are approximate. Cancelled listings are indistinguishable from sales.
 
 ## Profit calculator
 

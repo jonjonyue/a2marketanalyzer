@@ -29,10 +29,10 @@ export const ESTIMATOR = {
   expiryTolMin: 90,    // a removal within ±90 min of a listing's 72h mark counts as an expiry
   minDays: 1,          // need at least a day of history to report a rate
   // Hourly snapshots miss listings that are posted and bought between two snapshots.
-  // Checked against the game's own daily sales on an EU server (26 item-days, Oct 2026):
-  // the raw count caught about two-thirds of sales (168 of 265). The scale-up is set conservatively at 1.2
-  // so estimates lean low rather than overstating demand.
-  captureAdjust: 1.2,
+  // Checked against the game's own daily sales on EU server 11304 (Oct 24 2026, 111 item-days, 1,076 sales): with
+  // pulled and reposted listings left out, the raw count caught 56% in thin markets and 37% overall (factors 1.8 and
+  // 2.7). Set at 1.5 so estimates still lean low, since EU markets are busier than NA West.
+  captureAdjust: 1.5,
   // In a market this thin (cheapest visible among this few listings), a pricier listing disappearing is the seller
   // pulling it, not a buyer passing over the cheapest: never counted as a sale.
   thinNoPricierSales: 3,
