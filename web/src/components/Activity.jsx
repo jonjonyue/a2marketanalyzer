@@ -47,7 +47,11 @@ export function ActivityPanel({ activity: a, serverName }) {
           </div>
         ))}
       </div>
-      <p className="muted small">Sales per day by weekday. Only {days} days of history so far (1–2 of each weekday), so treat these as rough.</p>
+      {(() => {
+        const seen = a.days.map((d) => d.daysSeen).filter((x) => x > 0);
+        const fewest = Math.min(...seen), most = Math.max(...seen);
+        return <p className="muted small">Sales per day by weekday ({Math.floor(fewest)}–{Math.round(most)} of each weekday so far){fewest < 4 ? ", so treat these as rough; it gets more reliable as history builds up" : ""}.</p>;
+      })()}
     </section>
   );
 }

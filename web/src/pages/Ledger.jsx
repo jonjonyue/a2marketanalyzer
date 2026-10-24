@@ -467,7 +467,7 @@ export default function Ledger() {
     for (const r of analyzeMarket(market, settings)) { map.set(r.key, r); map.set(String(r.shortName).toLowerCase(), r); }
     return map;
   }, [market, settings]);
-  const bestTime = useMemo(() => (market ? bestTimeNote(activityProfile(market)) : ""), [market]);
+  const bestTime = useMemo(() => (market ? bestTimeNote(activityProfile(market, doc?.activity)) : ""), [market, doc]);
   const adviceFor = (l) => {
     const r = (l.key != null && rowFor.get(l.key)) || rowFor.get(String(l.name).toLowerCase());
     if (!r || isMaterials(l.name)) return null;

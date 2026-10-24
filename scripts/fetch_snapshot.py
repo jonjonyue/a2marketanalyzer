@@ -34,6 +34,7 @@ from pathlib import Path
 
 DEFAULT_BASE = "https://aion2.exchange"
 SKIP_EXIT = 3  # --skip-unchanged: nothing to do this run (API down, or no new snapshot since the published data)
+ACTIVITY_KEEP_DAYS = 180  # hourly activity totals kept in each server file (the API itself keeps only ~10 days)
 MAX_SKIP_AGE = timedelta(hours=3)  # refresh anyway once the published data is this old, in case health misreports
 DEFAULT_SERVER = 11201  # Siel · Elyos · North America West (the page's default)
 DEFAULT_SERVERS = (11201, 12201)  # NA West: Siel (Elyos) and Israphel (Asmodian)
@@ -249,6 +250,55 @@ def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tup
 SERVER_FIELDS = ("server_id", "name", "region", "region_name", "faction")
 
 
+def activity_buckets(history: dict) -> dict[str, list[int]]:
+    """Hourly market activity from one server's listing history, keyed by UTC epoch hour:
+    [sales, undercuts, undercuts whose new cheapest sold before being undercut again, undercuts decided either way, snapshots].
+    Same rules as the dashboard's activityProfile."""
+    grid = sorted({p[0] for h in history.values() for p in h})
+    out: dict[int, list[int]] = {}
+    def bucket(t: int) -> list[int]:
+        return out.setdefault(t // 60, [0, 0, 0, 0, 0])
+    for t in grid:
+        bucket(t)[4] += 1
+    for h in history.values():
+        if not h:
+            continue
+        by_t = {p[0]: p for p in h}
+        tl = [(t, by_t[t][1], by_t[t][2]) if t in by_t else (t, 0, None) for t in grid if t >= h[0][0]]
+        for i in range(1, len(tl)):
+            (_, an, alow), (bt, bn, blow) = tl[i - 1], tl[i]
+            d = bn - an
+            sold = max(0, -d) or (1 if d == 0 and alow is not None and (blow is None or blow > alow) else 0)
+            b = bucket(bt)
+            b[0] += sold
+            if d >= 0 and alow and blow and blow < alow:
+                b[1] += 1
+                for t2, _, low2 in tl[i + 1:]:  # did the new cheapest sell before someone went lower? (within 72h)
+                    if t2 - bt > 72 * 60:
+                        break
+                    if low2 is not None and low2 < blow:
+                        b[3] += 1
+                        break
+                    if low2 is None or low2 > blow:
+                        b[2] += 1
+                        b[3] += 1
+                        break
+    return {str(k): v for k, v in out.items()}
+
+
+def merge_activity(previous: dict | None, history: dict) -> dict:
+    """Recompute the hours this run's history covers (later snapshots can still settle an undercut's outcome) and keep
+    older hours from the previously published file, for up to ACTIVITY_KEEP_DAYS."""
+    fresh = activity_buckets(history)
+    first = min((int(k) for k in fresh), default=None)
+    hours = {k: v for k, v in ((previous or {}).get("hours") or {}).items() if first is None or int(k) < first}
+    hours.update(fresh)
+    latest = max((int(k) for k in hours), default=int(time.time() // 3600))
+    cutoff = latest - ACTIVITY_KEEP_DAYS * 24
+    return {"v": 1, "fields": ["sales", "undercuts", "sold_first", "decided", "snapshots"],
+            "hours": {k: hours[k] for k in sorted(hours, key=int) if int(k) >= cutoff}}
+
+
 def parse_time(v) -> datetime | None:
     try:
         t = datetime.fromisoformat(str(v).replace("Z", "+00:00"))
@@ -369,9 +419,17 @@ def main() -> int:
         if market["targets"] and len(errors) > len(market["targets"]) / 2:
             print(f"server {sid}: too many failures ({len(errors)}); keeping its previous file", file=sys.stderr)
             return {**info, "ok": False, "error": f"{len(errors)} request failures"}
+        # Hourly activity builds up across runs: older hours come from the file already published.
+        previous = None
+        if args.fallback:
+            try:
+                previous = (get_json(args.fallback, f"/data/servers/{sid}.json", {"run": int(time.time())}, retries=2) or {}).get("activity")
+            except Exception as err:
+                print(f"server {sid}: couldn't read the published activity ({err}); starting from this run's history", file=sys.stderr)
         doc = {
             "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "source": args.base, "server": info, "model": model, "market": market, "errors": errors,
+            "activity": merge_activity(previous, market["history"]),
         }
         (server_dir / f"{sid}.json").write_text(json.dumps(doc, separators=(",", ":")))
         points = sum(len(h) for h in market["history"].values())

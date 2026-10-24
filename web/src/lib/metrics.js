@@ -169,12 +169,25 @@ export function supplyInflux(est, o = INFLUX) {
  * When buyers are active, server-wide, in the viewer's local time: per hour of day, sales and undercuts per snapshot
  * hour, and how often a listing that became the cheapest in that hour sold before being undercut; per weekday, sales
  * per day. `best` / `worst` are the 3-hour windows with the highest / lowest sell-first rate.
+ * `archive` is the server file's saved hourly totals ({ hours: { utcEpochHour: [sales, undercuts, soldFirst, decided,
+ * snapshots] } }), built up by the data refresh over months; without it, only the market's ~10 days of history are used.
  */
-export function activityProfile(market) {
-  const histories = market?.history || {};
-  const grid = snapshotGrid(histories);
+export function activityProfile(market, archive = null) {
   const hours = Array.from({ length: 24 }, () => ({ sales: 0, cuts: 0, first: 0, decided: 0, snaps: 0 }));
   const days = Array.from({ length: 7 }, () => ({ sales: 0, snaps: 0 }));
+  const saved = archive?.hours ? Object.entries(archive.hours) : [];
+  if (saved.length >= 48) {
+    let lo = Infinity, hi = -Infinity;
+    for (const [k, [sales, cuts, first, decided, snaps]] of saved) {
+      const at = Number(k), d = new Date(at * 3600e3), H = hours[d.getHours()], D = days[d.getDay()];
+      H.sales += sales; H.cuts += cuts; H.first += first; H.decided += decided; H.snaps += snaps;
+      D.sales += sales; D.snaps += snaps;
+      lo = Math.min(lo, at); hi = Math.max(hi, at);
+    }
+    return summarizeActivity(hours, days, [lo * 60, (hi + 1) * 60]);
+  }
+  const histories = market?.history || {};
+  const grid = snapshotGrid(histories);
   if (grid.length < 2) return null;
   for (const t of grid) { const d = new Date(t * 60000); hours[d.getHours()].snaps++; days[d.getDay()].snaps++; }
   for (const h of Object.values(histories)) {
@@ -193,6 +206,10 @@ export function activityProfile(market) {
       }
     }
   }
+  return summarizeActivity(hours, days, [grid[0], grid[grid.length - 1]]);
+}
+
+function summarizeActivity(hours, days, span) {
   const total = hours.reduce((t, x) => ({ first: t.first + x.first, decided: t.decided + x.decided }), { first: 0, decided: 0 });
   const avg = total.decided ? total.first / total.decided : null;
   const windows = Array.from({ length: 24 }, (_, s) => {
@@ -205,8 +222,7 @@ export function activityProfile(market) {
   return {
     hours: hours.map((x) => ({ ...x, salesPerHour: x.snaps ? x.sales / x.snaps : 0, cutsPerHour: x.snaps ? x.cuts / x.snaps : 0, rate: x.decided ? x.first / x.decided : null })),
     days: days.map((x) => ({ ...x, perDay: x.snaps ? (x.sales / x.snaps) * 24 : null, daysSeen: x.snaps / 24 })),
-    avg, best: by((a, b) => b.rate - a.rate || b.salesPerHour - a.salesPerHour), worst: by((a, b) => a.rate - b.rate),
-    span: [grid[0], grid[grid.length - 1]],
+    avg, best: by((a, b) => b.rate - a.rate || b.salesPerHour - a.salesPerHour), worst: by((a, b) => a.rate - b.rate), span,
   };
 }
 

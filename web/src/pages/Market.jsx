@@ -364,7 +364,7 @@ export default function Market() {
     rows.forEach((r, i) => (r.rank = i + 1)); // rank within the whole server, before filters
     return rows;
   }, [market, settings]);
-  const activity = useMemo(() => (market ? activityProfile(market) : null), [market]);
+  const activity = useMemo(() => (market ? activityProfile(market, doc?.activity) : null), [market, doc]);
   const rows = useMemo(() => (all || []).filter((r) =>
     (ui.tier === "All" || r.tier === ui.tier) && (ui.skill === "All" || r.skill === ui.skill) && !(ui.hideLoss && r.profit != null && r.profit <= 0)),
   [all, ui.tier, ui.skill, ui.hideLoss]);
