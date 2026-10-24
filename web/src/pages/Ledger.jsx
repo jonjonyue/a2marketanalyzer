@@ -717,19 +717,22 @@ function ListingRow({ l, left, now, advice, feePct, onSold, onExpire, onRelist }
       <td>{left.toLocaleString()}{left < l.qty && <> <span className="dim">of {l.qty.toLocaleString()}</span></>}</td>
       <td title={full(l.price)}>{kinah(l.price)}</td>
       <td className="pos" title={`${full(net)} after ${l.taxPct}% tax`}>{kinah(net)}</td>
-      <td className="relist-at" title={advice ? `${advice.note}${trendText(advice.trend)}${advice.breakEven ? ` Break-even ${kinah(advice.breakEven)}.` : ""} Relisting costs a new ${kinah(advice.price * left * feePct / 100)} fee.` : "No market data for this item"}>
-        {advice?.price ? <>
-          <strong>{kinah(advice.price)}</strong>{" "}
-          <span className={`relist-tag ${ACTION[advice.action][1]}`}>{ACTION[advice.action][0]}{advice.trend?.change <= -0.03 ? " ↓" : advice.trend?.change >= 0.03 ? " ↑" : ""}</span>
-        </> : <span className="dim">—</span>}
+      <td className="relist-at" title={advice?.price ? `Click to close this listing and relist ${left} at ${kinah(advice.price)}. ${advice.note}${trendText(advice.trend)}${advice.breakEven ? ` Break-even ${kinah(advice.breakEven)}.` : ""} New listing fee ${kinah(advice.price * left * feePct / 100)}.` : "No market data for this item"}>
+        {advice?.price ? (
+          <button type="button" className="mini-btn relist-btn" onClick={() => onRelist(l.id, advice.price)} aria-label={`Relist ${left} at ${kinah(advice.price)}`}>
+            <strong>{kinah(advice.price)}</strong>{" "}
+            <span className={`relist-tag ${ACTION[advice.action][1]}`}>{ACTION[advice.action][0]}{advice.trend?.change <= -0.03 ? " ↓" : advice.trend?.change >= 0.03 ? " ↑" : ""}</span>
+          </button>
+        ) : (
+          <button type="button" className="mini-btn" onClick={() => onRelist(l.id, l.price)} title={`No market data: relist at your price (${kinah(l.price)})`}>Relist</button>
+        )}
       </td>
       <td className="listing-actions">
         <label className="sr-only" htmlFor={`sold-${l.id}`}>Quantity sold</label>{" "}
         <input type="number" id={`sold-${l.id}`} className="sold-qty" min="1" max={left} step="1" value={qty} inputMode="numeric"
           onChange={(e) => setQty(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") onSold(l.id, Number(qty)); }} />{" "}
         <button type="button" className="mini-btn good" onClick={() => onSold(l.id, Number(qty))}>Mark sold</button>{" "}
-        <button type="button" className="mini-btn" title="It didn't sell: close the listing (the listing fee is lost)" onClick={() => onExpire(l.id)}>Expired</button>{" "}
-        <button type="button" className="mini-btn" title={`Close it and post the unsold units again at ${kinah(advice?.price || l.price)}, paying a new listing fee`} onClick={() => onRelist(l.id, advice?.price || l.price)}>Relist</button>
+        <button type="button" className="mini-btn" title="It didn't sell: close the listing (the listing fee is lost)" onClick={() => onExpire(l.id)}>Expired</button>
       </td>
     </tr>
   );

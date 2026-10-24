@@ -21,10 +21,10 @@ export function SupplyPanel({ rows, mine, planned, icons }) {
     <section className="panel table-panel supply-panel" aria-labelledby="supplyTitle">
       <div className="table-head">
         <h2 id="supplyTitle">New supply</h2>
-        <p className="muted">{list.length ? `${list.length} item${list.length > 1 ? "s" : ""} with crafters piling in over the last 24h${hits ? ` · ${hits} you're in` : ""}` : "No unusual new supply in the last 24h."}</p>
+        <p className="muted">{list.length ? `${list.length} item${list.length > 1 ? "s" : ""} with crafters piling in over the last 24h${hits ? ` · ${hits} you're in` : ""}${list.length > 5 ? " · scroll for more" : ""}` : "No unusual new supply in the last 24h."}</p>
       </div>
       {list.length > 0 && (
-        <div className="table-scroll">
+        <div className={`table-scroll supply-scroll${list.length > 5 ? " capped" : ""}`}>
           <table className="ledger-table supply-table">
             <thead><tr><th>Item</th><th>New 24h</th><th>Usual</th><th>Listed</th><th>Sold 24h</th><th>You</th></tr></thead>
             <tbody>

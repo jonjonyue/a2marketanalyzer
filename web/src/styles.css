@@ -502,3 +502,6 @@ td.over-budget { color: var(--serious); }
 .day .track { height: 10px; background: var(--surface-2); border-radius: 5px; overflow: hidden; }
 .day .bar { height: 100%; background: var(--accent); opacity: .7; }
 .day .val { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.supply-scroll.capped { max-height: 232px; overflow-y: auto; } /* header + 5 rows */
+.relist-btn { margin-left: 0; display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.relist-btn strong { color: var(--text); }
