@@ -33,6 +33,9 @@ export const ESTIMATOR = {
   // the raw count caught about two-thirds of sales (168 of 265). The scale-up is set conservatively at 1.2
   // so estimates lean low rather than overstating demand.
   captureAdjust: 1.2,
+  // In a market this thin (cheapest visible among this few listings), a pricier listing disappearing is the seller
+  // pulling it, not a buyer passing over the cheapest: never counted as a sale.
+  thinNoPricierSales: 3,
 };
 
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -48,7 +51,8 @@ const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
  *    the rest are counted as sales (cancellations are indistinguishable and get counted too);
  *  - if the count stays flat but the cheapest price rises, the cheapest listing sold and was replaced: one sale;
  *  - a listing that wasn't the cheapest disappearing, with a new listing showing up within 3 hours, is a seller
- *    cancelling and reposting (usually lower, to undercut), not a sale: buyers take the cheapest. Left out (`repriced`).
+ *    cancelling and reposting (usually lower, to undercut), not a sale: buyers take the cheapest. In a thin market
+ *    (3 or fewer listed) a pricier listing disappearing is never a sale, reposted or not. Left out (`repriced`).
  * Each sale is priced at the cheapest listing just before it disappeared.
  */
 export function estimateSales(history, grid, opts = ESTIMATOR) {
@@ -91,7 +95,11 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
       }
       s = -d - expired;
       sLow = cheapestGone && s > 0 ? 1 : 0;
-      if (!cheapestGone && s > 0) { const r = reposts(timeline, i, s, usedArrivals); s -= r; if (b.t > start) repriced += r; }
+      if (!cheapestGone && s > 0) {
+        const r = a.n <= o.thinNoPricierSales ? s : reposts(timeline, i, s, usedArrivals);
+        s -= r;
+        if (b.t > start) repriced += r;
+      }
     } else if (cheapestGone && a.n > 0) {
       s = sLow = 1;
     }
@@ -219,7 +227,7 @@ export function activityProfile(market, archive = null) {
       const when = new Date(b.t * 60000), H = hours[when.getHours()];
       const gone = a.low != null && (b.low == null || b.low > a.low);
       let sold = Math.max(0, -d) || (d === 0 && gone ? 1 : 0);
-      if (d < 0 && !gone) sold -= reposts(tl, i, sold, used); // cancel-and-reposts aren't buyers
+      if (d < 0 && !gone) sold -= a.n <= ESTIMATOR.thinNoPricierSales ? sold : reposts(tl, i, sold, used); // pulled listings aren't buyers
       if (sold) { H.sales += sold; days[when.getDay()].sales += sold; }
       if (d >= 0 && a.low > 0 && b.low > 0 && b.low < a.low) {
         H.cuts++;

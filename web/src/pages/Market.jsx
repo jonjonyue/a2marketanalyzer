@@ -223,7 +223,7 @@ function salesTitle(r) {
   const e = r.est;
   if (!e) return "No listing history";
   if (e.perDay == null) return "Not enough history yet";
-  return `Estimated: ${e.sales} sales seen in ${e.days.toFixed(1)} days` + (e.repriced ? ` (${e.repriced} cancel-and-repost${e.repriced > 1 ? "s" : ""} left out)` : "");
+  return `Estimated: ${e.sales} sales seen in ${e.days.toFixed(1)} days` + (e.repriced ? ` (${e.repriced} pulled or reposted listing${e.repriced > 1 ? "s" : ""} left out)` : "");
 }
 const overTransfer = (r) => r.transfer?.cost != null && r.price != null && r.price > r.transfer.cost;
 

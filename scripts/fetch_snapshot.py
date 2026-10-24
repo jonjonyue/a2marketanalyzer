@@ -34,6 +34,7 @@ from pathlib import Path
 
 DEFAULT_BASE = "https://aion2.exchange"
 SKIP_EXIT = 3  # --skip-unchanged: nothing to do this run (API down, or no new snapshot since the published data)
+THIN_NO_PRICIER_SALES = 3  # mirrors ESTIMATOR.thinNoPricierSales in the dashboard's metrics.js
 ACTIVITY_KEEP_DAYS = 180  # hourly activity totals kept in each server file (the API itself keeps only ~10 days)
 MAX_SKIP_AGE = timedelta(hours=3)  # refresh anyway once the published data is this old, in case health misreports
 DEFAULT_SERVER = 11201  # Siel · Elyos · North America West (the page's default)
@@ -286,8 +287,8 @@ def activity_buckets(history: dict) -> dict[str, list[int]]:
             d = bn - an
             gone = alow is not None and (blow is None or blow > alow)
             sold = max(0, -d) or (1 if d == 0 and gone else 0)
-            if d < 0 and not gone:  # a listing that wasn't the cheapest went; a repost within 3h means it was cancelled
-                sold -= reposts(tl, i, sold, used)
+            if d < 0 and not gone:  # a listing that wasn't the cheapest went: pulled if the market is thin (3 or fewer
+                sold -= sold if an <= THIN_NO_PRICIER_SALES else reposts(tl, i, sold, used)  # listed) or reposted within 3h
             b = bucket(bt)
             b[0] += sold
             if d >= 0 and alow and blow and blow < alow:
