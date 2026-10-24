@@ -56,12 +56,14 @@ function localInputValue(ts) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 const fmtDate = (ts) => new Date(ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+// Compact "dd/mm hh:mm" for the active listings table.
+const fmtShort = (ts) => { const d = new Date(ts), p = (n) => String(n).padStart(2, "0"); return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 
 function timeLeft(l, now) {
   const ms = l.ts + LISTING_HOURS * 3600e3 - now;
   const h = Math.abs(ms) / 3600e3;
   const txt = h >= 24 ? `${Math.floor(h / 24)}d ${Math.floor(h % 24)}h` : h >= 1 ? `${Math.floor(h)}h` : `${Math.max(1, Math.round(h * 60))}m`;
-  return ms > 0 ? { text: `in ${txt}`, over: false } : { text: `${txt} ago`, over: true };
+  return ms > 0 ? { text: txt, over: false, full: `Expires in ${txt}` } : { text: "Expired", over: true, full: `Expired ${txt} ago` };
 }
 
 function inPeriod(e, period) {
@@ -710,8 +712,8 @@ function ListingRow({ l, left, now, advice, feePct, onSold, onExpire, onRelist }
   return (
     <tr className={tl.over ? "overdue" : undefined}>
       <td className="name"><span className="item-cell"><EntryIcon e={l} /><span>{l.name}</span> <SupplyTag influx={advice?.influx} /></span></td>
-      <td className="dim">{fmtDate(l.ts)}</td>
-      <td className={tl.over ? "warn" : "dim"} title="Listings last 3 days">{tl.over ? "Expired " : "Expires "}{tl.text}</td>
+      <td className="dim" title={fmtDate(l.ts)}>{fmtShort(l.ts)}</td>
+      <td className={tl.over ? "warn" : "dim"} title={`${tl.full} (listings last 3 days)`}>{tl.text}</td>
       <td>{left.toLocaleString()}{left < l.qty && <> <span className="dim">of {l.qty.toLocaleString()}</span></>}</td>
       <td title={full(l.price)}>{kinah(l.price)}</td>
       <td className="pos" title={`${full(net)} after ${l.taxPct}% tax`}>{kinah(net)}</td>
@@ -747,7 +749,7 @@ function Listings({ active, entries, now, adviceFor, feePct, bestTime, onSold, o
       </div>
       <div className="table-scroll">
         <table className="ledger-table listings-table" id="listings">
-          <thead><tr><th>Item</th><th>Listed</th><th>Status</th><th>Left</th><th>Price each</th><th>If sold</th><th>Relist at</th><th><span className="sr-only">Actions</span></th></tr></thead>
+          <thead><tr><th>Item</th><th>Listed</th><th>Time left</th><th>Left</th><th>Price each</th><th>If sold</th><th>Relist at</th><th><span className="sr-only">Actions</span></th></tr></thead>
           <tbody>
             {active.map((l) => <ListingRow key={l.id} l={l} left={remaining(entries, l)} now={now} advice={adviceFor(l)} feePct={feePct} onSold={onSold} onExpire={onExpire} onRelist={onRelist} />)}
           </tbody>
