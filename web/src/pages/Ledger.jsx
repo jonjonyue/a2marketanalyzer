@@ -1,10 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { shortenName, parseKinah, analyzeMarket, DEFAULT_SETTINGS } from "../lib/metrics.js";
+import { shortenName, parseKinah, analyzeMarket, relistAdvice, DEFAULT_SETTINGS } from "../lib/metrics.js";
 import { kinah, full, signClass, cx } from "../lib/format.js";
 import { KEYS, readRaw, readJson, writeRaw, writeKinah, useKinah, useStoredRaw } from "../lib/storage.js";
 import { DEFAULT_SERVER, serverLabel, useServerDoc, useSnapshot } from "../lib/data.js";
 import { ItemIcon } from "../components/ItemIcon.jsx";
-import { listingEntry } from "../lib/ledgerStore.js";
+import { listingEntry, ownListings } from "../lib/ledgerStore.js";
 import { planView } from "../components/Plan.jsx";
 import { LedgerMethod } from "./LedgerMethod.jsx";
 
@@ -395,15 +395,15 @@ export default function Ledger() {
       () => commit({ entries: logRef.current.entries.filter((x) => x.id !== sale.id) }));
   }
 
-  function markExpired(id, { relist = false } = {}) {
+  function markExpired(id, { relist = false, price = null } = {}) {
     const l = entries.find((x) => x.id === id);
     if (!l) return;
     const left = remaining(entries, l);
     const fresh = relist && left > 0
-      ? { id: newId(), side: "list", name: l.name, key: l.key ?? null, qty: left, price: l.price, taxPct: log.settings.taxPct, feePct: log.settings.feePct, ts: Date.now(), note: l.note || "" }
+      ? { id: newId(), side: "list", name: l.name, key: l.key ?? null, qty: left, price: price > 0 ? Math.round(price) : l.price, taxPct: log.settings.taxPct, feePct: log.settings.feePct, ts: Date.now(), note: l.note || "" }
       : null;
     commit({ entries: [...entries.map((x) => (x.id === id ? { ...x, expired: true, expiredTs: Date.now() } : x)), ...(fresh ? [fresh] : [])] });
-    showToast(fresh ? `Relisted ${left} × ${l.name}: new listing fee ${full(amounts(fresh).fee)}.` : `Marked ${left} × ${l.name} as expired; the listing fee is lost.`,
+    showToast(fresh ? `Relisted ${left} × ${l.name} at ${full(fresh.price)}: new listing fee ${full(amounts(fresh).fee)}.` : `Marked ${left} × ${l.name} as expired; the listing fee is lost.`,
       () => commit({ entries: logRef.current.entries
         .filter((x) => !fresh || x.id !== fresh.id)
         .map((x) => { if (x.id !== id) return x; const { expired, expiredTs, ...rest } = x; return rest; }) }));
@@ -458,6 +458,19 @@ export default function Ledger() {
     return rows;
   }, [market, settings, tier, skill]);
   const filters = [tier !== "All" && tier, skill !== "All" && skill].filter(Boolean).join(", ");
+  // Relist advice for each active listing: every craft on the server (not just the plan's filters), by key and name.
+  const rowFor = useMemo(() => {
+    const map = new Map();
+    if (!market) return map;
+    for (const r of analyzeMarket(market, settings)) { map.set(r.key, r); map.set(String(r.shortName).toLowerCase(), r); }
+    return map;
+  }, [market, settings]);
+  const adviceFor = (l) => {
+    const r = (l.key != null && rowFor.get(l.key)) || rowFor.get(String(l.name).toLowerCase());
+    if (!r || isMaterials(l.name)) return null;
+    return relistAdvice(r, { price: l.price, t: Math.floor(l.ts / 60000) }, { ...settings, ownListings: ownListings(entries),
+      snapshotAt: market?.captured_at ? Math.floor(new Date(market.captured_at).getTime() / 60000) : null });
+  };
   // The plan's "+ List" button: log one at the suggested price, like adding it with the form.
   function listFromPlan(p) {
     const entry = listingEntry({ name: p.row.shortName, key: p.row.key, price: p.listAt }, log.settings);
@@ -550,8 +563,8 @@ export default function Ledger() {
       </form>
 
       {active.length > 0 && (
-        <Listings active={active} entries={entries} now={now}
-          onSold={markSold} onExpire={(id) => markExpired(id)} onRelist={(id) => markExpired(id, { relist: true })} />
+        <Listings active={active} entries={entries} now={now} adviceFor={adviceFor} feePct={log.settings.feePct}
+          onSold={markSold} onExpire={(id) => markExpired(id)} onRelist={(id, price) => markExpired(id, { relist: true, price })} />
       )}
 
       <section className="controls ledger-controls" aria-label="Your kinah, period and fees">
@@ -678,7 +691,13 @@ function KinahField({ have, lastDelta }) {
   );
 }
 
-function ListingRow({ l, left, now, onSold, onExpire, onRelist }) {
+const ACTION = { keep: ["Keep", "dim"], lower: ["Lower", "neg"], raise: ["Raise", "pos"] };
+function trendText(t) {
+  if (t?.change == null || Math.abs(t.change) < 0.03) return "";
+  return ` Trend ${t.change < 0 ? "↓" : "↑"} ${Math.abs(Math.round(t.change * 100))}% (recent ~${kinah(t.recent)} vs week ~${kinah(t.week)}).`;
+}
+
+function ListingRow({ l, left, now, advice, feePct, onSold, onExpire, onRelist }) {
   const [qty, setQty] = useState(String(left));
   useEffect(() => setQty(String(left)), [left]);
   const gross = left * l.price;
@@ -692,19 +711,25 @@ function ListingRow({ l, left, now, onSold, onExpire, onRelist }) {
       <td>{left.toLocaleString()}{left < l.qty && <> <span className="dim">of {l.qty.toLocaleString()}</span></>}</td>
       <td title={full(l.price)}>{kinah(l.price)}</td>
       <td className="pos" title={`${full(net)} after ${l.taxPct}% tax`}>{kinah(net)}</td>
+      <td className="relist-at" title={advice ? `${advice.note}${trendText(advice.trend)}${advice.breakEven ? ` Break-even ${kinah(advice.breakEven)}.` : ""} Relisting costs a new ${kinah(advice.price * left * feePct / 100)} fee.` : "No market data for this item"}>
+        {advice?.price ? <>
+          <strong>{kinah(advice.price)}</strong>{" "}
+          <span className={`relist-tag ${ACTION[advice.action][1]}`}>{ACTION[advice.action][0]}{advice.trend?.change <= -0.03 ? " ↓" : advice.trend?.change >= 0.03 ? " ↑" : ""}</span>
+        </> : <span className="dim">—</span>}
+      </td>
       <td className="listing-actions">
         <label className="sr-only" htmlFor={`sold-${l.id}`}>Quantity sold</label>{" "}
         <input type="number" id={`sold-${l.id}`} className="sold-qty" min="1" max={left} step="1" value={qty} inputMode="numeric"
           onChange={(e) => setQty(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") onSold(l.id, Number(qty)); }} />{" "}
         <button type="button" className="mini-btn good" onClick={() => onSold(l.id, Number(qty))}>Mark sold</button>{" "}
         <button type="button" className="mini-btn" title="It didn't sell: close the listing (the listing fee is lost)" onClick={() => onExpire(l.id)}>Expired</button>{" "}
-        <button type="button" className="mini-btn" title="Close it as expired and post the unsold units again, paying a new listing fee" onClick={() => onRelist(l.id)}>Relist</button>
+        <button type="button" className="mini-btn" title={`Close it and post the unsold units again at ${kinah(advice?.price || l.price)}, paying a new listing fee`} onClick={() => onRelist(l.id, advice?.price || l.price)}>Relist</button>
       </td>
     </tr>
   );
 }
 
-function Listings({ active, entries, now, onSold, onExpire, onRelist }) {
+function Listings({ active, entries, now, adviceFor, feePct, onSold, onExpire, onRelist }) {
   let units = 0, value = 0;
   for (const l of active) {
     const left = remaining(entries, l), gross = left * l.price;
@@ -718,9 +743,9 @@ function Listings({ active, entries, now, onSold, onExpire, onRelist }) {
       </div>
       <div className="table-scroll">
         <table className="ledger-table listings-table" id="listings">
-          <thead><tr><th>Item</th><th>Listed</th><th>Status</th><th>Left</th><th>Price each</th><th>If sold</th><th><span className="sr-only">Actions</span></th></tr></thead>
+          <thead><tr><th>Item</th><th>Listed</th><th>Status</th><th>Left</th><th>Price each</th><th>If sold</th><th>Relist at</th><th><span className="sr-only">Actions</span></th></tr></thead>
           <tbody>
-            {active.map((l) => <ListingRow key={l.id} l={l} left={remaining(entries, l)} now={now} onSold={onSold} onExpire={onExpire} onRelist={onRelist} />)}
+            {active.map((l) => <ListingRow key={l.id} l={l} left={remaining(entries, l)} now={now} advice={adviceFor(l)} feePct={feePct} onSold={onSold} onExpire={onExpire} onRelist={onRelist} />)}
           </tbody>
         </table>
       </div>

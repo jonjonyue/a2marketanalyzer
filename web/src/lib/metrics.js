@@ -720,6 +720,56 @@ function typicalPrice(r, o) {
   return (normalUnits >= 2 ? weightedMedian(normalEvents, now) : weightedMedian(events, now)) ?? (r.soldAvg > 0 ? r.soldAvg : null);
 }
 
+/** Where the price is heading: the recent (recency-weighted) usual price vs the plain week's median, and the change. */
+export function marketTrend(r, o = LISTING_ADVICE) {
+  const events = r.est?.events || [];
+  const normal = events.filter(([, n]) => n > o.thinListings);
+  const use = normal.reduce((t, e) => t + e[2], 0) >= 2 ? normal : events;
+  const recent = typicalPrice(r, o), week = weightedMedian(use);
+  return { recent, week, change: recent && week ? recent / week - 1 : null };
+}
+
+/**
+ * What to relist one of your active listings at, if it expires or you cancel it early: { price, action, note, trend }.
+ * action: "keep" (your price still fits), "lower" or "raise". `mine` = { price, t (epoch minutes it was listed) }.
+ * settings: the plan's settings plus ownListings (your logged listings) and snapshotAt (epoch minutes of the market data).
+ * If you're the cheapest in the snapshot you're not undercutting yourself: keep the price unless recent sales are
+ * below it. Otherwise it's the same List at price the plan suggests (undercut-aware, never below break-even).
+ */
+export function relistAdvice(r, mine, settings = DEFAULT_SETTINGS) {
+  const s = { ...DEFAULT_SETTINGS, ...settings };
+  const keep = 1 - (s.salesTaxPct + s.listingFeePct) / 100;
+  const breakEven = r.cost > 0 && keep > 0 ? Math.ceil(r.cost / keep) : 0;
+  const trend = marketTrend(r);
+  const inSnapshot = s.snapshotAt != null && mine.t <= s.snapshotAt;
+  const cheapestIsMine = inSnapshot && r.listing > 0 && Math.abs(r.listing - mine.price) <= mine.price * 0.01;
+  let price, note;
+  if (cheapestIsMine) {
+    const usual = trend.recent;
+    if (usual && mine.price > usual * 1.02) {
+      price = Math.max(undercutPrice(usual + 1), breakEven);
+      note = `You're the cheapest, but recent sales are ~${fmtK(usual)}.`;
+    } else if (usual && usual > mine.price * 1.02 && (r.listings ?? 0) <= 1) {
+      // Yours is the only listing and recent sales went higher: relist closer to them.
+      price = undercutPrice(usual + 1);
+      note = `Yours is the only listing and recent sales are ~${fmtK(usual)}.`;
+    } else {
+      price = mine.price;
+      note = "You're still the cheapest." + (usual && usual > mine.price * 1.02 ? ` Recent sales are ~${fmtK(usual)}, but other listings may sit between.` : "");
+    }
+  } else {
+    // Your listing, if the snapshot has it, isn't the cheapest: someone undercut you. Price against them.
+    const others = inSnapshot ? { ...r, listings: Math.max(0, (r.listings ?? 0) - 1) } : r;
+    const a = suggestedListPrice(others, s);
+    price = a.price != null ? Math.max(a.price, breakEven) : null;
+    note = (r.listing > 0 && r.listing < mine.price ? `Undercut: cheapest is ${fmtK(r.listing)}. ` : "") + (a.note || "") +
+      (a.price != null && a.price < breakEven ? ` The market is below your break-even (${fmtK(breakEven)}), so this holds at break-even.` : "");
+  }
+  if (price == null) return { price: null, action: null, note: "No market data.", trend };
+  const action = Math.abs(price - mine.price) <= mine.price * 0.005 ? "keep" : price < mine.price ? "lower" : "raise";
+  return { price, action, note, trend, breakEven: breakEven || null };
+}
+
 /**
  * Tally what happened after undercuts, by price level vs the usual sale price: { band: { sold, cut, falls[] } }.
  * `rows` are analyzed crafts; `isOwn(row, undercut)` leaves out your own listings.
