@@ -46,7 +46,9 @@ const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
  * Between two snapshots:
  *  - listings that disappear are removals; removals that land ~72h after a listing appeared are expiries,
  *    the rest are counted as sales (cancellations are indistinguishable and get counted too);
- *  - if the count stays flat but the cheapest price rises, the cheapest listing sold and was replaced: one sale.
+ *  - if the count stays flat but the cheapest price rises, the cheapest listing sold and was replaced: one sale;
+ *  - a listing that wasn't the cheapest disappearing, with a new listing showing up within 3 hours, is a seller
+ *    cancelling and reposting (usually lower, to undercut), not a sale: buyers take the cheapest. Left out (`repriced`).
  * Each sale is priced at the cheapest listing just before it disappeared.
  */
 export function estimateSales(history, grid, opts = ESTIMATOR) {
@@ -63,7 +65,8 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
   const end = timeline[timeline.length - 1].t;
   const start = Math.max(first, end - o.windowDays * 1440);
   const expiries = []; // predicted expiry times (epoch minutes) of listings we saw appear
-  let sales = 0, cheapestSold = 0, priceSum = 0, priceN = 0;
+  let sales = 0, cheapestSold = 0, priceSum = 0, priceN = 0, repriced = 0;
+  const usedArrivals = new Map(); // timeline index -> arrivals already matched to a cancel-and-repost
   // New supply: listings that appeared (count went up, or a cheaper one showed up while the count held or fell),
   // in the last 24h vs before it, plus sales in the last 24h and the listing count 24h ago.
   const dayAgo = end - 1440;
@@ -88,6 +91,7 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
       }
       s = -d - expired;
       sLow = cheapestGone && s > 0 ? 1 : 0;
+      if (!cheapestGone && s > 0) { const r = reposts(timeline, i, s, usedArrivals); s -= r; if (b.t > start) repriced += r; }
     } else if (cheapestGone && a.n > 0) {
       s = sLow = 1;
     }
@@ -120,6 +124,7 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
     avgSalePrice: priceN ? priceSum / priceN : null,
     events,
     end, // the latest snapshot (epoch minutes)
+    repriced, // cancel-and-reposts left out of sales
     undercuts,
     undercutDepths: undercuts.map((u) => u[3]),
     // Per day, as observed (no capture adjustment): undercuts vs sales of the cheapest listing. Their ratio says how
@@ -131,6 +136,20 @@ export function estimateSales(history, grid, opts = ESTIMATOR) {
     },
     cheapestSoldPerDay: enough ? cheapestSold / days : null,
   };
+}
+
+// How many of `want` listings removed at timeline[i] (not the cheapest) came back as new listings within 3 hours:
+// cancel-and-reposts. Each new listing is matched once (`used`: timeline index -> arrivals already claimed).
+export const REPOST_WINDOW_MIN = 180;
+function reposts(timeline, i, want, used) {
+  let got = 0;
+  for (let j = i + 1; j < timeline.length && timeline[j].t - timeline[i].t <= REPOST_WINDOW_MIN && got < want; j++) {
+    const x = timeline[j - 1], y = timeline[j];
+    const arrived = Math.max(0, y.n - x.n) + (y.n === x.n && y.low != null && x.low != null && y.low < x.low ? 1 : 0);
+    const take = Math.min(arrived - (used.get(j) || 0), want - got);
+    if (take > 0) { used.set(j, (used.get(j) || 0) + take); got += take; }
+  }
+  return got;
 }
 
 // What happened to a listing that just became the cheapest at timeline[i]: [outcome, fall] (see estimateSales).
@@ -194,10 +213,13 @@ export function activityProfile(market, archive = null) {
     if (!h?.length) continue;
     const byT = new Map(h.map((p) => [p[0], p]));
     const tl = grid.filter((t) => t >= h[0][0]).map((t) => { const p = byT.get(t); return p ? { t, n: p[1], low: p[2] } : { t, n: 0, low: null }; });
+    const used = new Map();
     for (let i = 1; i < tl.length; i++) {
       const a = tl[i - 1], b = tl[i], d = b.n - a.n;
       const when = new Date(b.t * 60000), H = hours[when.getHours()];
-      const sold = Math.max(0, -d) || (d === 0 && a.low != null && (b.low == null || b.low > a.low) ? 1 : 0);
+      const gone = a.low != null && (b.low == null || b.low > a.low);
+      let sold = Math.max(0, -d) || (d === 0 && gone ? 1 : 0);
+      if (d < 0 && !gone) sold -= reposts(tl, i, sold, used); // cancel-and-reposts aren't buyers
       if (sold) { H.sales += sold; days[when.getDay()].sales += sold; }
       if (d >= 0 && a.low > 0 && b.low > 0 && b.low < a.low) {
         H.cuts++;

@@ -250,6 +250,21 @@ def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tup
 SERVER_FIELDS = ("server_id", "name", "region", "region_name", "faction")
 
 
+def reposts(tl: list, i: int, want: int, used: dict[int, int]) -> int:
+    """How many of `want` (non-cheapest) listings removed at tl[i] came back as new listings within 3 hours. Mirrors the
+    dashboard's reposts(): each new listing is matched once."""
+    got, j = 0, i + 1
+    while j < len(tl) and tl[j][0] - tl[i][0] <= 180 and got < want:
+        (_, xn, xlow), (_, yn, ylow) = tl[j - 1], tl[j]
+        arrived = max(0, yn - xn) + (1 if yn == xn and ylow is not None and xlow is not None and ylow < xlow else 0)
+        take = min(arrived - used.get(j, 0), want - got)
+        if take > 0:
+            used[j] = used.get(j, 0) + take
+            got += take
+        j += 1
+    return got
+
+
 def activity_buckets(history: dict) -> dict[str, list[int]]:
     """Hourly market activity from one server's listing history, keyed by UTC epoch hour:
     [sales, undercuts, undercuts whose new cheapest sold before being undercut again, undercuts decided either way, snapshots].
@@ -265,10 +280,14 @@ def activity_buckets(history: dict) -> dict[str, list[int]]:
             continue
         by_t = {p[0]: p for p in h}
         tl = [(t, by_t[t][1], by_t[t][2]) if t in by_t else (t, 0, None) for t in grid if t >= h[0][0]]
+        used: dict[int, int] = {}
         for i in range(1, len(tl)):
             (_, an, alow), (bt, bn, blow) = tl[i - 1], tl[i]
             d = bn - an
-            sold = max(0, -d) or (1 if d == 0 and alow is not None and (blow is None or blow > alow) else 0)
+            gone = alow is not None and (blow is None or blow > alow)
+            sold = max(0, -d) or (1 if d == 0 and gone else 0)
+            if d < 0 and not gone:  # a listing that wasn't the cheapest went; a repost within 3h means it was cancelled
+                sold -= reposts(tl, i, sold, used)
             b = bucket(bt)
             b[0] += sold
             if d >= 0 and alow and blow and blow < alow:
