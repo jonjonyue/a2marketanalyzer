@@ -505,3 +505,4 @@ td.over-budget { color: var(--serious); }
 .supply-scroll.capped { max-height: 232px; overflow-y: auto; } /* header + 5 rows */
 .relist-btn { margin-left: 0; display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
 .relist-btn strong { color: var(--text); }
+.undercut-mark { font-size: 10px; }

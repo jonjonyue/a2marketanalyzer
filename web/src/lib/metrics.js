@@ -863,7 +863,10 @@ export function relistAdvice(r, mine, settings = DEFAULT_SETTINGS) {
   const breakEven = r.cost > 0 && keep > 0 ? Math.ceil(r.cost / keep) : 0;
   const trend = marketTrend(r);
   const inSnapshot = s.snapshotAt != null && mine.t <= s.snapshotAt;
-  const cheapestIsMine = inSnapshot && r.listing > 0 && Math.abs(r.listing - mine.price) <= mine.price * 0.01;
+  // Exact: the snapshot's cheapest price is the true cheapest, so anything below your price, even by 1 kinah, is someone
+  // undercutting you. At exactly your price it's yours (or a tie). Needs the exact price you listed at in the log.
+  const cheapestIsMine = inSnapshot && r.listing > 0 && r.listing >= mine.price && r.listing <= mine.price * 1.01;
+  const undercutBy = r.listing > 0 && r.listing < mine.price ? mine.price - r.listing : 0;
   let price, note;
   if (cheapestIsMine) {
     const usual = trend.recent;
@@ -883,12 +886,12 @@ export function relistAdvice(r, mine, settings = DEFAULT_SETTINGS) {
     const others = inSnapshot ? { ...r, listings: Math.max(0, (r.listings ?? 0) - 1) } : r;
     const a = suggestedListPrice(others, s);
     price = a.price != null ? Math.max(a.price, breakEven) : null;
-    note = (r.listing > 0 && r.listing < mine.price ? `Undercut: cheapest is ${fmtK(r.listing)}. ` : "") + (a.note || "") +
+    note = (undercutBy ? `Undercut by ${undercutBy.toLocaleString("en-US")} kinah: cheapest is ${r.listing.toLocaleString("en-US")}. ` : "") + (a.note || "") +
       (a.price != null && a.price < breakEven ? ` The market is below your break-even (${fmtK(breakEven)}), so this holds at break-even.` : "");
   }
   if (price == null) return { price: null, action: null, note: "No market data.", trend };
   const action = Math.abs(price - mine.price) <= mine.price * 0.005 ? "keep" : price < mine.price ? "lower" : "raise";
-  return { price, action, note, trend, breakEven: breakEven || null };
+  return { price, action, note, trend, breakEven: breakEven || null, undercutBy, cheapest: r.listing > 0 ? r.listing : null };
 }
 
 /**

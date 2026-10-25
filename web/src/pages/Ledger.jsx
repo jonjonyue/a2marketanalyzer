@@ -715,7 +715,9 @@ function ListingRow({ l, left, now, advice, feePct, onSold, onExpire, onRelist }
       <td className="dim" title={fmtDate(l.ts)}>{fmtShort(l.ts)}</td>
       <td className={tl.over ? "warn" : "dim"} title={`${tl.full} (listings last 3 days)`}>{tl.text}</td>
       <td>{left.toLocaleString()}{left < l.qty && <> <span className="dim">of {l.qty.toLocaleString()}</span></>}</td>
-      <td title={full(l.price)}>{kinah(l.price)}</td>
+      <td title={advice?.undercutBy ? `${full(l.price)}: undercut by ${full(advice.undercutBy)} kinah (cheapest is ${full(advice.cheapest)})` : full(l.price)}>
+        {advice?.undercutBy > 0 && <span className="undercut-mark neg" aria-label="undercut">▼ </span>}{kinah(l.price)}
+      </td>
       <td className="pos" title={`${full(net)} after ${l.taxPct}% tax`}>{kinah(net)}</td>
       <td className="relist-at" title={advice?.price ? `Click to close this listing and relist ${left} at ${kinah(advice.price)}. ${advice.note}${trendText(advice.trend)}${advice.breakEven ? ` Break-even ${kinah(advice.breakEven)}.` : ""} New listing fee ${kinah(advice.price * left * feePct / 100)}.` : "No market data for this item"}>
         {advice?.price ? (
