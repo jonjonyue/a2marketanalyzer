@@ -349,7 +349,9 @@ export default function Market() {
     // Stackable items (stones) go up as one listing of every unit the plan makes; gear one at a time.
     const entry = listOne({ name: p.row.shortName, key: p.row.key, price: p.listAt, qty: p.row.stackable ? p.units : 1 });
     if (!entry) return toast("Couldn't save in this browser (private window or storage blocked).");
-    toast(`Listed ${entry.qty} × ${entry.name} at ${kinah(entry.price)} each (fee ${kinah(listingFee(entry))}). It's in the Profit Calculator.`, () => unlistOne(entry));
+    held.markListed(p.row.key, entry.qty);
+    toast(`Listed ${entry.qty} × ${entry.name} at ${kinah(entry.price)} each (fee ${kinah(listingFee(entry))}). It's in the Profit Calculator.`,
+      () => { unlistOne(entry); held.markListed(p.row.key, -entry.qty); });
   };
 
   const servers = snapshot?.servers || [];
@@ -393,7 +395,7 @@ export default function Market() {
   const liveEntries = useMemo(() => entriesOf(ledgerRaw), [ledgerRaw]);
   const held = useHeldPlan({ ready: !!market, server: sid, budget, entries: liveEntries });
   const plan = market && planView({
-    rows, budget: held.budget, settings, icons, snapshotAt: market.captured_at, serverName: srv?.name, entries: held.entries, now: held.now, onList: listFromPlan,
+    rows, budget: held.budget, settings, icons, snapshotAt: market.captured_at, serverName: srv?.name, entries: held.entries, now: held.now, listed: held.listed, onList: listFromPlan,
     emptyHint: "Enter your kinah above to see what to craft.",
   });
 

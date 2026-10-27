@@ -25,7 +25,8 @@ export function requestPlanRefresh() { window.dispatchEvent(new Event(REFRESH));
  * Holds the plan's kinah and listings still, so logging a buy or a listing doesn't reshuffle the plan while you
  * work through it. It takes the live values on page load, when the server changes, when you first set your kinah,
  * when you type your kinah, and on Refresh. Settings (goal, filters, fees) always apply right away.
- * Returns { budget, entries, now, stale, refresh }.
+ * "+ List" marks a craft listed (`markListed`), which takes it off the held plan until the next refresh.
+ * Returns { budget, entries, now, listed, stale, refresh, markListed }.
  */
 export function useHeldPlan({ ready, server, budget, entries }) {
   const live = { server, budget, entries, now: Date.now() };
@@ -42,9 +43,11 @@ export function useHeldPlan({ ready, server, budget, entries }) {
   const take = ready && (!held || held.server !== server || (held.budget == null && budget != null));
   useEffect(() => { if (take) setHeld(liveRef.current); }, [take]);
   const h = take || !held ? live : held;
-  return { budget: h.budget, entries: h.entries, now: h.now,
+  // Units listed from the plan since it was made, by craft key (n < 0 undoes).
+  const markListed = (key, n) => setHeld((x) => x && { ...x, listed: { ...x.listed, [key]: Math.max(0, (x.listed?.[key] || 0) + n) } });
+  return { budget: h.budget, entries: h.entries, now: h.now, listed: h.listed || {},
     stale: !take && !!held && (held.budget !== budget || held.entries !== entries),
-    refresh: () => setWant((w) => w + 1) };
+    refresh: () => setWant((w) => w + 1), markListed };
 }
 
 /** The plan's Refresh button: lit up when your kinah or listings changed since the plan was made. */
@@ -70,12 +73,33 @@ function listTitle(p) {
  * listings count); `icons` is the market's icon map; `scope` describes what the plan covers. `onList(pick)`, if given,
  * adds a button per craft that logs a listing of one at the suggested price.
  */
-export function planView({ rows, budget, settings, serverName, icons = {}, scope = "", emptyHint, snapshotAt = null, entries = [], now = Date.now(), onList = null }) {
+export function planView({ rows, budget, settings, serverName, icons = {}, scope = "", emptyHint, snapshotAt = null, entries = [], now = Date.now(), listed = {}, onList = null }) {
   if (!budget) {
     return { note: "", body: <p className="muted plan-empty">{emptyHint || "Enter how much kinah you have to see what to craft with it."}</p> };
   }
   const plan = planBudget(rows, budget, { ...settings, ownListings: ownListings(entries), ownActive: ownActiveListings(entries, now), ownActiveCount: activeListingCount(entries, now, stackableTest(rows)),
     snapshotAt: snapshotAt ? Math.floor(new Date(snapshotAt).getTime() / 60000) : null });
+  // Crafts you've listed from this plan (since the last refresh) come off it; the totals cover what's left.
+  const doneUnits = (p) => Math.min(p.units, listed[p.row.key] || 0);
+  const isDone = (p) => doneUnits(p) >= (p.row.stackable ? 1 : p.units);
+  const done = plan.picks.filter(isDone);
+  if (done.length) {
+    const picks = plan.picks.filter((p) => !isDone(p));
+    const sum = (f) => picks.reduce((t, p) => t + f(p), 0);
+    const capital = sum((p) => p.capital), profit = sum((p) => p.profit);
+    Object.assign(plan, { picks, capital, profit, spend: sum((p) => p.spend), profitPerDay: sum((p) => p.profitPerDay),
+      roi: capital ? (profit / capital) * 100 : null });
+    // Their listing slots move from "planned" to "listed".
+    const moved = done.reduce((t, p) => t + (p.row.stackable ? 1 : p.units), 0);
+    plan.slots = { ...plan.slots, yours: plan.slots.yours + moved, planned: Math.max(0, plan.slots.planned - moved) };
+  }
+  const listedNote = done.length > 0 && (
+    <p className="muted small plan-listed">
+      Listed from this plan:{" "}
+      {done.map((p, i) => <span key={p.row.key}>{i ? ", " : ""}<strong>{p.row.shortName}</strong>{p.units > 1 ? ` (${p.units})` : ""}</span>)}.
+      {" "}Refresh for a new plan.
+    </p>
+  );
   const note = `For ${kinah(budget)} on ${serverName || "this server"}${scope ? `, ${scope}` : ""}.`;
   const icon = (key) => <ItemIcon icon={icons[key]} size="small" />;
   const covered = plan.covered.length > 0 && (
@@ -97,10 +121,11 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
       : null;
   if (!plan.picks.length) {
     return { note, plan, body: <>
+      {listedNote}
       {covered}
       {full ? slotNote : plan.nextUp
         ? <p className="plan-empty">Nothing fits {kinah(budget)} yet. Cheapest good option: <strong>{plan.nextUp.row.shortName}</strong>, about <strong>{kinah(plan.nextUp.capital)}</strong>.</p>
-        : !plan.covered.length && <p className="plan-empty muted">Nothing worth crafting right now.</p>}
+        : !plan.covered.length && !done.length && <p className="plan-empty muted">Nothing worth crafting right now.</p>}
     </> };
   }
   const body = <>
@@ -127,6 +152,7 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
               <td title={`Room for ${p.slots} in the next ${settings.planDays ?? 1.5} days of sales`}>
                 {p.units}
                 {p.units < p.slots && <> <span className="dim">of {p.slots}</span></>}
+                {doneUnits(p) > 0 && <> <span className="dim">({doneUnits(p)} listed)</span></>}
                 {p.myUnits > 0 && <> <span className="dim" title={`You already have ${p.myUnits} listed (Profit Calculator); they take ${p.myUnits === 1 ? "a place" : "places"} in the market's room`}>+{p.myUnits} listed</span></>}
               </td>
               <td title={`For 90% odds of making ${p.units}`}>{kinah(p.capital)}</td>
@@ -141,6 +167,7 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
         </tbody>
       </table>
     </div>
+    {listedNote}
     {covered}
     {slotNote}
     {freeAfter > 0 && plan.nextUp

@@ -482,12 +482,13 @@ export default function Ledger() {
   function listFromPlan(p) {
     const entry = listingEntry({ name: p.row.shortName, key: p.row.key, price: p.listAt, qty: p.row.stackable ? p.units : 1 }, log.settings);
     commit({ entries: [...entries, entry] });
+    held.markListed(p.row.key, entry.qty);
     showToast(`Listed ${entry.qty} × ${entry.name} at ${full(entry.price)} each: listing fee ${full(amounts(entry).fee)}.`,
-      () => commit({ entries: logRef.current.entries.filter((x) => x.id !== entry.id) }));
+      () => { commit({ entries: logRef.current.entries.filter((x) => x.id !== entry.id) }); held.markListed(p.row.key, -entry.qty); });
   }
   const held = useHeldPlan({ ready: !!planRows, server: srv?.server_id ?? null, budget: have > 0 ? have : null, entries });
   const plan = planRows && planView({
-    rows: planRows, budget: held.budget, settings, serverName: srv?.name, snapshotAt: market.captured_at, icons: market.icons, entries: held.entries, now: held.now, onList: listFromPlan,
+    rows: planRows, budget: held.budget, settings, serverName: srv?.name, snapshotAt: market.captured_at, icons: market.icons, entries: held.entries, now: held.now, listed: held.listed, onList: listFromPlan,
     scope: filters,
     emptyHint: "Enter your kinah below to see what to craft.",
   });
