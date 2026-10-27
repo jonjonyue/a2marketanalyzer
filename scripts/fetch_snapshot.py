@@ -41,7 +41,8 @@ DEFAULT_SERVER = 11201  # Siel · Elyos · North America West (the page's defaul
 DEFAULT_SERVERS = (11201, 12201)  # NA West: Siel (Elyos) and Israphel (Asmodian)
 WORKERS = 3  # servers fetched in parallel; each still waits DELAY_S between its own requests
 RECIPES_DIR = Path(__file__).resolve().parent.parent / "recipes"
-TD_RECIPES = RECIPES_DIR / "true_dragon.json"   # True Dragon (combo -> Splendent True Dragon)
+TD_RECIPES = RECIPES_DIR / "true_dragon.json"
+STONE_RECIPES = RECIPES_DIR / "magic_stones.json"  # Superior manastones / soulstones (Alchemy, sold in stacks)   # True Dragon (combo -> Splendent True Dragon)
 HISTORY_DAYS = 10       # 7-day estimate window + 3 days so expiries of earlier listings can be matched
 USER_AGENT = "a2marketanalyzer-dashboard/1.0 (+https://github.com/jonjonyue/a2marketanalyzer)"
 DELAY_S = float(__import__("os").environ.get("FETCH_DELAY_S", "0.25"))  # be gentle with the site: ~4 requests/second max
@@ -59,6 +60,7 @@ TARGET_FIELDS = (
 # True Dragon and Star Dragon share the tier labels "True Dragon" / "Splendent True Dragon".
 EXPERT_TIER = "Expert's Splendent"
 TD_TIER, STD_TIER = "True Dragon", "Splendent True Dragon"
+STONE_TIER = "Superior Stone"
 BASE_TIER = "Artisan's Splendent"
 
 ITEM_FIELDS = (
@@ -193,6 +195,27 @@ def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tup
             "cost": cost, "cost_market": cost_market, "carried": None, "missing": 0,
             "market_price": i.get("price"), "listings": i.get("listings"), "margin": None, "margin_pct": None,
         })
+
+    # Superior manastones and soulstones: Alchemy crafts from recipes/magic_stones.json, listed in stacks.
+    stone_recipes = json.loads(STONE_RECIPES.read_text())
+    stones = {s["key"]: s for s in stone_recipes["stones"]}
+    time.sleep(DELAY_S)
+    try:
+        resp = get_json(base, "/api/items", {"keys": ",".join(map(str, stones)), "limit": 100, "server": server_id}) or {}
+        for i in resp.get("items") or []:
+            st = stones.get(i["item_key"])
+            if not st:
+                continue
+            items.append(pick(i, ITEM_FIELDS))
+            targets.append({
+                "target_key": i["item_key"], "name": i.get("name"), "tier": STONE_TIER,
+                "category": "Magic Stone", "skill": "Alchemy", "profile_label": st["kind"] + "s", "stackable": True,
+                "cost": None, "cost_market": None, "carried": None, "missing": 0,
+                "market_price": i.get("price"), "listings": i.get("listings"), "margin": None, "margin_pct": None,
+            })
+    except Exception as err:  # the stones are an extra; never fail the gear over them
+        errors.append(f"stones: {err}")
+        print(errors[-1], file=sys.stderr)
     keys = [t["target_key"] for t in targets]
 
     since = datetime.now(timezone.utc) - timedelta(days=HISTORY_DAYS)
@@ -206,7 +229,7 @@ def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tup
             print(errors[-1], file=sys.stderr)
 
     # True Dragon recipe materials, priced at the current cheapest listing on this server.
-    mat_names = td_recipes["materials"]
+    mat_names = {**td_recipes["materials"], **stone_recipes["materials"]}
     time.sleep(DELAY_S)
     resp = get_json(base, "/api/items", {"keys": ",".join(mat_names), "limit": 100, "server": server_id}) or {}
     priced = {str(i["item_key"]): i for i in resp.get("items") or []}
@@ -244,6 +267,7 @@ def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tup
         "materials": materials,
         "icons": icons,
         "chains": chains,
+        "stone_recipes": {k: stone_recipes[k] for k in ("stones", "npc_prices", "powder")},
     }
     return market, crafts.get("model"), errors
 

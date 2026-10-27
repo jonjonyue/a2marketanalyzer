@@ -1,5 +1,5 @@
 import { planBudget } from "../lib/metrics.js";
-import { ownListings, ownActiveListings, activeListingCount } from "../lib/ledgerStore.js";
+import { ownListings, ownActiveListings, activeListingCount, stackableTest } from "../lib/ledgerStore.js";
 import { kinah, pct, days } from "../lib/format.js";
 import { ItemIcon } from "./ItemIcon.jsx";
 import { SupplyTag } from "./Supply.jsx";
@@ -21,7 +21,7 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
   if (!budget) {
     return { note: "", body: <p className="muted plan-empty">{emptyHint || "Enter how much kinah you have to see what to craft with it."}</p> };
   }
-  const plan = planBudget(rows, budget, { ...settings, ownListings: ownListings(entries), ownActive: ownActiveListings(entries), ownActiveCount: activeListingCount(entries),
+  const plan = planBudget(rows, budget, { ...settings, ownListings: ownListings(entries), ownActive: ownActiveListings(entries), ownActiveCount: activeListingCount(entries, Date.now(), stackableTest(rows)),
     snapshotAt: snapshotAt ? Math.floor(new Date(snapshotAt).getTime() / 60000) : null });
   const note = `For ${kinah(budget)} on ${serverName || "this server"}${scope ? `, ${scope}` : ""}.`;
   const icon = (key) => <ItemIcon icon={icons[key]} size="small" />;

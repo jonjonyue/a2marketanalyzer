@@ -1,4 +1,6 @@
-import { masteryLabel, PROFICIENCY, shortenName } from "../lib/metrics.js";
+import { useState } from "react";
+import { masteryLabel, PROFICIENCY, shortenName, parseKinah } from "../lib/metrics.js";
+import { KEYS, readRaw, writeRaw } from "../lib/storage.js";
 import { kinah, asPct } from "../lib/format.js";
 import { API } from "./ItemIcon.jsx";
 
@@ -170,8 +172,81 @@ function TransferCard({ row }) {
   );
 }
 
+// A value you give a Lesser stone that has no market price (saved in this browser).
+function StoneValue({ id, name }) {
+  const saved = () => { try { return JSON.parse(readRaw(KEYS.stoneValues) || "{}")[id] ?? ""; } catch { return ""; } };
+  const [text, setText] = useState(() => { const v = saved(); return v ? Math.round(v).toLocaleString("en-US") : ""; });
+  const commit = () => {
+    let all = {};
+    try { all = JSON.parse(readRaw(KEYS.stoneValues) || "{}") || {}; } catch { /* start fresh */ }
+    const v = parseKinah(text);
+    if (text.trim() && v > 0) all[id] = v; else delete all[id];
+    writeRaw(KEYS.stoneValues, JSON.stringify(all));
+  };
+  return (
+    <label className="stone-value">Your value per {name}:{" "}
+      <input type="text" inputMode="decimal" placeholder="e.g. 60k" value={text} onChange={(e) => setText(e.target.value)}
+        onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") commit(); }} />
+    </label>
+  );
+}
+
+const STONE_METHOD = { npc: "NPC", buy: "Bought", craft: "Crafted", yours: "Your value" };
+
+function StoneRoute({ route, label, picked }) {
+  const rows = route.materials.map((m) => ({ id: m.key, name: m.name, qty: m.qty, market: m.listing ?? (m.method === "craft" ? null : m.price),
+    crafted: m.craft ?? (m.method === "craft" ? m.price : null), used: m.method === "craft" ? "crafted" : "market",
+    method: m.price == null ? <span className="neg">No price</span> : STONE_METHOD[m.method] || m.method, cost: m.price == null ? "—" : kinah(m.price * m.qty) }));
+  const sum = route.success === 0
+    ? <>Needs <strong>{masteryLabel(route.recipeLevel)}</strong> Alchemy.</>
+    : route.cost == null
+      ? <>Needs a value for {route.materials.filter((m) => m.price == null).map((m) => m.name).join(", ")}.</>
+      : route.route === "combo"
+        ? <>{asPct(route.success)} success × {asPct(route.comboProbability)} combo → <strong>{kinah(route.cost)}</strong> each (~{(1 / route.hit).toFixed(1)} attempts).</>
+        : <>{asPct(route.success)} success → <strong>{kinah(route.cost)}</strong> each.</>;
+  return (
+    <details className="sub" open={picked}>
+      <summary>{label}{picked ? " (used: cheaper)" : ""} · needs {masteryLabel(route.recipeLevel)}</summary>
+      <div className="recipe-card">
+        <RecipeTable rows={rows} perAttempt={route.attempt} />
+        <p className="detail-sum">{sum}</p>
+      </div>
+    </details>
+  );
+}
+
+// What one Lesser stone can cost you and still break even on the combo route, at this stone's sell price.
+function lesserBreakEven(row) {
+  const c = row.stoneDetail?.combo;
+  const keepShare = row.price > 0 && row.net != null ? row.net / row.price : null;
+  const lesser = c?.materials.find((m) => m.key === row.stoneDetail.lesserKey);
+  if (!c || !lesser || !(c.hit > 0) || keepShare == null) return null;
+  const others = c.materials.reduce((t, m) => (m === lesser || m.price == null ? t : t + m.price * m.qty), 0);
+  return { name: lesser.name, value: (row.price * keepShare * c.hit - others) / lesser.qty };
+}
+
+function StoneCard({ row }) {
+  const d = row.stoneDetail;
+  const be = lesserBreakEven(row);
+  const unpriced = [...new Map([...d.combo.materials, ...(d.regular?.materials || [])]
+    .filter((m) => m.method == null || m.method === "yours").map((m) => [m.key, m])).values()];
+  return <>
+    {unpriced.length > 0 && (
+      <div className="stone-values">
+        <p className="muted small">Not sold on the exchange (drops and weekly supply requests). Enter what one is worth to you to cost this craft:</p>
+        {unpriced.map((m) => <StoneValue key={m.key} id={m.key} name={m.name} />)}
+      </div>
+    )}
+    {be && d.combo.success > 0 && (
+      <p className="detail-sum">Break-even: worth crafting only if a <strong>{be.name}</strong> costs you under <strong>{be.value > 0 ? kinah(be.value) : "nothing"}</strong> (at {kinah(row.price)} each, combo route).</p>
+    )}
+    <StoneRoute route={d.combo} label={`Combo: Intermediate craft, ${asPct(d.combo.comboProbability)} chance of a Superior`} picked={d.route === "combo"} />
+    {d.regular && <StoneRoute route={d.regular} label="Regular: from 30 Intermediate stones" picked={d.route === "regular"} />}
+  </>;
+}
+
 export function RecipeDetail({ row, chains }) {
-  const c = row.costDetail ? null : chainOf(chains, row.key);
+  const c = row.costDetail || row.stoneDetail ? null : chainOf(chains, row.key);
   return <>
     <div className="detail-head">
       <div>
@@ -180,10 +255,11 @@ export function RecipeDetail({ row, chains }) {
       </div>
       <ExtLink row={row} />
     </div>
-    {row.costDetail ? <TrueDragonCard row={row} chains={chains} />
+    {row.stoneDetail ? <StoneCard row={row} />
+      : row.costDetail ? <TrueDragonCard row={row} chains={chains} />
       : c ? <StepCard chain={c.chain} index={c.index} />
         : <p className="muted">No recipe available for this item.</p>}
-    {(row.costDetail || c) && (
+    {(row.costDetail || row.stoneDetail || c) && (
       <p className="muted small">Highlighted price is the one used.</p>
     )}
   </>;

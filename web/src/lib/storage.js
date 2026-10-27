@@ -13,7 +13,16 @@ export const KEYS = {
   proficiency: "a2dash.proficiency", // { skill: 1-100 }
   planSettings: "a2dash.planSettings", // the plan's settings, last used on Market Analysis
   ledger: "a2ledger.v1",            // the Profit Calculator's log
+  stoneValues: "a2dash.stoneValues", // { item key: kinah } for Lesser stones with no market price
 };
+
+/** Your values for Lesser stones that have no market price: { item key: kinah }. */
+export function parseStoneValues(raw) {
+  try {
+    const v = JSON.parse(raw || "null") || {};
+    return Object.fromEntries(Object.entries(v).filter(([, x]) => Number.isFinite(x) && x > 0).map(([k, x]) => [Number(k), x]));
+  } catch { return {}; }
+}
 
 export function readRaw(key) {
   try { return localStorage.getItem(key); } catch { return null; }

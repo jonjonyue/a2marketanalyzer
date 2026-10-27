@@ -1,10 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { shortenName, parseKinah, analyzeMarket, relistAdvice, activityProfile, DEFAULT_SETTINGS } from "../lib/metrics.js";
 import { kinah, full, signClass, cx } from "../lib/format.js";
-import { KEYS, readRaw, readJson, writeRaw, writeKinah, useKinah, useStoredRaw } from "../lib/storage.js";
+import { KEYS, readRaw, readJson, writeRaw, writeKinah, useKinah, useStoredRaw, parseStoneValues } from "../lib/storage.js";
 import { DEFAULT_SERVER, serverLabel, useServerDoc, useSnapshot } from "../lib/data.js";
 import { ItemIcon } from "../components/ItemIcon.jsx";
-import { listingEntry, ownListings } from "../lib/ledgerStore.js";
+import { listingEntry, ownListings, activeListingCount, stackableTest } from "../lib/ledgerStore.js";
 import { SupplyTag } from "../components/Supply.jsx";
 import { bestTimeNote } from "../components/Activity.jsx";
 import { planView } from "../components/Plan.jsx";
@@ -85,7 +85,7 @@ function totals(entries) {
 }
 
 // The plan uses the settings last used on Market Analysis (filters, share of sales, price basis, proficiency) in this browser.
-function planSettings(savedRaw, profRaw) {
+function planSettings(savedRaw, profRaw, stoneRaw) {
   let saved = {}, prof = {};
   try { saved = JSON.parse(savedRaw || "null") || {}; } catch { /* defaults */ }
   try { prof = JSON.parse(profRaw || "null") || {}; } catch { /* defaults */ }
@@ -94,7 +94,7 @@ function planSettings(savedRaw, profRaw) {
   const pick = (k, ok) => (ok(saved[k]) ? saved[k] : DEFAULT_SETTINGS[k]);
   const num = (lo, hi) => (v) => Number.isFinite(v) && v >= lo && v <= hi;
   return {
-    settings: { ...DEFAULT_SETTINGS, proficiency,
+    settings: { ...DEFAULT_SETTINGS, proficiency, stoneValues: parseStoneValues(stoneRaw),
       sharePct: pick("sharePct", num(1, 100)), salesTaxPct: pick("salesTaxPct", num(0, 50)), listingFeePct: pick("listingFeePct", num(0, 50)),
       priceBasis: pick("priceBasis", (v) => ["conservative", "listing", "sold"].includes(v)),
       costBasis: pick("costBasis", (v) => ["cheapest", "market"].includes(v)) },
@@ -453,7 +453,8 @@ export default function Ledger() {
   // ---------- plan ----------
   const planRaw = useStoredRaw(KEYS.planSettings);
   const profRaw = useStoredRaw(KEYS.proficiency);
-  const { settings, tier, skill } = useMemo(() => planSettings(planRaw, profRaw), [planRaw, profRaw]);
+  const stoneRaw = useStoredRaw(KEYS.stoneValues);
+  const { settings, tier, skill } = useMemo(() => planSettings(planRaw, profRaw, stoneRaw), [planRaw, profRaw, stoneRaw]);
   const planRows = useMemo(() => {
     if (!market) return null;
     let rows = analyzeMarket(market, settings);
@@ -478,9 +479,9 @@ export default function Ledger() {
   };
   // The plan's "+ List" button: log one at the suggested price, like adding it with the form.
   function listFromPlan(p) {
-    const entry = listingEntry({ name: p.row.shortName, key: p.row.key, price: p.listAt }, log.settings);
+    const entry = listingEntry({ name: p.row.shortName, key: p.row.key, price: p.listAt, qty: p.row.stackable ? p.units : 1 }, log.settings);
     commit({ entries: [...entries, entry] });
-    showToast(`Listed 1 × ${entry.name} at ${full(entry.price)}: listing fee ${full(amounts(entry).fee)}.`,
+    showToast(`Listed ${entry.qty} × ${entry.name} at ${full(entry.price)} each: listing fee ${full(amounts(entry).fee)}.`,
       () => commit({ entries: logRef.current.entries.filter((x) => x.id !== entry.id) }));
   }
   const plan = planRows && planView({
@@ -570,6 +571,7 @@ export default function Ledger() {
 
       {active.length > 0 && (
         <Listings active={active} entries={entries} now={now} adviceFor={adviceFor} feePct={log.settings.feePct} bestTime={bestTime}
+          slotsUsed={activeListingCount(entries, now, stackableTest([...new Set(rowFor.values())]))}
           onSold={markSold} onExpire={(id) => markExpired(id)} onRelist={(id, price) => markExpired(id, { relist: true, price })} />
       )}
 
@@ -740,7 +742,7 @@ function ListingRow({ l, left, now, advice, feePct, onSold, onExpire, onRelist }
   );
 }
 
-function Listings({ active, entries, now, adviceFor, feePct, bestTime, onSold, onExpire, onRelist }) {
+function Listings({ active, entries, now, adviceFor, feePct, bestTime, slotsUsed, onSold, onExpire, onRelist }) {
   let units = 0, value = 0;
   for (const l of active) {
     const left = remaining(entries, l), gross = left * l.price;
@@ -750,7 +752,7 @@ function Listings({ active, entries, now, adviceFor, feePct, bestTime, onSold, o
     <section className="panel table-panel" id="listingsPanel">
       <div className="table-head">
         <h2>Active listings</h2>
-        <p className="muted" id="listingsNote">{units.toLocaleString()} of {DEFAULT_SETTINGS.maxListings} slots used · worth {kinah(value)} after tax{bestTime ? ` · ${bestTime}` : ""}</p>
+        <p className="muted" id="listingsNote">{(slotsUsed ?? units).toLocaleString()} of {DEFAULT_SETTINGS.maxListings} slots used · worth {kinah(value)} after tax{bestTime ? ` · ${bestTime}` : ""}</p>
       </div>
       <div className="table-scroll">
         <table className="ledger-table listings-table" id="listings">

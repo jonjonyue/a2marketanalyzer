@@ -332,7 +332,7 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
   const soldAvg = officialAvg ?? num(est?.avgSalePrice);
   const priceSource = officialAvg != null ? "official" : soldAvg != null ? "estimate" : null;
 
-  const cost = target.costDetail ? num(target.cost)
+  const cost = target.costDetail || target.stoneDetail ? num(target.cost)
     : s.costBasis === "market" ? num(target.cost_market) ?? num(target.cost) : num(target.cost);
   const price = sellPrice(listing, soldAvg, s.priceBasis);
   // Both fees scale with the price you list at, so one listing that sells keeps price × (1 − tax − fee).
@@ -370,6 +370,7 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
     success: target.success ?? null, recipeLevel: target.recipeLevel ?? null, playerLevel: target.playerLevel ?? null, locked: !!target.locked,
     salesSource, priceSource, est, costDetail: target.costDetail || null, transfer: target.transfer || null,
     influx: supplyInflux(est),
+    stoneDetail: target.stoneDetail || null, stackable: !!target.stackable,
     missingInputs: num(target.missing) ?? 0,
     verdict: target.locked
       ? { id: "locked", label: `Needs ${masteryLabel(target.recipeLevel)}`, tone: "neutral" }
@@ -469,6 +470,69 @@ export function adjustChain(chain, playerLevel) {
   });
   const tiers = (chain.tiers || []).map((x) => (cost.has(x.item_key) ? { ...x, cost: cost.get(x.item_key), cost_market: costMarket.get(x.item_key) } : { ...x }));
   return { ...chain, steps, tiers, player_level: playerLevel };
+}
+
+/**
+ * Superior manastones / soulstones (recipes/magic_stones.json, in market.stone_recipes): Alchemy crafts sold in stacks.
+ * Two routes, whichever is cheaper:
+ *  - combo: the Intermediate recipe from Lesser stones has a 20% combo chance to give the Superior stone, so one costs
+ *    an attempt ÷ (success × 20%), about 5 attempts (the Intermediate stones from the other attempts aren't credited);
+ *  - regular (plain Superior Manastone / Soulstone only): 30 Intermediate stones (bought, or crafted if cheaper)
+ *    + materials, ÷ success.
+ * Inks are NPC-sold; Spiritstone Powder is the cheaper of buying it or a third of a Spiritstone. Lesser stones with no
+ * market price use the viewer's own value (settings.stoneValues), else the cost is TBD. Success uses your Alchemy level
+ * with the True Dragon cap (not published for these recipes).
+ */
+export const STONE_TIER = "Superior Stone";
+export function stoneCost(stone, ctx, settings = DEFAULT_SETTINGS) {
+  const s = { ...DEFAULT_SETTINGS, ...settings };
+  const book = ctx.stoneRecipes || {};
+  const npc = book.npc_prices || {}, powder = book.powder || {};
+  const level = s.proficiency?.Alchemy ?? null;
+  const cap = PROFICIENCY.trueDragonCap;
+  const priceOf = (key) => {
+    if (npc[key] != null) return { price: npc[key], method: "npc" };
+    let price = num(ctx.materials.get(key)?.price) ?? num(ctx.items.get(key)?.price), method = price != null ? "buy" : null;
+    if (key === powder.key) {
+      const src = num(ctx.materials.get(powder.from_key)?.price);
+      if (src != null && (price == null || src / powder.per_source < price)) { price = src / powder.per_source; method = "craft"; }
+    }
+    if (price == null && s.stoneValues?.[key] > 0) { price = s.stoneValues[key]; method = "yours"; }
+    return { price, method };
+  };
+  const rows = (mats) => mats.map((m) => ({ key: m.key, name: ctx.materials.get(m.key)?.name ?? String(m.key), qty: m.qty, ...priceOf(m.key) }));
+  const total = (rs) => rs.reduce((t, m) => t + (m.price ?? 0) * m.qty, 0);
+  const c = stone.combo;
+  const cRows = rows(c.materials), cMissing = cRows.filter((m) => m.price == null);
+  const cAttempt = total(cRows);
+  const cSuccess = successAt(level, c.mastery_level, cap) ?? 1;
+  const combo = { route: "combo", materials: cRows, attempt: cAttempt, success: cSuccess, hit: cSuccess * c.combo_probability,
+    comboProbability: c.combo_probability, recipeLevel: c.mastery_level, missing: cMissing.map((m) => m.key),
+    cost: cMissing.length || !(cSuccess > 0) ? null : cAttempt / (cSuccess * c.combo_probability) };
+  let regular = null;
+  if (stone.regular) {
+    const rRows = rows(stone.regular.materials);
+    const inter = rRows.find((m) => m.key === c.intermediate_key);
+    const interCraft = cMissing.length || !(cSuccess > 0) ? null : cAttempt / cSuccess; // an Intermediate from the combo recipe's regular result
+    if (inter) {
+      inter.listing = inter.price;
+      inter.craft = interCraft;
+      if (interCraft != null && (inter.price == null || interCraft < inter.price)) { inter.price = interCraft; inter.method = "craft"; }
+    }
+    const rMissing = rRows.filter((m) => m.price == null);
+    const rSuccess = successAt(level, stone.regular.mastery_level, cap) ?? 1;
+    const attempt = total(rRows);
+    regular = { route: "regular", materials: rRows, attempt, success: rSuccess, hit: rSuccess, recipeLevel: stone.regular.mastery_level,
+      missing: rMissing.map((m) => m.key), cost: rMissing.length || !(rSuccess > 0) ? null : attempt / rSuccess };
+  }
+  const routes = [combo, regular].filter(Boolean);
+  const usable = routes.filter((r) => r.success > 0);
+  const pick = usable.filter((r) => r.cost != null).sort((a, b) => a.cost - b.cost)[0] || usable[0] || combo;
+  return {
+    cost: pick.cost, missing: pick.missing.length, hit: pick.hit, attempt: pick.attempt, success: pick.success,
+    locked: !usable.length, recipeLevel: pick.recipeLevel, playerLevel: level,
+    detail: { route: pick.route, combo, regular, playerLevel: level, lesserKey: c.lesser_key },
+  };
 }
 
 /**
@@ -591,6 +655,7 @@ export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
   const targets = (market.targets || []).map(withChainCost);
 
   const ctx = {
+    stoneRecipes: market.stone_recipes || null,
     items,
     targets: new Map(targets.map((t) => [t.target_key, t])),
     materials: new Map((market.materials || []).map((m) => [m.item_key, m])),
@@ -603,10 +668,17 @@ export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
     recipeFor.set(r.product_key, r);
     if (!recipeFor.has(r.combo_key)) recipeFor.set(r.combo_key, r);
   }
+  const stoneByKey = new Map((market.stone_recipes?.stones || []).map((st) => [st.key, st]));
   const rows = targets
     .map((t0) => {
       let t = t0;
-      const recipe = !stepOf.has(t.target_key) && t.cost == null ? recipeFor.get(t.target_key) : null;
+      const stone = t.tier === STONE_TIER ? stoneByKey.get(t.target_key) : null;
+      if (stone) {
+        const c = stoneCost(stone, ctx, s);
+        t = { ...t, cost: c.cost, cost_market: c.cost, missing: c.missing, stoneDetail: c.detail, attemptCost: c.cost != null ? c.attempt : null,
+              hitChance: c.hit > 0 ? c.hit : null, success: c.success, locked: c.locked, recipeLevel: c.recipeLevel, playerLevel: c.playerLevel };
+      }
+      const recipe = !stone && !stepOf.has(t.target_key) && t.cost == null ? recipeFor.get(t.target_key) : null;
       if (recipe) {
         const c = trueDragonCost(recipe, t.target_key, { ...ctx, skill: t.skill }, s);
         t = { ...t, cost: c.cost, cost_market: c.cost, missing: c.missing, costDetail: c.detail,
@@ -746,7 +818,9 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
   // Choose how many of each to make: the most expected profit that fits both your kinah (capital set aside) and
   // your free listing slots. Exact, over Pareto fronts of (capital, profit) per number of slots used; with at most
   // 10 slots this stays small. So when slots are short, two cheaper listings can lose to one that earns more.
-  const cap = Math.min(free, options.reduce((t, o) => t + o.slots, 0));
+  // Gear is one listing per unit; stackable items (manastones, soulstones) go up as one listing however many.
+  const slotsFor = (o, n) => (n <= 0 ? 0 : o.r0.stackable ? 1 : n);
+  const cap = Math.min(free, options.reduce((t, o) => t + slotsFor(o, o.slots), 0));
   let fronts = Array.from({ length: cap + 1 }, (_, k) => (k ? [] : [{ capital: 0, profit: 0, units: [] }]));
   const prune = (list) => {
     list.sort((a, b) => a.capital - b.capital || b.profit - a.profit);
@@ -758,10 +832,10 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
     const next = fronts.map((f) => [...f]);
     for (let k = 0; k < fronts.length; k++) {
       for (const st of fronts[k]) {
-        for (let n = 1; n <= o.slots && k + n <= cap; n++) {
+        for (let n = 1; n <= o.slots && k + slotsFor(o, n) <= cap; n++) {
           const capital = st.capital + capitalFor(o.r, n);
           if (capital > budget) break;
-          next[k + n].push({ capital, profit: st.profit + n * o.each, units: [...st.units, [idx, n]] });
+          next[k + slotsFor(o, n)].push({ capital, profit: st.profit + n * o.each, units: [...st.units, [idx, n]] });
         }
       }
     }
@@ -784,12 +858,13 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
   const profit = picks.reduce((t, p) => t + p.profit, 0);
   const spend = picks.reduce((t, p) => t + p.spend, 0);
   const left = budget - capital;
-  const planned = picks.reduce((t, p) => t + p.units, 0);
+  const planned = picks.reduce((t, p) => t + (p.row.stackable ? 1 : p.units), 0); // listing slots the plan uses
   const slotsLeft = free - planned;
   // What's held back: a craft that could take another unit. If one more would fit your kinah, the slots are what
   // stopped it; otherwise kinah did, and the best of those is "next up".
   const more = options.map((o, idx) => ({ o, n: chosen.get(idx) || 0 })).filter(({ o, n }) => n < o.slots);
-  const capped = more.some(({ o, n }) => slotsLeft <= 0 && capitalFor(o.r, n + 1) - capitalFor(o.r, n) <= left);
+  // Slots held something back if one more unit would have been affordable but needed a slot you don't have.
+  const capped = more.some(({ o, n }) => slotsFor(o, n + 1) - slotsFor(o, n) > slotsLeft && capitalFor(o.r, n + 1) - capitalFor(o.r, n) <= left);
   const short = more.filter(({ n }) => !n).map(({ o }) => ({ row: o.r0, capital: capitalFor(o.r, 1), myUnits: o.myUnits }))
     .filter((x) => x.capital > left).sort((a, b) => (b.row.roc ?? 0) - (a.row.roc ?? 0));
   const nextUp = slotsLeft > 0 ? short[0] || null : null;

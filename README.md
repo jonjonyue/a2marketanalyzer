@@ -2,6 +2,11 @@
 
 A shareable dashboard that ranks Artisan's Splendent crafts on **NA West Siel (Elyos)** and **NA West Israphel (Asmodian)** by how much money they make **and** how fast they sell, including the Expert's Splendent, True Dragon and Splendent True Dragon versions of each slot. All data comes from the public [aion2.exchange](https://aion2.exchange) API.
 
+
+### Superior manastones and soulstones
+
+`recipes/magic_stones.json` (from questlog.gg) holds the Alchemy recipes for the four Superior stones: Superior Manastone, Superior Soulstone, Superior Abyssal Manastone and Superior Abyssal Soulstone. Each costs the cheaper of two routes (`stoneCost`): the combo route, where the Intermediate recipe from 5 Lesser stones has a 20% combo chance to give the Superior stone (cost = attempt ÷ (success × 20%), about 5 attempts; the Intermediate stones from the other attempts aren't credited), and for the plain stones the regular recipe from 30 Intermediate stones (bought, or crafted if cheaper) + 10 Spiritstone Powder + 2 Exceptional Ink. Inks are NPC-sold (1,200 / 10,000); Spiritstone Powder is the cheaper of buying it or a third of a Spiritstone. Lesser Soulstone and the Lesser Abyssal stones aren't tracked by aion2.exchange (drops and weekly supply requests), so the viewer enters a value for them in the expanded row (`a2dash.stoneValues`); the row also shows the break-even value per Lesser stone. Success uses your Alchemy level with the True Dragon cap. Stones are sold in stacks: a stack takes one of the 10 listing slots in the plan and the Profit Calculator, and "+ List" logs all the planned stones as one listing. The sales estimate counts stacks that sold out; partial buys from a stack aren't visible in the snapshots.
+
 ## How it works
 
 ```

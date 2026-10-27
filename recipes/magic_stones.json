@@ -1,0 +1,34 @@
+{
+  "_source": "questlog.gg Aion 2 database (https://questlog.gg/aion-2/en/db), Alchemy > Magic Stone recipes, extracted 2026-10-26",
+  "_notes": "Superior manastones and soulstones, the ones worth selling. Each can be made two ways: (combo) the Intermediate recipe from Lesser stones has a 20% combo chance to give the Superior stone instead, so one costs the attempts it takes to hit the combo (about 5); (regular) only the plain Superior Manastone / Soulstone also have a recipe from 30 Intermediate stones. Abyssal stones only come from the combo. Recipe ids 31xxxxxxx are Elyos and 32xxxxxxx Asmodian; both factions use the same items, materials and levels. mastery_level is the recipe's Alchemy level on the game's 1-100 scale (questlog's 'Lv'). The inks are bound and sold by the Alchemy Merchant NPC (npc_prices). Spiritstone Powder can also be crafted from Spiritstone (10 Spiritstone -> 30 Powder, recipe 315016011). Lesser Abyssal Manastone / Soulstone and Lesser Soulstone come from drops and weekly supply requests and aren't tracked on aion2.exchange, so they have no market price; the dashboard asks the viewer for their value.",
+  "npc_prices": { "630543008": 1200, "630543013": 10000 },
+  "powder": { "key": 610740001, "from_key": 610530014, "per_source": 3 },
+  "stones": [
+    { "key": 511360004, "name": "Superior Manastone", "kind": "Manastone",
+      "combo": { "recipe_ids": [314046001, 324046001], "mastery_level": 20, "combo_probability": 0.2, "intermediate_key": 511360003, "lesser_key": 511360001,
+        "materials": [{ "key": 511360001, "qty": 5 }, { "key": 610740001, "qty": 3 }, { "key": 630543008, "qty": 2 }] },
+      "regular": { "recipe_ids": [314046003, 324046003], "mastery_level": 85,
+        "materials": [{ "key": 511360003, "qty": 30 }, { "key": 610740001, "qty": 10 }, { "key": 630543013, "qty": 2 }] } },
+    { "key": 513560004, "name": "Superior Soulstone", "kind": "Soulstone",
+      "combo": { "recipe_ids": [314046002, 324046002], "mastery_level": 25, "combo_probability": 0.2, "intermediate_key": 513560003, "lesser_key": 513560001,
+        "materials": [{ "key": 513560001, "qty": 5 }, { "key": 610740001, "qty": 3 }, { "key": 630543008, "qty": 2 }] },
+      "regular": { "recipe_ids": [314046004, 324046004], "mastery_level": 90,
+        "materials": [{ "key": 513560003, "qty": 30 }, { "key": 610740001, "qty": 10 }, { "key": 630543013, "qty": 2 }] } },
+    { "key": 511351003, "name": "Superior Abyssal Manastone", "kind": "Manastone",
+      "combo": { "recipe_ids": [314045001, 324045001], "mastery_level": 85, "combo_probability": 0.2, "intermediate_key": 511351002, "lesser_key": 511351001,
+        "materials": [{ "key": 511351001, "qty": 5 }, { "key": 610740001, "qty": 5 }, { "key": 630543008, "qty": 3 }] },
+      "regular": null },
+    { "key": 513551003, "name": "Superior Abyssal Soulstone", "kind": "Soulstone",
+      "combo": { "recipe_ids": [314045002, 324045002], "mastery_level": 90, "combo_probability": 0.2, "intermediate_key": 513551002, "lesser_key": 513551001,
+        "materials": [{ "key": 513551001, "qty": 5 }, { "key": 610740001, "qty": 5 }, { "key": 630543008, "qty": 3 }] },
+      "regular": null }
+  ],
+  "materials": {
+    "511360001": "Lesser Manastone", "513560001": "Lesser Soulstone",
+    "511351001": "Lesser Abyssal Manastone", "513551001": "Lesser Abyssal Soulstone",
+    "511360003": "Intermediate Manastone", "513560003": "Intermediate Soulstone",
+    "511351002": "Intermediate Abyssal Manastone", "513551002": "Intermediate Abyssal Soulstone",
+    "610740001": "Spiritstone Powder", "610530014": "Spiritstone",
+    "630543008": "Professional Ink (Bound)", "630543013": "Exceptional Ink (Bound)"
+  }
+}

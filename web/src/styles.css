@@ -506,3 +506,6 @@ td.over-budget { color: var(--serious); }
 .relist-btn { margin-left: 0; display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
 .relist-btn strong { color: var(--text); }
 .undercut-mark { font-size: 10px; }
+.stone-values { margin: 0 0 10px; display: grid; gap: 6px; }
+.stone-value { font-size: 13px; }
+.stone-value input { width: 120px; height: 28px; padding: 3px 8px; margin-left: 6px; font: inherit; }

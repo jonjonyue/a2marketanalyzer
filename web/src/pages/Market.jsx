@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { analyzeMarket, activityProfile, DEFAULT_SETTINGS, VERDICT_ORDER, byRank, isWorthCrafting, SKILLS as CRAFT_SKILLS, shortenName, parseKinah } from "../lib/metrics.js";
 import { kinah, pct, rate, days, ago, asPct, cx } from "../lib/format.js";
-import { KEYS, readJson, readRaw, writeRaw, useKinah, useStoredRaw } from "../lib/storage.js";
+import { KEYS, readJson, readRaw, writeRaw, useKinah, useStoredRaw, parseStoneValues } from "../lib/storage.js";
 import { entriesOf, listOne, unlistOne, listingFee, ownActiveListings } from "../lib/ledgerStore.js";
 import { useToast } from "../components/Toast.jsx";
 import { DEFAULT_SERVER, serverLabel, useServerDoc, useSnapshot } from "../lib/data.js";
@@ -18,8 +18,8 @@ const SKILLS = ["All", "Blacksmithing", "Armorsmithing", "Handicrafting", "Alche
 // URL codes per skill; t and j are the old Tailoring / Jewelcrafting codes, kept so older links still work.
 const PROF_CODE = { Blacksmithing: "b", Armorsmithing: "r", Handicrafting: "h", Alchemy: "a" };
 const PROF_LEGACY = { t: "Armorsmithing", j: "Handicrafting" };
-const TIERS = ["All", "Expert's Splendent", "Artisan's Splendent", "True Dragon", "Splendent True Dragon"];
-const TIER_PARAM = { "Expert's Splendent": "es", "Artisan's Splendent": "as", "True Dragon": "td", "Splendent True Dragon": "std" };
+const TIERS = ["All", "Expert's Splendent", "Artisan's Splendent", "True Dragon", "Splendent True Dragon", "Superior Stone"];
+const TIER_PARAM = { "Expert's Splendent": "es", "Artisan's Splendent": "as", "True Dragon": "td", "Splendent True Dragon": "std", "Superior Stone": "ss" };
 
 // ---------- URL state (so a copied link reproduces the view) ----------
 function savedServer() {
@@ -208,6 +208,14 @@ function Kpis({ rows, sharePct }) {
 
 // ---------- table ----------
 function costTitle(r) {
+  const sd = r.stoneDetail;
+  if (sd) {
+    const route = sd.route === "combo" ? sd.combo : sd.regular;
+    if (r.cost == null) return route.missing.length ? "Needs a value for an input with no market price: expand the row" : "Can't craft this yet";
+    return sd.route === "combo"
+      ? `Combo route: ${kinah(route.attempt)} per attempt ÷ (${asPct(route.success)} × ${asPct(route.comboProbability)} combo), about ${(1 / route.hit).toFixed(1)} attempts`
+      : `30 Intermediate route: ${kinah(route.attempt)} per attempt ÷ ${asPct(route.success)}`;
+  }
   const d = r.costDetail;
   if (!d) return r.cost == null ? "No crafting cost known" : `Average cost at your proficiency (${r.success != null ? asPct(r.success) : "—"} success)`;
   return `${kinah(d.attempt)} per attempt (${d.baseName} ${kinah(d.base)} + materials ${kinah(d.matsCost)})`;
@@ -223,7 +231,8 @@ function salesTitle(r) {
   const e = r.est;
   if (!e) return "No listing history";
   if (e.perDay == null) return "Not enough history yet";
-  return `Estimated: ${e.sales} sales seen in ${e.days.toFixed(1)} days` + (e.repriced ? ` (${e.repriced} pulled or reposted listing${e.repriced > 1 ? "s" : ""} left out)` : "");
+  return `Estimated: ${e.sales} sales seen in ${e.days.toFixed(1)} days` + (e.repriced ? ` (${e.repriced} pulled or reposted listing${e.repriced > 1 ? "s" : ""} left out)` : "") +
+    (r.stackable ? ". Sold in stacks: this counts listings that sold out, not stones, and partial buys from a stack aren't visible" : "");
 }
 const overTransfer = (r) => r.transfer?.cost != null && r.price != null && r.price > r.transfer.cost;
 
@@ -336,9 +345,10 @@ export default function Market() {
   const [toastEl, toast] = useToast();
   // The plan's "+ List" button: log one at the suggested price in the Profit Calculator.
   const listFromPlan = (p) => {
-    const entry = listOne({ name: p.row.shortName, key: p.row.key, price: p.listAt });
+    // Stackable items (stones) go up as one listing of every unit the plan makes; gear one at a time.
+    const entry = listOne({ name: p.row.shortName, key: p.row.key, price: p.listAt, qty: p.row.stackable ? p.units : 1 });
     if (!entry) return toast("Couldn't save in this browser (private window or storage blocked).");
-    toast(`Listed 1 × ${entry.name} at ${kinah(entry.price)} (fee ${kinah(listingFee(entry))}). It's in the Profit Calculator.`, () => unlistOne(entry));
+    toast(`Listed ${entry.qty} × ${entry.name} at ${kinah(entry.price)} each (fee ${kinah(listingFee(entry))}). It's in the Profit Calculator.`, () => unlistOne(entry));
   };
 
   const servers = snapshot?.servers || [];
@@ -355,9 +365,10 @@ export default function Market() {
 
   useEffect(() => { if (snapshot) writeUrl({ ...ui, server: sid }); }, [ui, sid, snapshot]);
 
+  const stoneRaw = useStoredRaw(KEYS.stoneValues);
   const settings = useMemo(() => ({ ...DEFAULT_SETTINGS, priceBasis: ui.priceBasis, costBasis: ui.costBasis, salesTaxPct: ui.salesTaxPct,
-    listingFeePct: ui.listingFeePct, sharePct: ui.sharePct, proficiency: ui.proficiency }),
-  [ui.priceBasis, ui.costBasis, ui.salesTaxPct, ui.listingFeePct, ui.sharePct, ui.proficiency]);
+    listingFeePct: ui.listingFeePct, sharePct: ui.sharePct, proficiency: ui.proficiency, stoneValues: parseStoneValues(stoneRaw) }),
+  [ui.priceBasis, ui.costBasis, ui.salesTaxPct, ui.listingFeePct, ui.sharePct, ui.proficiency, stoneRaw]);
   const all = useMemo(() => {
     if (!market) return null;
     const rows = analyzeMarket(market, settings);
@@ -426,7 +437,7 @@ export default function Market() {
         <div className="field">
           <span>Tier</span>
           <Chips id="tiers" label="Tier" options={TIERS} value={ui.tier} onChange={(tier) => set({ tier })}
-            display={(v) => (asmo ? v.replace("True Dragon", "Star Dragon") : v)} />
+            display={(v) => (v === "Superior Stone" ? "Superior Stones" : asmo ? v.replace("True Dragon", "Star Dragon") : v)} />
         </div>
         <div className="field">
           <span>Skill</span>

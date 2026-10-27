@@ -38,12 +38,25 @@ export function ownActiveListings(entries = [], now = Date.now()) {
   return map;
 }
 
-/** How many units you have listed right now (active, under 3 days old): each takes one of the exchange's listing slots. */
-export function activeListingCount(entries = [], now = Date.now()) {
+/**
+ * Listing slots your active listings use (under 3 days old): one per unit of gear, one per stack of a stackable item.
+ * `stackable(entry)` says whether an entry's item stacks (manastones, soulstones).
+ */
+export function activeListingCount(entries = [], now = Date.now(), stackable = () => false) {
   const sold = new Map();
   for (const e of entries) if (e.side === "sell" && e.listingId) sold.set(e.listingId, (sold.get(e.listingId) || 0) + (e.qty || 0));
-  return entries.reduce((t, e) => (e.side !== "list" || e.expired || !Number.isFinite(e.ts) || now - e.ts > 72 * 3600e3 ? t
-    : t + Math.max(0, (e.qty || 0) - (sold.get(e.id) || 0))), 0);
+  return entries.reduce((t, e) => {
+    if (e.side !== "list" || e.expired || !Number.isFinite(e.ts) || now - e.ts > 72 * 3600e3) return t;
+    const left = Math.max(0, (e.qty || 0) - (sold.get(e.id) || 0));
+    return t + (left > 0 && stackable(e) ? 1 : left);
+  }, 0);
+}
+
+/** A test for stackable entries, from analyzed market rows (by item key and by name). */
+export function stackableTest(rows = []) {
+  const keys = new Set(), names = new Set();
+  for (const r of rows) if (r.stackable) { keys.add(r.key); names.add(String(r.shortName || r.name).toLowerCase()); }
+  return (e) => (e.key != null && keys.has(e.key)) || names.has(String(e.name || "").toLowerCase());
 }
 
 /** The ledger's entries straight from a stored string (no validation; the plan only reads them). */
@@ -65,9 +78,9 @@ function moveKinah(delta) {
   if (delta && Number.isFinite(have)) writeKinah(have + delta);
 }
 
-/** A listing entry for one unit at `price`, at the Profit Calculator's current tax and fee rates. */
-export function listingEntry({ name, key, price }, settings = readLog().settings) {
-  return { id: newId(), side: "list", name, key: key ?? null, qty: 1, price: Math.round(price),
+/** A listing entry for `qty` units (default 1) at `price` each, at the Profit Calculator's current tax and fee rates. */
+export function listingEntry({ name, key, price, qty = 1 }, settings = readLog().settings) {
+  return { id: newId(), side: "list", name, key: key ?? null, qty: Math.max(1, Math.round(qty)), price: Math.round(price),
     taxPct: settings.taxPct, feePct: settings.feePct, ts: Date.now(), note: "from plan" };
 }
 export const listingFee = (e) => Math.round(e.qty * e.price * e.feePct / 100);
