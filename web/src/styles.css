@@ -512,3 +512,5 @@ td.over-budget { color: var(--serious); }
 .plan-title-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .plan-title-row h2 { margin: 0; }
 .plan-goal button { height: 28px; font-size: 12.5px; }
+.plan-refresh { height: 28px; margin-left: auto; }
+.plan-refresh.stale { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }

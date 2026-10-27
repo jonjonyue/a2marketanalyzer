@@ -7,7 +7,7 @@ import { ItemIcon } from "../components/ItemIcon.jsx";
 import { listingEntry, ownListings, activeListingCount, stackableTest } from "../lib/ledgerStore.js";
 import { SupplyTag } from "../components/Supply.jsx";
 import { bestTimeNote } from "../components/Activity.jsx";
-import { planView, PlanGoal } from "../components/Plan.jsx";
+import { planView, PlanGoal, PlanRefresh, useHeldPlan, requestPlanRefresh } from "../components/Plan.jsx";
 import { LedgerMethod } from "./LedgerMethod.jsx";
 
 // Profit calculator: a personal log of exchange purchases, listings and sales, kept in this browser (localStorage).
@@ -485,8 +485,9 @@ export default function Ledger() {
     showToast(`Listed ${entry.qty} × ${entry.name} at ${full(entry.price)} each: listing fee ${full(amounts(entry).fee)}.`,
       () => commit({ entries: logRef.current.entries.filter((x) => x.id !== entry.id) }));
   }
+  const held = useHeldPlan({ ready: !!planRows, server: srv?.server_id ?? null, budget: have > 0 ? have : null, entries });
   const plan = planRows && planView({
-    rows: planRows, budget: have > 0 ? have : null, settings, serverName: srv?.name, snapshotAt: market.captured_at, icons: market.icons, entries, onList: listFromPlan,
+    rows: planRows, budget: held.budget, settings, serverName: srv?.name, snapshotAt: market.captured_at, icons: market.icons, entries: held.entries, now: held.now, onList: listFromPlan,
     scope: filters,
     emptyHint: "Enter your kinah below to see what to craft.",
   });
@@ -523,7 +524,7 @@ export default function Ledger() {
     <main className="wrap">
       <section className="panel plan ledger-plan" aria-labelledby="planTitle">
         <div className="table-head">
-          <div className="plan-title-row"><h2 id="planTitle">What to craft with your kinah</h2><PlanGoal goal={settings.planGoal} /></div>
+          <div className="plan-title-row"><h2 id="planTitle">What to craft with your kinah</h2><PlanGoal goal={settings.planGoal} />{planRows && <PlanRefresh stale={held.stale} onClick={held.refresh} />}</div>
           <p className="muted"><span id="planNote">{plan?.note}</span> <a href="#/">Change settings on Market Analysis</a></p>
         </div>
         <div id="planBody">{plan ? plan.body : <p className="muted plan-empty">Loading market data…</p>}</div>
@@ -684,6 +685,7 @@ function KinahField({ have, lastDelta }) {
     if (raw && !(v >= 0)) return setInvalid(true);
     setInvalid(false);
     writeKinah(v);
+    requestPlanRefresh();
     setText(v == null ? "" : full(v));
   };
   return (

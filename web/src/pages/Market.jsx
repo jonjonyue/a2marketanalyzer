@@ -6,7 +6,7 @@ import { entriesOf, listOne, unlistOne, listingFee, ownActiveListings } from "..
 import { useToast } from "../components/Toast.jsx";
 import { DEFAULT_SERVER, serverLabel, useServerDoc, useSnapshot } from "../lib/data.js";
 import { ItemIcon } from "../components/ItemIcon.jsx";
-import { planView, PlanGoal } from "../components/Plan.jsx";
+import { planView, PlanGoal, PlanRefresh, useHeldPlan, requestPlanRefresh } from "../components/Plan.jsx";
 import { BarChart, Scatter, Tooltip, noCostsInView, useTip } from "../components/Charts.jsx";
 import { ExtLink, RecipeDetail } from "../components/Recipe.jsx";
 import { SupplyPanel, SupplyTag } from "../components/Supply.jsx";
@@ -97,6 +97,7 @@ function BudgetInput({ budget }) {
     if (raw && !(v > 0)) return setInvalid(true);
     setInvalid(false);
     writeRaw(KEYS.budget, v ? String(v) : null);
+    requestPlanRefresh();
   };
   return (
     <input id="budget" ref={ref} type="text" inputMode="decimal" placeholder="e.g. 250m or 1.2b" autoComplete="off" value={text}
@@ -389,8 +390,10 @@ export default function Market() {
   }, [ui.sharePct, ui.priceBasis, ui.costBasis, ui.salesTaxPct, ui.listingFeePct, ui.tier, ui.skill]);
 
   const icons = market?.icons || {};
+  const liveEntries = useMemo(() => entriesOf(ledgerRaw), [ledgerRaw]);
+  const held = useHeldPlan({ ready: !!market, server: sid, budget, entries: liveEntries });
   const plan = market && planView({
-    rows, budget, settings, icons, snapshotAt: market.captured_at, serverName: srv?.name, entries: entriesOf(ledgerRaw), onList: listFromPlan,
+    rows, budget: held.budget, settings, icons, snapshotAt: market.captured_at, serverName: srv?.name, entries: held.entries, now: held.now, onList: listFromPlan,
     emptyHint: "Enter your kinah above to see what to craft.",
   });
 
@@ -496,7 +499,7 @@ export default function Market() {
 
       <section className="panel plan" aria-labelledby="planTitle">
         <div className="table-head">
-          <div className="plan-title-row"><h2 id="planTitle">What to craft with your kinah</h2><PlanGoal goal={settings.planGoal} /></div>
+          <div className="plan-title-row"><h2 id="planTitle">What to craft with your kinah</h2><PlanGoal goal={settings.planGoal} />{market && <PlanRefresh stale={held.stale} onClick={held.refresh} />}</div>
           <p className="muted" id="planNote">{plan?.note}</p>
         </div>
         <div id="planBody">{plan?.body}</div>

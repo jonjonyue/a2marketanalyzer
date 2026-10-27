@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { planBudget } from "../lib/metrics.js";
 import { ownListings, ownActiveListings, activeListingCount, stackableTest } from "../lib/ledgerStore.js";
 import { kinah, pct, days } from "../lib/format.js";
@@ -16,6 +17,46 @@ export function PlanGoal({ goal }) {
   );
 }
 
+const REFRESH = "a2:plan-refresh";
+/** Ask any plan on the page to take your current kinah and listings (typing your kinah does this). */
+export function requestPlanRefresh() { window.dispatchEvent(new Event(REFRESH)); }
+
+/**
+ * Holds the plan's kinah and listings still, so logging a buy or a listing doesn't reshuffle the plan while you
+ * work through it. It takes the live values on page load, when the server changes, when you first set your kinah,
+ * when you type your kinah, and on Refresh. Settings (goal, filters, fees) always apply right away.
+ * Returns { budget, entries, now, stale, refresh }.
+ */
+export function useHeldPlan({ ready, server, budget, entries }) {
+  const live = { server, budget, entries, now: Date.now() };
+  const liveRef = useRef(live);
+  liveRef.current = live;
+  const [held, setHeld] = useState(null);
+  const [want, setWant] = useState(0);
+  useEffect(() => {
+    const f = () => setWant((w) => w + 1);
+    window.addEventListener(REFRESH, f);
+    return () => window.removeEventListener(REFRESH, f);
+  }, []);
+  useEffect(() => { if (want && ready) setHeld(liveRef.current); }, [want]); // eslint-disable-line react-hooks/exhaustive-deps
+  const take = ready && (!held || held.server !== server || (held.budget == null && budget != null));
+  useEffect(() => { if (take) setHeld(liveRef.current); }, [take]);
+  const h = take || !held ? live : held;
+  return { budget: h.budget, entries: h.entries, now: h.now,
+    stale: !take && !!held && (held.budget !== budget || held.entries !== entries),
+    refresh: () => setWant((w) => w + 1) };
+}
+
+/** The plan's Refresh button: lit up when your kinah or listings changed since the plan was made. */
+export function PlanRefresh({ stale, onClick }) {
+  return (
+    <button type="button" className={`mini-btn plan-refresh${stale ? " stale" : ""}`} onClick={onClick}
+      title={stale ? "Your kinah or listings changed since this plan was made. Refresh to use them." : "Remake the plan with your current kinah and listings"}>
+      ↻ Refresh{stale ? " (changed)" : ""}
+    </button>
+  );
+}
+
 // "What to craft with your kinah": shared by Market Analysis and the Profit Calculator.
 
 function listTitle(p) {
@@ -29,11 +70,11 @@ function listTitle(p) {
  * listings count); `icons` is the market's icon map; `scope` describes what the plan covers. `onList(pick)`, if given,
  * adds a button per craft that logs a listing of one at the suggested price.
  */
-export function planView({ rows, budget, settings, serverName, icons = {}, scope = "", emptyHint, snapshotAt = null, entries = [], onList = null }) {
+export function planView({ rows, budget, settings, serverName, icons = {}, scope = "", emptyHint, snapshotAt = null, entries = [], now = Date.now(), onList = null }) {
   if (!budget) {
     return { note: "", body: <p className="muted plan-empty">{emptyHint || "Enter how much kinah you have to see what to craft with it."}</p> };
   }
-  const plan = planBudget(rows, budget, { ...settings, ownListings: ownListings(entries), ownActive: ownActiveListings(entries), ownActiveCount: activeListingCount(entries, Date.now(), stackableTest(rows)),
+  const plan = planBudget(rows, budget, { ...settings, ownListings: ownListings(entries), ownActive: ownActiveListings(entries, now), ownActiveCount: activeListingCount(entries, now, stackableTest(rows)),
     snapshotAt: snapshotAt ? Math.floor(new Date(snapshotAt).getTime() / 60000) : null });
   const note = `For ${kinah(budget)} on ${serverName || "this server"}${scope ? `, ${scope}` : ""}.`;
   const icon = (key) => <ItemIcon icon={icons[key]} size="small" />;
