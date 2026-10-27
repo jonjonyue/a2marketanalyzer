@@ -35,7 +35,7 @@ from pathlib import Path
 DEFAULT_BASE = "https://aion2.exchange"
 # Bump when the published data gains new content (e.g. 2 = Superior stones): a refresh then fetches even if the API
 # has no new snapshot, so the new content shows up without waiting for one.
-DATA_VERSION = 2
+DATA_VERSION = 3  # 3: Superior stones turned off again
 SKIP_EXIT = 3  # --skip-unchanged: nothing to do this run (API down, or no new snapshot since the published data)
 THIN_NO_PRICIER_SALES = 3  # mirrors ESTIMATOR.thinNoPricierSales in the dashboard's metrics.js
 ACTIVITY_KEEP_DAYS = 180  # hourly activity totals kept in each server file (the API itself keeps only ~10 days)
@@ -45,7 +45,10 @@ DEFAULT_SERVERS = (11201, 12201)  # NA West: Siel (Elyos) and Israphel (Asmodian
 WORKERS = 3  # servers fetched in parallel; each still waits DELAY_S between its own requests
 RECIPES_DIR = Path(__file__).resolve().parent.parent / "recipes"
 TD_RECIPES = RECIPES_DIR / "true_dragon.json"
-STONE_RECIPES = RECIPES_DIR / "magic_stones.json"  # Superior manastones / soulstones (Alchemy, sold in stacks)   # True Dragon (combo -> Splendent True Dragon)
+STONE_RECIPES = RECIPES_DIR / "magic_stones.json"  # Superior manastones / soulstones (Alchemy, sold in stacks)
+# Off for now (Oct 2026): at market prices for Lesser stones they're almost always a loss. Set True to bring them back
+# (and bump DATA_VERSION so the next refresh picks them up); the dashboard shows them whenever the data has them.
+INCLUDE_STONES = False   # True Dragon (combo -> Splendent True Dragon)
 HISTORY_DAYS = 10       # 7-day estimate window + 3 days so expiries of earlier listings can be matched
 USER_AGENT = "a2marketanalyzer-dashboard/1.0 (+https://github.com/jonjonyue/a2marketanalyzer)"
 DELAY_S = float(__import__("os").environ.get("FETCH_DELAY_S", "0.25"))  # be gentle with the site: ~4 requests/second max
@@ -200,11 +203,12 @@ def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tup
         })
 
     # Superior manastones and soulstones: Alchemy crafts from recipes/magic_stones.json, listed in stacks.
-    stone_recipes = json.loads(STONE_RECIPES.read_text())
+    stone_recipes = json.loads(STONE_RECIPES.read_text()) if INCLUDE_STONES else {"stones": [], "materials": {}, "npc_prices": {}, "powder": {}}
     stones = {s["key"]: s for s in stone_recipes["stones"]}
-    time.sleep(DELAY_S)
+    if stones:
+        time.sleep(DELAY_S)
     try:
-        resp = get_json(base, "/api/items", {"keys": ",".join(map(str, stones)), "limit": 100, "server": server_id}) or {}
+        resp = (get_json(base, "/api/items", {"keys": ",".join(map(str, stones)), "limit": 100, "server": server_id}) or {}) if stones else {}
         for i in resp.get("items") or []:
             st = stones.get(i["item_key"])
             if not st:
@@ -270,7 +274,7 @@ def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tup
         "materials": materials,
         "icons": icons,
         "chains": chains,
-        "stone_recipes": {k: stone_recipes[k] for k in ("stones", "npc_prices", "powder")},
+        **({"stone_recipes": {k: stone_recipes[k] for k in ("stones", "npc_prices", "powder")}} if stones else {}),
     }
     return market, crafts.get("model"), errors
 

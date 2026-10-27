@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { analyzeMarket, activityProfile, DEFAULT_SETTINGS, VERDICT_ORDER, byRank, isWorthCrafting, SKILLS as CRAFT_SKILLS, shortenName, parseKinah } from "../lib/metrics.js";
+import { analyzeMarket, activityProfile, STONE_TIER, DEFAULT_SETTINGS, VERDICT_ORDER, byRank, isWorthCrafting, SKILLS as CRAFT_SKILLS, shortenName, parseKinah } from "../lib/metrics.js";
 import { kinah, pct, rate, days, ago, asPct, cx } from "../lib/format.js";
 import { KEYS, readJson, readRaw, writeRaw, useKinah, useStoredRaw, parseStoneValues } from "../lib/storage.js";
 import { entriesOf, listOne, unlistOne, listingFee, ownActiveListings } from "../lib/ledgerStore.js";
@@ -436,7 +436,8 @@ export default function Market() {
         </label>
         <div className="field">
           <span>Tier</span>
-          <Chips id="tiers" label="Tier" options={TIERS} value={ui.tier} onChange={(tier) => set({ tier })}
+          <Chips id="tiers" label="Tier" value={ui.tier} onChange={(tier) => set({ tier })}
+            options={TIERS.filter((t) => t !== STONE_TIER || (all || []).some((r) => r.tier === STONE_TIER))}
             display={(v) => (v === "Superior Stone" ? "Superior Stones" : asmo ? v.replace("True Dragon", "Star Dragon") : v)} />
         </div>
         <div className="field">
