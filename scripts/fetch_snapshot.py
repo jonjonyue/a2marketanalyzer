@@ -33,6 +33,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 DEFAULT_BASE = "https://aion2.exchange"
+# Bump when the published data gains new content (e.g. 2 = Superior stones): a refresh then fetches even if the API
+# has no new snapshot, so the new content shows up without waiting for one.
+DATA_VERSION = 2
 SKIP_EXIT = 3  # --skip-unchanged: nothing to do this run (API down, or no new snapshot since the published data)
 THIN_NO_PRICIER_SALES = 3  # mirrors ESTIMATOR.thinNoPricierSales in the dashboard's metrics.js
 ACTIVITY_KEEP_DAYS = 180  # hourly activity totals kept in each server file (the API itself keeps only ~10 days)
@@ -361,10 +364,14 @@ def needs_refresh(base: str, site: str | None, servers: list[int] | None) -> boo
     if not site:
         return True
     try:
-        published = {s["server_id"]: s for s in (get_json(site, "/data/snapshot.json", {"run": int(time.time())}, retries=2) or {}).get("servers", [])}
+        index = get_json(site, "/data/snapshot.json", {"run": int(time.time())}, retries=2) or {}
     except Exception as err:
         print(f"Couldn't read the published data ({err}); refreshing.")
         return True
+    if index.get("data_version") != DATA_VERSION:
+        print(f"Published data is version {index.get('data_version')}, this refresh writes {DATA_VERSION}; refreshing.")
+        return True
+    published = {s["server_id"]: s for s in index.get("servers", [])}
     now = datetime.now(timezone.utc)
     for sid in servers or list(published):
         pub = published.get(sid) or {}
@@ -514,6 +521,7 @@ def main() -> int:
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "source": args.base,
         "default_server": DEFAULT_SERVER,
+        "data_version": DATA_VERSION,
         "model": model,
         # Servers that failed this run are listed only if their last published file was kept (marked stale).
         "servers": [{**{k: r.get(k) for k in (*SERVER_FIELDS, "generated_at", "captured_at")}, **({"stale": True} if r.get("stale") else {})}
