@@ -7,7 +7,7 @@ import { ItemIcon } from "../components/ItemIcon.jsx";
 import { listingEntry, ownListings, activeListingCount, stackableTest } from "../lib/ledgerStore.js";
 import { SupplyTag } from "../components/Supply.jsx";
 import { bestTimeNote } from "../components/Activity.jsx";
-import { planView } from "../components/Plan.jsx";
+import { planView, PlanGoal } from "../components/Plan.jsx";
 import { LedgerMethod } from "./LedgerMethod.jsx";
 
 // Profit calculator: a personal log of exchange purchases, listings and sales, kept in this browser (localStorage).
@@ -85,7 +85,7 @@ function totals(entries) {
 }
 
 // The plan uses the settings last used on Market Analysis (filters, share of sales, price basis, proficiency) in this browser.
-function planSettings(savedRaw, profRaw, stoneRaw) {
+function planSettings(savedRaw, profRaw, stoneRaw, goalRaw) {
   let saved = {}, prof = {};
   try { saved = JSON.parse(savedRaw || "null") || {}; } catch { /* defaults */ }
   try { prof = JSON.parse(profRaw || "null") || {}; } catch { /* defaults */ }
@@ -94,7 +94,7 @@ function planSettings(savedRaw, profRaw, stoneRaw) {
   const pick = (k, ok) => (ok(saved[k]) ? saved[k] : DEFAULT_SETTINGS[k]);
   const num = (lo, hi) => (v) => Number.isFinite(v) && v >= lo && v <= hi;
   return {
-    settings: { ...DEFAULT_SETTINGS, proficiency, stoneValues: parseStoneValues(stoneRaw),
+    settings: { ...DEFAULT_SETTINGS, proficiency, stoneValues: parseStoneValues(stoneRaw), planGoal: goalRaw === "perDay" ? "perDay" : "total",
       sharePct: pick("sharePct", num(1, 100)), salesTaxPct: pick("salesTaxPct", num(0, 50)), listingFeePct: pick("listingFeePct", num(0, 50)),
       priceBasis: pick("priceBasis", (v) => ["conservative", "listing", "sold"].includes(v)),
       costBasis: pick("costBasis", (v) => ["cheapest", "market"].includes(v)) },
@@ -454,7 +454,8 @@ export default function Ledger() {
   const planRaw = useStoredRaw(KEYS.planSettings);
   const profRaw = useStoredRaw(KEYS.proficiency);
   const stoneRaw = useStoredRaw(KEYS.stoneValues);
-  const { settings, tier, skill } = useMemo(() => planSettings(planRaw, profRaw, stoneRaw), [planRaw, profRaw, stoneRaw]);
+  const goalRaw = useStoredRaw(KEYS.planGoal);
+  const { settings, tier, skill } = useMemo(() => planSettings(planRaw, profRaw, stoneRaw, goalRaw), [planRaw, profRaw, stoneRaw, goalRaw]);
   const planRows = useMemo(() => {
     if (!market) return null;
     let rows = analyzeMarket(market, settings);
@@ -522,7 +523,7 @@ export default function Ledger() {
     <main className="wrap">
       <section className="panel plan ledger-plan" aria-labelledby="planTitle">
         <div className="table-head">
-          <h2 id="planTitle">What to craft with your kinah</h2>
+          <div className="plan-title-row"><h2 id="planTitle">What to craft with your kinah</h2><PlanGoal goal={settings.planGoal} /></div>
           <p className="muted"><span id="planNote">{plan?.note}</span> <a href="#/">Change settings on Market Analysis</a></p>
         </div>
         <div id="planBody">{plan ? plan.body : <p className="muted plan-empty">Loading market data…</p>}</div>

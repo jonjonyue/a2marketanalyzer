@@ -3,6 +3,18 @@ import { ownListings, ownActiveListings, activeListingCount, stackableTest } fro
 import { kinah, pct, days } from "../lib/format.js";
 import { ItemIcon } from "./ItemIcon.jsx";
 import { SupplyTag } from "./Supply.jsx";
+import { KEYS, writeRaw } from "../lib/storage.js";
+
+/** The plan's goal switch: most total profit, or most profit per day (faster sellers win). Shared by both pages. */
+export function PlanGoal({ goal }) {
+  const set = (v) => writeRaw(KEYS.planGoal, v);
+  return (
+    <div className="seg plan-goal" role="radiogroup" aria-label="Plan for">
+      <button type="button" role="radio" aria-checked={goal !== "perDay"} onClick={() => set("total")} title="The mix that earns the most in total">Most profit</button>
+      <button type="button" role="radio" aria-checked={goal === "perDay"} onClick={() => set("perDay")} title="The mix that earns the most per day: profit ÷ days until it sells, so fast sellers win">Profit per day</button>
+    </div>
+  );
+}
 
 // "What to craft with your kinah": shared by Market Analysis and the Profit Calculator.
 
@@ -52,13 +64,13 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
   }
   const body = <>
     <div className="plan-summary">
-      <div><span className="label">Expected profit</span><strong className="pos">{kinah(plan.profit, { sign: true })}</strong><span className="sub">{pct(plan.roi)} on what you set aside</span></div>
+      <div><span className="label">Expected profit</span><strong className="pos">{kinah(plan.profit, { sign: true })}</strong><span className="sub">{pct(plan.roi)} on what you set aside · ~{kinah(plan.profitPerDay)}/day</span></div>
       <div><span className="label">Set aside</span><strong>{kinah(plan.capital)}</strong><span className="sub">average spend {kinah(plan.spend)}</span></div>
       <div><span className="label">Left over</span><strong>{kinah(plan.left)}</strong><span className="sub">{plan.picks.length} of {plan.candidates} worthwhile crafts</span></div>
     </div>
     <div className="table-scroll">
       <table className="plan-table">
-        <thead><tr>{onList && <th><span className="sr-only">Log a listing</span></th>}<th>Craft</th><th>Verdict</th><th>Make</th><th>Set aside <span className="th-sub">total</span></th><th>Avg spend <span className="th-sub">total</span></th><th>List at <span className="th-sub">each</span></th><th>Profit <span className="th-sub">total</span></th><th>Return</th><th>Sells in</th></tr></thead>
+        <thead><tr>{onList && <th><span className="sr-only">Log a listing</span></th>}<th>Craft</th><th>Verdict</th><th>Make</th><th>Set aside <span className="th-sub">total</span></th><th>Avg spend <span className="th-sub">total</span></th><th>List at <span className="th-sub">each</span></th><th>Profit <span className="th-sub">total</span></th><th>Profit <span className="th-sub">per day</span></th><th>Return</th><th>Sells in</th></tr></thead>
         <tbody>
           {plan.picks.map((p) => (
             <tr key={p.row.key}>
@@ -80,6 +92,7 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
               <td title={`Average spend for ${p.units}${p.units > 1 ? ` (${kinah(p.spend / p.units)} each)` : ""}`}>{kinah(p.spend)}</td>
               <td title={listTitle(p)}><strong>{kinah(p.listAt)}</strong>{p.units > 1 && <span className="dim"> ×{p.units}</span>}</td>
               <td className={p.profit > 0 ? "pos" : "neg"} title={`At ${kinah(p.listAt)} each you keep ${kinah(p.netEach)} after tax and fee${p.units > 1 ? `; ${kinah(p.profit / p.units, { sign: true })} profit each, ${p.units} units` : ""}`}>{kinah(p.profit, { sign: true })}</td>
+              <td className={p.profitPerDay > 0 ? "pos" : "neg"} title="Profit ÷ days until your last one sells (at least 6 hours)">{kinah(p.profitPerDay, { sign: true })}</td>
               <td>{pct(p.row.roc)}</td>
               <td title="When your last one should sell">{days(p.daysToSell)} d</td>
             </tr>

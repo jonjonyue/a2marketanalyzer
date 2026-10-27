@@ -14,6 +14,7 @@ export const KEYS = {
   planSettings: "a2dash.planSettings", // the plan's settings, last used on Market Analysis
   ledger: "a2ledger.v1",            // the Profit Calculator's log
   stoneValues: "a2dash.stoneValues", // { item key: kinah } for Lesser stones with no market price
+  planGoal: "a2dash.planGoal",      // what the plan maximizes: "total" profit or "perDay"
 };
 
 /** Your values for Lesser stones that have no market price: { item key: kinah }. */

@@ -11,6 +11,8 @@ export const DEFAULT_SETTINGS = {
   listingDays: 3,             // listings expire after 3 days
   planDays: 1.5,              // the kinah plan only makes what the market can take within this many days
   maxListings: 10,            // the exchange lets one character have this many listings up at once
+  planGoal: "total",          // the plan maximizes "total" expected profit, or "perDay": profit ÷ days until it sells
+  minSellDays: 0.25,          // "perDay": nothing counts as selling faster than this (6 hours), so one noisy estimate can't dominate
   maxSupplyDays: 5,           // more days of supply than this (listings ÷ sold/day) is "Oversupplied"
                               // "Slow seller": a new listing would wait (listings + 1) ÷ sold/day > listingDays to sell
   minRoc: 15,                 // return on capital (%) below this is "Low return"
@@ -815,17 +817,21 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
     if (each > 0) options.push({ r0, r, slots, myUnits, list, each });
   }
 
-  // Choose how many of each to make: the most expected profit that fits both your kinah (capital set aside) and
-  // your free listing slots. Exact, over Pareto fronts of (capital, profit) per number of slots used; with at most
-  // 10 slots this stays small. So when slots are short, two cheaper listings can lose to one that earns more.
+  // Choose how many of each to make: the most expected profit (or, with planGoal "perDay", the most profit per day:
+  // each craft's profit ÷ the days until its last unit sells, at least minSellDays) that fits both your kinah (capital
+  // set aside) and your free listing slots. Exact, over Pareto fronts of (capital, score) per number of slots used;
+  // with at most 10 slots this stays small. So when slots are short, two cheaper listings can lose to one that earns more.
+  const perDay = s.planGoal === "perDay";
+  const sellDays = (o, n) => Math.max(s.minSellDays, daysForUnits(o.r, o.myUnits + n, s) ?? Infinity);
+  const score = (o, n) => (perDay ? (n * o.each) / sellDays(o, n) : n * o.each);
   // Gear is one listing per unit; stackable items (manastones, soulstones) go up as one listing however many.
   const slotsFor = (o, n) => (n <= 0 ? 0 : o.r0.stackable ? 1 : n);
   const cap = Math.min(free, options.reduce((t, o) => t + slotsFor(o, o.slots), 0));
-  let fronts = Array.from({ length: cap + 1 }, (_, k) => (k ? [] : [{ capital: 0, profit: 0, units: [] }]));
+  let fronts = Array.from({ length: cap + 1 }, (_, k) => (k ? [] : [{ capital: 0, score: 0, units: [] }]));
   const prune = (list) => {
-    list.sort((a, b) => a.capital - b.capital || b.profit - a.profit);
+    list.sort((a, b) => a.capital - b.capital || b.score - a.score);
     const out = [];
-    for (const x of list) if (!out.length || x.profit > out[out.length - 1].profit + 1e-6) out.push(x);
+    for (const x of list) if (!out.length || x.score > out[out.length - 1].score + 1e-6) out.push(x);
     return out.length > 400 ? out.filter((_, i) => i % Math.ceil(out.length / 400) === 0 || i === out.length - 1) : out;
   };
   options.forEach((o, idx) => {
@@ -835,14 +841,14 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
         for (let n = 1; n <= o.slots && k + slotsFor(o, n) <= cap; n++) {
           const capital = st.capital + capitalFor(o.r, n);
           if (capital > budget) break;
-          next[k + slotsFor(o, n)].push({ capital, profit: st.profit + n * o.each, units: [...st.units, [idx, n]] });
+          next[k + slotsFor(o, n)].push({ capital, score: st.score + score(o, n), units: [...st.units, [idx, n]] });
         }
       }
     }
     fronts = next.map(prune);
   });
   let best = fronts[0][0];
-  for (const f of fronts) for (const x of f) if (x.profit > best.profit + 1e-6 || (Math.abs(x.profit - best.profit) <= 1e-6 && x.capital < best.capital)) best = x;
+  for (const f of fronts) for (const x of f) if (x.score > best.score + 1e-6 || (Math.abs(x.score - best.score) <= 1e-6 && x.capital < best.capital)) best = x;
   const chosen = new Map(best.units);
 
   const picks = [];
@@ -851,9 +857,10 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
     if (!n) return;
     picks.push({ row: o.r0, units: n, slots: o.slots, myUnits: o.myUnits, capital: capitalFor(o.r, n), spend: n * o.r.cost, profit: n * o.each,
       listAt: o.list.price, listBasis: o.list.basis, listNote: o.list.note,
-      netEach: o.list.price != null ? o.list.price * keep : null, daysToSell: daysForUnits(o.r, o.myUnits + n, s) });
+      netEach: o.list.price != null ? o.list.price * keep : null, daysToSell: daysForUnits(o.r, o.myUnits + n, s),
+      profitPerDay: (n * o.each) / sellDays(o, n) });
   });
-  picks.sort((a, b) => (b.row.roc ?? 0) - (a.row.roc ?? 0));
+  picks.sort(perDay ? (a, b) => b.profitPerDay - a.profitPerDay : (a, b) => (b.row.roc ?? 0) - (a.row.roc ?? 0));
   const capital = picks.reduce((t, p) => t + p.capital, 0);
   const profit = picks.reduce((t, p) => t + p.profit, 0);
   const spend = picks.reduce((t, p) => t + p.spend, 0);
@@ -868,7 +875,8 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
   const short = more.filter(({ n }) => !n).map(({ o }) => ({ row: o.r0, capital: capitalFor(o.r, 1), myUnits: o.myUnits }))
     .filter((x) => x.capital > left).sort((a, b) => (b.row.roc ?? 0) - (a.row.roc ?? 0));
   const nextUp = slotsLeft > 0 ? short[0] || null : null;
-  return { budget, picks, capital, spend, profit, left, roi: capital ? (profit / capital) * 100 : null,
+  return { budget, picks, capital, spend, profit, left, roi: capital ? (profit / capital) * 100 : null, goal: perDay ? "perDay" : "total",
+    profitPerDay: picks.reduce((t, p) => t + p.profitPerDay, 0),
     nextUp: nextUp && { ...nextUp, short: nextUp.capital - left }, candidates: candidates.length, covered,
     slots: { total: slotsTotal, yours: s.ownActiveCount ?? 0, planned, capped } };
 }

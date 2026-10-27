@@ -509,3 +509,6 @@ td.over-budget { color: var(--serious); }
 .stone-values { margin: 0 0 10px; display: grid; gap: 6px; }
 .stone-value { font-size: 13px; }
 .stone-value input { width: 120px; height: 28px; padding: 3px 8px; margin-left: 6px; font: inherit; }
+.plan-title-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.plan-title-row h2 { margin: 0; }
+.plan-goal button { height: 28px; font-size: 12.5px; }
