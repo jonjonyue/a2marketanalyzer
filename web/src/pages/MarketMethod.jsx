@@ -11,7 +11,7 @@ export function MarketMethod({ modelNote }) {
         <li><strong>Top pick</strong> and <strong>Craft it</strong> are profitable and selling; <strong>Low return</strong>, <strong>Slow seller</strong>, <strong>Oversupplied</strong> and <strong>Loss</strong> aren't worth it.</li>
         <li><strong>New supply</strong> flags items where new listings in the last 24h jumped well above their usual pace while supply built up (▲▲ flooding when listings at least doubled), and marks ones you've listed or the plan suggests.</li>
         <li><strong>When buyers are active</strong> uses the last ~10 days of hourly snapshots, in your local time: sales per hour, and how often a listing that became the cheapest in that hour sold before being undercut. The best window is the 3 hours where that's highest.</li>
-        <li><strong>What to craft</strong> is the most profitable mix for your kinah and 10 listing slots, sized to about 1.5 days of sales. <strong>List at</strong> avoids prices that usually get undercut.</li>
+        <li><strong>What to craft</strong> is the most profitable mix for your kinah and 10 listing slots, sized to about 1.5 days of sales. Switch it to <em>Profit per day</em> to favour fast sellers (profit ÷ days until it sells). <strong>List at</strong> avoids prices that usually get undercut.</li>
       </ul>
     </>}>
       <ul>

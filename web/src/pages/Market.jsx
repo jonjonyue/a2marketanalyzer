@@ -6,7 +6,7 @@ import { entriesOf, listOne, unlistOne, listingFee, ownActiveListings } from "..
 import { useToast } from "../components/Toast.jsx";
 import { DEFAULT_SERVER, serverLabel, useServerDoc, useSnapshot } from "../lib/data.js";
 import { ItemIcon } from "../components/ItemIcon.jsx";
-import { planView } from "../components/Plan.jsx";
+import { planView, PlanGoal } from "../components/Plan.jsx";
 import { BarChart, Scatter, Tooltip, noCostsInView, useTip } from "../components/Charts.jsx";
 import { ExtLink, RecipeDetail } from "../components/Recipe.jsx";
 import { SupplyPanel, SupplyTag } from "../components/Supply.jsx";
@@ -366,9 +366,11 @@ export default function Market() {
   useEffect(() => { if (snapshot) writeUrl({ ...ui, server: sid }); }, [ui, sid, snapshot]);
 
   const stoneRaw = useStoredRaw(KEYS.stoneValues);
+  const goalRaw = useStoredRaw(KEYS.planGoal);
   const settings = useMemo(() => ({ ...DEFAULT_SETTINGS, priceBasis: ui.priceBasis, costBasis: ui.costBasis, salesTaxPct: ui.salesTaxPct,
-    listingFeePct: ui.listingFeePct, sharePct: ui.sharePct, proficiency: ui.proficiency, stoneValues: parseStoneValues(stoneRaw) }),
-  [ui.priceBasis, ui.costBasis, ui.salesTaxPct, ui.listingFeePct, ui.sharePct, ui.proficiency, stoneRaw]);
+    listingFeePct: ui.listingFeePct, sharePct: ui.sharePct, proficiency: ui.proficiency, stoneValues: parseStoneValues(stoneRaw),
+    planGoal: goalRaw === "perDay" ? "perDay" : "total" }),
+  [ui.priceBasis, ui.costBasis, ui.salesTaxPct, ui.listingFeePct, ui.sharePct, ui.proficiency, stoneRaw, goalRaw]);
   const all = useMemo(() => {
     if (!market) return null;
     const rows = analyzeMarket(market, settings);
@@ -494,7 +496,7 @@ export default function Market() {
 
       <section className="panel plan" aria-labelledby="planTitle">
         <div className="table-head">
-          <h2 id="planTitle">What to craft with your kinah</h2>
+          <div className="plan-title-row"><h2 id="planTitle">What to craft with your kinah</h2><PlanGoal goal={settings.planGoal} /></div>
           <p className="muted" id="planNote">{plan?.note}</p>
         </div>
         <div id="planBody">{plan?.body}</div>
