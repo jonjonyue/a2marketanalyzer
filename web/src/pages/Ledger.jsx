@@ -501,15 +501,6 @@ export default function Ledger() {
   const item = lookup(f.name);
 
   return <IconLookup.Provider value={iconFor}>
-    <div className="wip-banner" role="note">
-      <div className="wrap wip-inner">
-        <span className="wip-icon" aria-hidden="true">!</span>
-        <div>
-          <strong>Work in progress</strong>
-          <p>Features may change; export a backup of anything you log.</p>
-        </div>
-      </div>
-    </div>
 
     <header className="top">
       <div className="wrap top-inner">

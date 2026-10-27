@@ -375,12 +375,6 @@ button.ext-button, label.ext-button { cursor: pointer; }
 }
 
 /* work-in-progress banner */
-.wip-banner { background: repeating-linear-gradient(-45deg, #f5b81c 0 22px, #e7a90b 22px 44px); color: #1a1405; border-bottom: 1px solid #c88f00; }
-.wip-inner { display: flex; align-items: center; gap: 14px; padding-top: 18px; padding-bottom: 18px; }
-.wip-icon { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: #1a1405; color: #f5b81c; font-size: 24px; font-weight: 800; }
-.wip-banner strong { display: block; font-size: 22px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; line-height: 1.2; }
-.wip-banner p { margin: 2px 0 0; font-size: 14px; font-weight: 500; }
-@media (max-width: 560px) { .wip-banner strong { font-size: 18px; } .wip-icon { width: 36px; height: 36px; font-size: 20px; } }
 
 /* listings in the profit calculator */
 .side-seg[data-side="list"] button[aria-checked="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
