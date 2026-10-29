@@ -1,10 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { shortenName, parseKinah, analyzeMarket, relistAdvice, activityProfile, DEFAULT_SETTINGS } from "../lib/metrics.js";
+import { shortenName, parseKinah, analyzeMarket, relistAdvice, planListPrice, activityProfile, DEFAULT_SETTINGS } from "../lib/metrics.js";
 import { kinah, full, signClass, cx } from "../lib/format.js";
 import { KEYS, readRaw, readJson, writeRaw, writeKinah, useKinah, useStoredRaw, parseStoneValues } from "../lib/storage.js";
 import { DEFAULT_SERVER, serverLabel, useServerDoc, useSnapshot } from "../lib/data.js";
 import { ItemIcon } from "../components/ItemIcon.jsx";
-import { listingEntry, ownListings, activeListingCount, stackableTest } from "../lib/ledgerStore.js";
+import { listingEntry, ownListings, ownActiveListings, activeListingCount, stackableTest } from "../lib/ledgerStore.js";
 import { SupplyTag } from "../components/Supply.jsx";
 import { bestTimeNote } from "../components/Activity.jsx";
 import { planView, PlanGoal, PlanRefresh, useHeldPlan, requestPlanRefresh } from "../components/Plan.jsx";
@@ -478,6 +478,15 @@ export default function Ledger() {
     return { ...relistAdvice(r, { price: l.price, t: Math.floor(l.ts / 60000) }, { ...settings, ownListings: ownListings(entries),
       snapshotAt: market?.captured_at ? Math.floor(new Date(market.captured_at).getTime() / 60000) : null }), influx: r.influx };
   };
+  // A suggested price while you log a listing: what the plan would list it at (your other listings counted the same way).
+  const suggestFor = (name, key) => {
+    const r = (key != null && rowFor.get(key)) || rowFor.get(String(name || "").toLowerCase());
+    if (!r || isMaterials(name)) return null;
+    const own = editing ? entries.filter((x) => x.id !== editing) : entries;
+    const a = planListPrice(r, { ...settings, ownListings: ownListings(own), ownActive: ownActiveListings(own, now),
+      snapshotAt: market?.captured_at ? Math.floor(new Date(market.captured_at).getTime() / 60000) : null });
+    return a.price > 0 ? { price: a.price, note: a.note, listing: r.listing, listings: r.listings } : null;
+  };
   // The plan's "+ List" button: log one at the suggested price, like adding it with the form.
   function listFromPlan(p) {
     const entry = listingEntry({ name: p.row.shortName, key: p.row.key, price: p.listAt, qty: p.row.stackable ? p.units : 1 }, log.settings);
@@ -545,10 +554,21 @@ export default function Ledger() {
             <span>Quantity</span>
             <input id="qty" ref={qtyRef} type="number" min="1" step="1" inputMode="numeric" required value={form.qty} onChange={(e) => setField("qty", e.target.value)} />
           </label>
-          <label className="field">
-            <span>Price each</span>
+          <div className="field price-field">
+            <label htmlFor="price">Price each</label>
             <input id="price" ref={priceRef} type="text" inputMode="decimal" placeholder="e.g. 1.5m or 250k" required value={form.price} onChange={(e) => setField("price", e.target.value)} />
-          </label>
+            {side === "list" && (() => {
+              const sug = f.name && suggestFor(f.name, item?.key);
+              if (!sug) return null;
+              const same = f.price === sug.price;
+              return (
+                <p className="price-hint" id="priceHint" title={`${sug.note || ""} Cheapest listing ${sug.listing > 0 ? full(sug.listing) : "none"} · ${sug.listings ?? 0} listed.`.trim()}>
+                  Suggested <strong>{full(sug.price)}</strong>
+                  {!same && <> · <button type="button" className="text-btn" onClick={() => { setField("price", full(sug.price)); priceRef.current?.focus(); }}>Use</button></>}
+                </p>
+              );
+            })()}
+          </div>
           <label className="field">
             <span>Date</span>
             <input id="when" type="datetime-local" required value={form.when} onChange={(e) => setField("when", e.target.value)} />

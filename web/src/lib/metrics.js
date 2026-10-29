@@ -782,6 +782,24 @@ export function suggestedListPrice(r, settings = DEFAULT_SETTINGS) {
   return a.price != null ? a : { ...a, price: r.price ?? null, basis: "price", note: "No market data; using the sell price." };
 }
 
+/**
+ * Your own active listings of row `r0` (settings.ownActive, from the Profit Calculator). Those posted before the market
+ * snapshot are already in its listing count; take them out so they aren't counted twice (once as yours, once as
+ * competitors). Returns { r, myUnits }.
+ */
+function withoutOwn(r0, s) {
+  const mine = s.ownActive?.get(r0.key) || s.ownActive?.get(String(r0.name || "").toLowerCase()) || [];
+  const myUnits = mine.reduce((t, l) => t + l.units, 0);
+  const inSnapshot = s.snapshotAt ? mine.filter((l) => l.t <= s.snapshotAt).reduce((t, l) => t + l.units, 0) : 0;
+  return { r: myUnits ? { ...r0, listings: Math.max(0, (r0.listings ?? 0) - inSnapshot) } : r0, myUnits };
+}
+
+/** The price the plan would list `r0` at (per unit), with your own listings counted as the plan counts them. */
+export function planListPrice(r0, settings = DEFAULT_SETTINGS) {
+  const s = { ...DEFAULT_SETTINGS, ...settings };
+  return suggestedListPrice(withoutOwn(r0, s).r, s);
+}
+
 export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
   const s = { ...DEFAULT_SETTINGS, ...settings };
   if (!(budget > 0)) return null;
@@ -803,12 +821,7 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
   const covered = []; // crafts your own active listings already fill
   const options = []; // crafts you could make more of: { r0, r, slots (market room left), myUnits, list, each }
   for (const r0 of candidates) {
-    // Your own active listings of this item (from the Profit Calculator). Those posted before the market snapshot are
-    // already in its listing count; take them out so they aren't counted twice (once as yours, once as competitors).
-    const mine = s.ownActive?.get(r0.key) || s.ownActive?.get(String(r0.name || "").toLowerCase()) || [];
-    const myUnits = mine.reduce((t, l) => t + l.units, 0);
-    const inSnapshot = s.snapshotAt ? mine.filter((l) => l.t <= s.snapshotAt).reduce((t, l) => t + l.units, 0) : 0;
-    const r = myUnits ? { ...r0, listings: Math.max(0, (r0.listings ?? 0) - inSnapshot) } : r0;
+    const { r, myUnits } = withoutOwn(r0, s); // your own active listings of this item
     const room = marketRoom(r, s);
     const slots = Math.max(0, room - myUnits); // what's left after your listings take their places
     if (myUnits && !slots) { covered.push({ row: r0, myUnits, room }); continue; }

@@ -312,6 +312,11 @@ details.sub > summary:hover { color: var(--accent); }
 .add-btn { margin-left: 0; min-width: 84px; }
 .side-seg[data-side="sell"] button[aria-checked="true"] { background: var(--good-bg); color: var(--good); border-color: var(--good); }
 .side-seg[data-side="buy"] button[aria-checked="true"] { background: var(--critical-bg); color: var(--critical); border-color: var(--critical); }
+.price-field { position: relative; }
+.price-hint { position: absolute; top: 100%; left: 0; margin: 4px 0 0; white-space: nowrap; font-size: 12px; color: var(--muted); }
+.price-hint strong { font-family: var(--mono); font-weight: 600; color: var(--text-2); }
+.price-hint .text-btn { font-size: 12px; padding: 0; }
+.form-grid:has(.price-hint) { margin-bottom: 20px; }
 .preview { margin: 12px 0 0; min-height: 21px; font-family: var(--mono); font-size: 12.5px; color: var(--text-2); }
 .preview .muted { font-family: Inter, system-ui, sans-serif; }
 .pos { color: var(--good); }
@@ -355,7 +360,10 @@ button.ext-button, label.ext-button { cursor: pointer; }
 .toast[hidden] { display: none; }
 .toast button { all: unset; cursor: pointer; font-weight: 700; color: var(--accent); }
 @media (max-width: 1100px) {
-  .form-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .form-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); align-items: start; }
+  .price-hint { position: static; white-space: normal; margin: 0; }
+  .form-grid:has(.price-hint) { margin-bottom: 0; }
+  .form-grid > .add-btn { align-self: end; }
   .form-grid > .field:nth-child(1) { grid-column: span 2; }
   .form-grid > .item-field { grid-column: span 4; }
   .form-grid > .field:nth-child(3) { grid-column: span 1; }
@@ -403,7 +411,7 @@ table.listings-table { min-width: 940px; }
 .item-input-icon .mat-icon.small { width: 22px; height: 22px; }
 
 /* item search dropdown */
-.field.item-field > label { font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.field.item-field > label, .price-field > label { font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .combo input { padding-right: 28px !important; }
 .combo-caret { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 11px; pointer-events: none; }
 .combo-menu {
