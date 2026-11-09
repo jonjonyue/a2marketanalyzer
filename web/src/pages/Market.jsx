@@ -238,7 +238,8 @@ function salesTitle(r) {
   if (!e) return "No listing history";
   if (e.perDay == null) return "Not enough history yet";
   return `Estimated: ${e.sales} sales seen in ${e.days.toFixed(1)} days` + (e.repriced ? ` (${e.repriced} pulled or reposted listing${e.repriced > 1 ? "s" : ""} left out)` : "") +
-    (r.stackable ? ". Sold in stacks: this counts listings that sold out, not units, and partial buys from a stack aren't visible" : "");
+    (r.stackSize ? `. Sold in stacks: this counts listings that sold out; at a stack of ${r.stackSize} (what one Dragon Lord craft needs) that's about ${Math.round(e.perDay * r.stackSize)} a day`
+      : r.stackable ? ". Sold in stacks: this counts listings that sold out, not units, and partial buys from a stack aren't visible" : "");
 }
 const overTransfer = (r) => r.transfer?.cost != null && r.price != null && r.price > r.transfer.cost;
 
@@ -352,7 +353,7 @@ export default function Market() {
   // The plan's "+ List" button: log one at the suggested price in the Profit Calculator.
   const listFromPlan = (p) => {
     // Stackable items (stones) go up as one listing of every unit the plan makes; gear one at a time.
-    const entry = listOne({ name: p.row.shortName, key: p.row.key, price: p.listAt, qty: p.row.stackable ? p.units : 1 });
+    const entry = listOne({ name: p.row.shortName, key: p.row.key, price: p.listAt, qty: p.stack ?? (p.row.stackable ? p.units : 1) });
     if (!entry) return toast("Couldn't save in this browser (private window or storage blocked).");
     held.markListed(p.row.key, entry.qty);
     toast(`Listed ${entry.qty} × ${entry.name} at ${kinah(entry.price)} each (fee ${kinah(listingFee(entry))}). It's in the Profit Calculator.`,

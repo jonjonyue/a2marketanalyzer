@@ -312,6 +312,8 @@ details.sub > summary:hover { color: var(--accent); }
 .add-btn { margin-left: 0; min-width: 84px; }
 .side-seg[data-side="sell"] button[aria-checked="true"] { background: var(--good-bg); color: var(--good); border-color: var(--good); }
 .side-seg[data-side="buy"] button[aria-checked="true"] { background: var(--critical-bg); color: var(--critical); border-color: var(--critical); }
+.balaur-uses ul { margin: 4px 0 6px; padding-left: 18px; }
+.balaur-uses li { margin: 2px 0; }
 .price-field { position: relative; }
 .price-hint { position: absolute; top: 100%; left: 0; margin: 4px 0 0; white-space: nowrap; font-size: 12px; color: var(--muted); }
 .price-hint strong { font-family: var(--mono); font-weight: 600; color: var(--text-2); }

@@ -372,7 +372,7 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
     success: target.success ?? null, recipeLevel: target.recipeLevel ?? null, playerLevel: target.playerLevel ?? null, locked: !!target.locked,
     salesSource, priceSource, est, costDetail: target.costDetail || null, transfer: target.transfer || null,
     influx: supplyInflux(est),
-    stoneDetail: target.stoneDetail || null, simpleDetail: target.simpleDetail || null, stackable: !!target.stackable,
+    stoneDetail: target.stoneDetail || null, simpleDetail: target.simpleDetail || null, stackSize: target.stackSize ?? null, uses: target.uses ?? null, stackable: !!target.stackable,
     missingInputs: num(target.missing) ?? 0,
     verdict: target.locked
       ? { id: "locked", label: `Needs ${masteryLabel(target.recipeLevel)}`, tone: "neutral" }
@@ -712,7 +712,7 @@ export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
       const bal = t.tier === BALAUR_TIER ? balaurByKey.get(t.target_key) : null;
       if (bal) {
         const c = balaurCost(bal, ctx, s);
-        t = { ...t, cost: c.cost, cost_market: c.cost, missing: c.missing, simpleDetail: c.detail, attemptCost: c.cost != null ? c.attempt : null,
+        t = { ...t, cost: c.cost, cost_market: c.cost, missing: c.missing, simpleDetail: c.detail, stackSize: bal.stack ?? null, uses: bal.uses || null, attemptCost: c.cost != null ? c.attempt : null,
               hitChance: c.hit > 0 ? c.hit : null, success: c.success, locked: c.locked, recipeLevel: c.recipeLevel, playerLevel: c.playerLevel };
       }
       const recipe = !stone && !bal && !stepOf.has(t.target_key) && t.cost == null ? recipeFor.get(t.target_key) : null;
@@ -824,8 +824,10 @@ export function suggestedListPrice(r, settings = DEFAULT_SETTINGS) {
  */
 function withoutOwn(r0, s) {
   const mine = s.ownActive?.get(r0.key) || s.ownActive?.get(String(r0.name || "").toLowerCase()) || [];
-  const myUnits = mine.reduce((t, l) => t + l.units, 0);
-  const inSnapshot = s.snapshotAt ? mine.filter((l) => l.t <= s.snapshotAt).reduce((t, l) => t + l.units, 0) : 0;
+  // Stackable items (stones, Balaur materials): the market data counts listings, so count your listings, not units.
+  const n = (l) => (r0.stackable ? 1 : l.units);
+  const myUnits = mine.reduce((t, l) => t + n(l), 0);
+  const inSnapshot = s.snapshotAt ? mine.filter((l) => l.t <= s.snapshotAt).reduce((t, l) => t + n(l), 0) : 0;
   return { r: myUnits ? { ...r0, listings: Math.max(0, (r0.listings ?? 0) - inSnapshot) } : r0, myUnits };
 }
 
@@ -861,8 +863,11 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
     const slots = Math.max(0, room - myUnits); // what's left after your listings take their places
     if (myUnits && !slots) { covered.push({ row: r0, myUnits, room }); continue; }
     const list = suggestedListPrice(r, s);
-    const each = list.price != null ? list.price * keep - r.cost : r.profit; // profit per unit at the suggested price
-    if (each > 0) options.push({ r0, r, slots, myUnits, list, each });
+    // A Balaur material sells as a stack of what one Dragon Lord craft needs (r0.stackSize): the plan's unit is that
+    // stack, one listing each. Everything else: one item.
+    const per = r0.stackSize > 1 ? r0.stackSize : 1;
+    const each = per * (list.price != null ? list.price * keep - r.cost : r.profit); // profit per unit (stack) at the suggested price
+    if (each > 0) options.push({ r0, r, slots, myUnits, list, each, per });
   }
 
   // Choose how many of each to make: the most expected profit (or, with planGoal "perDay", the most profit per day:
@@ -873,7 +878,8 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
   const sellDays = (o, n) => Math.max(s.minSellDays, daysForUnits(o.r, o.myUnits + n, s) ?? Infinity);
   const score = (o, n) => (perDay ? (n * o.each) / sellDays(o, n) : n * o.each);
   // Gear is one listing per unit; stackable items (manastones, soulstones) go up as one listing however many.
-  const slotsFor = (o, n) => (n <= 0 ? 0 : o.r0.stackable ? 1 : n);
+  const slotsFor = (o, n) => (n <= 0 ? 0 : o.r0.stackable && o.per === 1 ? 1 : n);
+  const capOf = (o, n) => capitalFor(o.r, n * o.per); // capital for n units (stacks)
   const cap = Math.min(free, options.reduce((t, o) => t + slotsFor(o, o.slots), 0));
   let fronts = Array.from({ length: cap + 1 }, (_, k) => (k ? [] : [{ capital: 0, score: 0, units: [] }]));
   const prune = (list) => {
@@ -887,7 +893,7 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
     for (let k = 0; k < fronts.length; k++) {
       for (const st of fronts[k]) {
         for (let n = 1; n <= o.slots && k + slotsFor(o, n) <= cap; n++) {
-          const capital = st.capital + capitalFor(o.r, n);
+          const capital = st.capital + capOf(o, n);
           if (capital > budget) break;
           next[k + slotsFor(o, n)].push({ capital, score: st.score + score(o, n), units: [...st.units, [idx, n]] });
         }
@@ -903,7 +909,9 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
   options.forEach((o, idx) => {
     const n = chosen.get(idx);
     if (!n) return;
-    picks.push({ row: o.r0, units: n, slots: o.slots, myUnits: o.myUnits, capital: capitalFor(o.r, n), spend: n * o.r.cost, profit: n * o.each,
+    // units: items to make; stacks / stack: for a Balaur material, how many listings of how many each.
+    picks.push({ row: o.r0, units: n * o.per, stacks: o.per > 1 ? n : null, stack: o.per > 1 ? o.per : null,
+      slots: o.slots, myUnits: o.myUnits, capital: capOf(o, n), spend: n * o.per * o.r.cost, profit: n * o.each,
       listAt: o.list.price, listBasis: o.list.basis, listNote: o.list.note,
       netEach: o.list.price != null ? o.list.price * keep : null, daysToSell: daysForUnits(o.r, o.myUnits + n, s),
       profitPerDay: (n * o.each) / sellDays(o, n) });
@@ -913,14 +921,14 @@ export function planBudget(rows, budget, settings = DEFAULT_SETTINGS) {
   const profit = picks.reduce((t, p) => t + p.profit, 0);
   const spend = picks.reduce((t, p) => t + p.spend, 0);
   const left = budget - capital;
-  const planned = picks.reduce((t, p) => t + (p.row.stackable ? 1 : p.units), 0); // listing slots the plan uses
+  const planned = picks.reduce((t, p) => t + (p.stacks ?? (p.row.stackable ? 1 : p.units)), 0); // listing slots the plan uses
   const slotsLeft = free - planned;
   // What's held back: a craft that could take another unit. If one more would fit your kinah, the slots are what
   // stopped it; otherwise kinah did, and the best of those is "next up".
   const more = options.map((o, idx) => ({ o, n: chosen.get(idx) || 0 })).filter(({ o, n }) => n < o.slots);
   // Slots held something back if one more unit would have been affordable but needed a slot you don't have.
-  const capped = more.some(({ o, n }) => slotsFor(o, n + 1) - slotsFor(o, n) > slotsLeft && capitalFor(o.r, n + 1) - capitalFor(o.r, n) <= left);
-  const short = more.filter(({ n }) => !n).map(({ o }) => ({ row: o.r0, capital: capitalFor(o.r, 1), myUnits: o.myUnits }))
+  const capped = more.some(({ o, n }) => slotsFor(o, n + 1) - slotsFor(o, n) > slotsLeft && capOf(o, n + 1) - capOf(o, n) <= left);
+  const short = more.filter(({ n }) => !n).map(({ o }) => ({ row: o.r0, capital: capOf(o, 1), myUnits: o.myUnits }))
     .filter((x) => x.capital > left).sort((a, b) => (b.row.roc ?? 0) - (a.row.roc ?? 0));
   const nextUp = slotsLeft > 0 ? short[0] || null : null;
   return { budget, picks, capital, spend, profit, left, roi: capital ? (profit / capital) * 100 : null, goal: perDay ? "perDay" : "total",

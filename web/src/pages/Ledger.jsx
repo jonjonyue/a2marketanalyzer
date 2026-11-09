@@ -489,7 +489,7 @@ export default function Ledger() {
   };
   // The plan's "+ List" button: log one at the suggested price, like adding it with the form.
   function listFromPlan(p) {
-    const entry = listingEntry({ name: p.row.shortName, key: p.row.key, price: p.listAt, qty: p.row.stackable ? p.units : 1 }, log.settings);
+    const entry = listingEntry({ name: p.row.shortName, key: p.row.key, price: p.listAt, qty: p.stack ?? (p.row.stackable ? p.units : 1) }, log.settings);
     commit({ entries: [...entries, entry] });
     held.markListed(p.row.key, entry.qty);
     showToast(`Listed ${entry.qty} × ${entry.name} at ${full(entry.price)} each: listing fee ${full(amounts(entry).fee)}.`,

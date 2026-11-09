@@ -245,6 +245,23 @@ function StoneCard({ row }) {
   </>;
 }
 
+// What a Balaur material goes into: how many one Dragon Lord craft needs, which sets the stack size the plan assumes.
+function BalaurUses({ row }) {
+  const groups = new Map();
+  for (const u of row.uses || []) groups.set(u.recipe, [...(groups.get(u.recipe) || []), u]);
+  if (!groups.size) return null;
+  const text = (us) => (new Set(us.map((u) => u.qty)).size === 1
+    ? `${us[0].qty} each (${us.map((u) => u.slot).join(", ")})`
+    : us.map((u) => `${u.slot} ${u.qty}`).join(", "));
+  return (
+    <div className="balaur-uses">
+      <p className="detail-sum">Buyers use it for Dragon Lord gear. One craft needs:</p>
+      <ul className="muted small">{[...groups].map(([name, us]) => <li key={name}><strong>{name}</strong>: {text(us)}</li>)}</ul>
+      {row.stackSize && <p className="muted small">The plan assumes each sale is a stack of <strong>{row.stackSize}</strong> (the middle of these), and suggests whole stacks.</p>}
+    </div>
+  );
+}
+
 export function RecipeDetail({ row, chains }) {
   const c = row.costDetail || row.stoneDetail || row.simpleDetail ? null : chainOf(chains, row.key);
   return <>
@@ -255,7 +272,7 @@ export function RecipeDetail({ row, chains }) {
       </div>
       <ExtLink row={row} />
     </div>
-    {row.simpleDetail ? <StoneRoute route={row.simpleDetail} label="Recipe" picked only skill={row.simpleDetail.skill} />
+    {row.simpleDetail ? <><StoneRoute route={row.simpleDetail} label="Recipe" picked only skill={row.simpleDetail.skill} /><BalaurUses row={row} /></>
       : row.stoneDetail ? <StoneCard row={row} />
       : row.costDetail ? <TrueDragonCard row={row} chains={chains} />
       : c ? <StepCard chain={c.chain} index={c.index} />

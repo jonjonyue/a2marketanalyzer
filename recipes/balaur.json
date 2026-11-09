@@ -1,6 +1,6 @@
 {
   "_source": "questlog.gg Aion 2 database (https://questlog.gg/aion-2/en/db), Blacksmithing / Handicrafting / Armorsmithing Misc recipes and NPC merchant prices, extracted 2026-11-09",
-  "_notes": "Balaur crafting materials (used in True / Star Dragon gear), sold in stacks. Each is one craft of 2 Balaur's Essence + 1 bound tool (hammer, scale hardener or leather softener) that the skill's merchant NPC sells (npc_prices). Gold cost 0. One craft is assumed to give one item; the recipes' success rate isn't published, so the dashboard uses the True Dragon cap with your mastery. Recipe ids 1/2/4xxxxxxx are Elyos and the 12/22/42 ones Asmodian; both factions use the same items. mastery_level is questlog's 'Lv' (1-100).",
+  "_notes": "Balaur crafting materials (used in True / Star Dragon gear), sold in stacks. Each is one craft of 2 Balaur's Essence + 1 bound tool (hammer, scale hardener or leather softener) that the skill's merchant NPC sells (npc_prices). Gold cost 0. One craft is assumed to give one item; the recipes' success rate isn't published, so the dashboard uses the True Dragon cap with your mastery. Recipe ids 1/2/4xxxxxxx are Elyos and the 12/22/42 ones Asmodian; both factions use the same items. mastery_level is questlog's 'Lv' (1-100). 'uses' lists how many of each go into one craft of the Dragon Lord gear they're made for (the plain tier and the Splendent transfer; Elyos / Asmodian names share quantities), from questlog.gg's 'Used in Recipes'. Buyers usually buy what one craft needs, so 'stack' (the lower median of those amounts) is the stack size the dashboard assumes for one listing that sells.",
   "npc_prices": {
     "630520001": 4650,
     "630520002": 5600,
@@ -45,6 +45,59 @@
           "key": 630520001,
           "qty": 1
         }
+      ],
+      "stack": 11,
+      "uses": [
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Longsword",
+          "qty": 22
+        },
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Greatsword",
+          "qty": 22
+        },
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Dagger",
+          "qty": 22
+        },
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Mace",
+          "qty": 22
+        },
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Guard",
+          "qty": 22
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Longsword",
+          "qty": 11
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Greatsword",
+          "qty": 11
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Dagger",
+          "qty": 11
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Mace",
+          "qty": 11
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Guard",
+          "qty": 11
+        }
       ]
     },
     {
@@ -66,6 +119,59 @@
         {
           "key": 630520002,
           "qty": 1
+        }
+      ],
+      "stack": 15,
+      "uses": [
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Longsword",
+          "qty": 29
+        },
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Greatsword",
+          "qty": 29
+        },
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Dagger",
+          "qty": 29
+        },
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Mace",
+          "qty": 29
+        },
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Guard",
+          "qty": 29
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Longsword",
+          "qty": 15
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Greatsword",
+          "qty": 15
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Dagger",
+          "qty": 15
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Mace",
+          "qty": 15
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Guard",
+          "qty": 15
         }
       ]
     },
@@ -89,6 +195,59 @@
           "key": 630520003,
           "qty": 1
         }
+      ],
+      "stack": 21,
+      "uses": [
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Longsword",
+          "qty": 41
+        },
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Greatsword",
+          "qty": 41
+        },
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Dagger",
+          "qty": 41
+        },
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Mace",
+          "qty": 41
+        },
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Guard",
+          "qty": 41
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Longsword",
+          "qty": 21
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Greatsword",
+          "qty": 21
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Dagger",
+          "qty": 21
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Mace",
+          "qty": 21
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Guard",
+          "qty": 21
+        }
       ]
     },
     {
@@ -110,6 +269,79 @@
         {
           "key": 630520007,
           "qty": 1
+        }
+      ],
+      "stack": 11,
+      "uses": [
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Bow",
+          "qty": 22
+        },
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Staff",
+          "qty": 22
+        },
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Necklace",
+          "qty": 14
+        },
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Earrings",
+          "qty": 11
+        },
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Ring",
+          "qty": 8
+        },
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Spellbook",
+          "qty": 22
+        },
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Orb",
+          "qty": 22
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Bow",
+          "qty": 11
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Staff",
+          "qty": 11
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Necklace",
+          "qty": 7
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Earrings",
+          "qty": 6
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Ring",
+          "qty": 4
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Spellbook",
+          "qty": 11
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Orb",
+          "qty": 11
         }
       ]
     },
@@ -133,6 +365,79 @@
           "key": 630520008,
           "qty": 1
         }
+      ],
+      "stack": 15,
+      "uses": [
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Bow",
+          "qty": 29
+        },
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Staff",
+          "qty": 29
+        },
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Necklace",
+          "qty": 19
+        },
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Earrings",
+          "qty": 15
+        },
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Ring",
+          "qty": 11
+        },
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Spellbook",
+          "qty": 29
+        },
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Orb",
+          "qty": 29
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Bow",
+          "qty": 15
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Staff",
+          "qty": 15
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Necklace",
+          "qty": 10
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Earrings",
+          "qty": 8
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Ring",
+          "qty": 6
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Spellbook",
+          "qty": 15
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Orb",
+          "qty": 15
+        }
       ]
     },
     {
@@ -154,6 +459,79 @@
         {
           "key": 630520009,
           "qty": 1
+        }
+      ],
+      "stack": 21,
+      "uses": [
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Bow",
+          "qty": 41
+        },
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Staff",
+          "qty": 41
+        },
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Necklace",
+          "qty": 26
+        },
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Earrings",
+          "qty": 21
+        },
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Ring",
+          "qty": 16
+        },
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Spellbook",
+          "qty": 41
+        },
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Orb",
+          "qty": 41
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Bow",
+          "qty": 21
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Staff",
+          "qty": 21
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Necklace",
+          "qty": 13
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Earrings",
+          "qty": 11
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Ring",
+          "qty": 8
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Spellbook",
+          "qty": 21
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Orb",
+          "qty": 21
         }
       ]
     },
@@ -177,6 +555,79 @@
           "key": 630520004,
           "qty": 1
         }
+      ],
+      "stack": 7,
+      "uses": [
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Breastplate",
+          "qty": 15
+        },
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Greaves",
+          "qty": 11
+        },
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Helm",
+          "qty": 9
+        },
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Pauldrons",
+          "qty": 9
+        },
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Gloves",
+          "qty": 7
+        },
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Boots",
+          "qty": 9
+        },
+        {
+          "recipe": "True / Star Dragon Lord",
+          "slot": "Cloak",
+          "qty": 7
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Breastplate",
+          "qty": 8
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Greaves",
+          "qty": 6
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Helm",
+          "qty": 5
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Pauldrons",
+          "qty": 5
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Gloves",
+          "qty": 4
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Boots",
+          "qty": 5
+        },
+        {
+          "recipe": "Splendent True / Star Dragon Lord",
+          "slot": "Cloak",
+          "qty": 4
+        }
       ]
     },
     {
@@ -199,6 +650,79 @@
           "key": 630520005,
           "qty": 1
         }
+      ],
+      "stack": 10,
+      "uses": [
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Breastplate",
+          "qty": 19
+        },
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Greaves",
+          "qty": 14
+        },
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Helm",
+          "qty": 12
+        },
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Pauldrons",
+          "qty": 12
+        },
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Gloves",
+          "qty": 10
+        },
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Boots",
+          "qty": 12
+        },
+        {
+          "recipe": "White / Dark Dragon Lord",
+          "slot": "Cloak",
+          "qty": 10
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Breastplate",
+          "qty": 10
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Greaves",
+          "qty": 7
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Helm",
+          "qty": 6
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Pauldrons",
+          "qty": 6
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Gloves",
+          "qty": 5
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Boots",
+          "qty": 6
+        },
+        {
+          "recipe": "Splendent White / Dark Dragon Lord",
+          "slot": "Cloak",
+          "qty": 5
+        }
       ]
     },
     {
@@ -220,6 +744,79 @@
         {
           "key": 630520006,
           "qty": 1
+        }
+      ],
+      "stack": 14,
+      "uses": [
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Breastplate",
+          "qty": 27
+        },
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Greaves",
+          "qty": 20
+        },
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Helm",
+          "qty": 17
+        },
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Pauldrons",
+          "qty": 17
+        },
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Gloves",
+          "qty": 14
+        },
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Boots",
+          "qty": 17
+        },
+        {
+          "recipe": "Wise / Ebony Dragon Lord",
+          "slot": "Cloak",
+          "qty": 14
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Breastplate",
+          "qty": 14
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Greaves",
+          "qty": 10
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Helm",
+          "qty": 9
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Pauldrons",
+          "qty": 9
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Gloves",
+          "qty": 7
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Boots",
+          "qty": 9
+        },
+        {
+          "recipe": "Splendent Wise / Ebony Dragon Lord",
+          "slot": "Cloak",
+          "qty": 7
         }
       ]
     }

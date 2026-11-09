@@ -65,7 +65,8 @@ export function PlanRefresh({ stale, onClick }) {
 function listTitle(p) {
   const r = p.row;
   return `${p.listNote || ""} Cheapest listing ${r.listing > 0 ? kinah(r.listing) : "none"} · ${r.listings ?? 0} listed.` +
-    (p.units > 1 ? ` List all ${p.units} at this price.` : "");
+    (p.stacks ? ` List ${p.stacks > 1 ? `${p.stacks} stacks` : "a stack"} of ${p.stack} (what one Dragon Lord craft needs) at this price each.`
+      : p.units > 1 ? ` List all ${p.units} at this price.` : "");
 }
 
 /**
@@ -81,7 +82,7 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
     snapshotAt: snapshotAt ? Math.floor(new Date(snapshotAt).getTime() / 60000) : null });
   // Crafts you've listed from this plan (since the last refresh) come off it; the totals cover what's left.
   const doneUnits = (p) => Math.min(p.units, listed[p.row.key] || 0);
-  const isDone = (p) => doneUnits(p) >= (p.row.stackable ? 1 : p.units);
+  const isDone = (p) => doneUnits(p) >= (p.row.stackable && !p.stacks ? 1 : p.units);
   const done = plan.picks.filter(isDone);
   if (done.length) {
     const picks = plan.picks.filter((p) => !isDone(p));
@@ -90,7 +91,7 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
     Object.assign(plan, { picks, capital, profit, spend: sum((p) => p.spend), profitPerDay: sum((p) => p.profitPerDay),
       roi: capital ? (profit / capital) * 100 : null });
     // Their listing slots move from "planned" to "listed".
-    const moved = done.reduce((t, p) => t + (p.row.stackable ? 1 : p.units), 0);
+    const moved = done.reduce((t, p) => t + (p.stacks ?? (p.row.stackable ? 1 : p.units)), 0);
     plan.slots = { ...plan.slots, yours: plan.slots.yours + moved, planned: Math.max(0, plan.slots.planned - moved) };
   }
   const listedNote = done.length > 0 && (
@@ -143,15 +144,16 @@ export function planView({ rows, budget, settings, serverName, icons = {}, scope
               {onList && (
                 <td className="plan-list">
                   <button type="button" className="mini-btn" disabled={!(p.listAt > 0) || full} onClick={() => onList(p)}
-                    title={full ? `All ${total} listing slots are in use` : p.listAt > 0 ? `Log a listing of 1 ${p.row.shortName} at ${kinah(p.listAt)} in the Profit Calculator (listing fee ${kinah(p.listAt * settings.listingFeePct / 100)})` : "No suggested price"}
-                    aria-label={`List 1 ${p.row.shortName} at ${kinah(p.listAt)}`}>+ List</button>
+                    title={full ? `All ${total} listing slots are in use` : p.listAt > 0 ? `Log a listing of ${p.stack ?? 1} ${p.row.shortName} at ${kinah(p.listAt)} in the Profit Calculator (listing fee ${kinah(p.listAt * settings.listingFeePct / 100)})` : "No suggested price"}
+                    aria-label={`List ${p.stack ?? 1} ${p.row.shortName} at ${kinah(p.listAt)}`}>+ List</button>
                 </td>
               )}
               <td className="name"><span className="item-cell">{icon(p.row.key)}<span>{p.row.shortName}</span> <SupplyTag influx={p.row.influx} /></span></td>
               <td><span className={`pill ${p.row.verdict.tone}`}>{p.row.verdict.label}</span></td>
-              <td title={`Room for ${p.slots} in the next ${settings.planDays ?? 1.5} days of sales`}>
-                {p.units}
-                {p.units < p.slots && <> <span className="dim">of {p.slots}</span></>}
+              <td title={p.stacks ? `${p.stacks} listing${p.stacks > 1 ? "s" : ""} of ${p.stack} (what one Dragon Lord craft needs; buyers usually buy that much), ${p.units} to make. Room for ${p.slots} listing${p.slots === 1 ? "" : "s"} in the next ${settings.planDays ?? 1.5} days of sales`
+                : `Room for ${p.slots} in the next ${settings.planDays ?? 1.5} days of sales`}>
+                {p.stacks ? <>{p.stacks} × {p.stack} <span className="dim">= {p.units}</span></> : p.units}
+                {(p.stacks ?? p.units) < p.slots && <> <span className="dim">of {p.slots}</span></>}
                 {doneUnits(p) > 0 && <> <span className="dim">({doneUnits(p)} listed)</span></>}
                 {p.myUnits > 0 && <> <span className="dim" title={`You already have ${p.myUnits} listed (Profit Calculator); they take ${p.myUnits === 1 ? "a place" : "places"} in the market's room`}>+{p.myUnits} listed</span></>}
               </td>
