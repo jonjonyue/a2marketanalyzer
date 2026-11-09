@@ -1,0 +1,227 @@
+{
+  "_source": "questlog.gg Aion 2 database (https://questlog.gg/aion-2/en/db), Blacksmithing / Handicrafting / Armorsmithing Misc recipes and NPC merchant prices, extracted 2026-11-09",
+  "_notes": "Balaur crafting materials (used in True / Star Dragon gear), sold in stacks. Each is one craft of 2 Balaur's Essence + 1 bound tool (hammer, scale hardener or leather softener) that the skill's merchant NPC sells (npc_prices). Gold cost 0. One craft is assumed to give one item; the recipes' success rate isn't published, so the dashboard uses the True Dragon cap with your mastery. Recipe ids 1/2/4xxxxxxx are Elyos and the 12/22/42 ones Asmodian; both factions use the same items. mastery_level is questlog's 'Lv' (1-100).",
+  "npc_prices": {
+    "630520001": 4650,
+    "630520002": 5600,
+    "630520003": 6550,
+    "630520007": 4650,
+    "630520008": 5600,
+    "630520009": 6550,
+    "630520004": 4650,
+    "630520005": 5600,
+    "630520006": 6550
+  },
+  "materials": {
+    "600590001": "Balaur's Essence",
+    "630520001": "Zircon Hammer (Bound)",
+    "630520002": "Lazuli Hammer (Bound)",
+    "630520003": "Moonstone Hammer (Bound)",
+    "630520007": "Lesser Dragon Scale Hardener (Bound)",
+    "630520008": "Intermediate Dragon Scale Hardener (Bound)",
+    "630520009": "Superior Dragon Scale Hardener (Bound)",
+    "630520004": "Lesser Dragon Leather Softener (Bound)",
+    "630520005": "Intermediate Dragon Leather Softener (Bound)",
+    "630520006": "Superior Dragon Leather Softener (Bound)"
+  },
+  "crafts": [
+    {
+      "key": 610710006,
+      "name": "Fine Thick Balaur Horn",
+      "kind": "Horn",
+      "grade": "Thick",
+      "skill": "Blacksmithing",
+      "mastery_level": 51,
+      "recipe_ids": [
+        115024001,
+        125024001
+      ],
+      "materials": [
+        {
+          "key": 600590001,
+          "qty": 2
+        },
+        {
+          "key": 630520001,
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "key": 610710007,
+      "name": "Fine Hard Balaur Horn",
+      "kind": "Horn",
+      "grade": "Hard",
+      "skill": "Blacksmithing",
+      "mastery_level": 65,
+      "recipe_ids": [
+        115024002,
+        125024002
+      ],
+      "materials": [
+        {
+          "key": 600590001,
+          "qty": 2
+        },
+        {
+          "key": 630520002,
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "key": 610710008,
+      "name": "Fine Durable Balaur Horn",
+      "kind": "Horn",
+      "grade": "Durable",
+      "skill": "Blacksmithing",
+      "mastery_level": 80,
+      "recipe_ids": [
+        115024003,
+        125024003
+      ],
+      "materials": [
+        {
+          "key": 600590001,
+          "qty": 2
+        },
+        {
+          "key": 630520003,
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "key": 610730022,
+      "name": "Enhanced Thick Balaur Scale",
+      "kind": "Scale",
+      "grade": "Thick",
+      "skill": "Handicrafting",
+      "mastery_level": 51,
+      "recipe_ids": [
+        215024001,
+        225024001
+      ],
+      "materials": [
+        {
+          "key": 600590001,
+          "qty": 2
+        },
+        {
+          "key": 630520007,
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "key": 610730023,
+      "name": "Enhanced Hard Balaur Scale",
+      "kind": "Scale",
+      "grade": "Hard",
+      "skill": "Handicrafting",
+      "mastery_level": 65,
+      "recipe_ids": [
+        215024002,
+        225024002
+      ],
+      "materials": [
+        {
+          "key": 600590001,
+          "qty": 2
+        },
+        {
+          "key": 630520008,
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "key": 610730024,
+      "name": "Enhanced Durable Balaur Scale",
+      "kind": "Scale",
+      "grade": "Durable",
+      "skill": "Handicrafting",
+      "mastery_level": 80,
+      "recipe_ids": [
+        215024003,
+        225024003
+      ],
+      "materials": [
+        {
+          "key": 600590001,
+          "qty": 2
+        },
+        {
+          "key": 630520009,
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "key": 610710009,
+      "name": "Tanned Thick Balaur Leather",
+      "kind": "Leather",
+      "grade": "Thick",
+      "skill": "Armorsmithing",
+      "mastery_level": 51,
+      "recipe_ids": [
+        415024001,
+        425024001
+      ],
+      "materials": [
+        {
+          "key": 600590001,
+          "qty": 2
+        },
+        {
+          "key": 630520004,
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "key": 610710010,
+      "name": "Tanned Hard Balaur Leather",
+      "kind": "Leather",
+      "grade": "Hard",
+      "skill": "Armorsmithing",
+      "mastery_level": 65,
+      "recipe_ids": [
+        415024002,
+        425024002
+      ],
+      "materials": [
+        {
+          "key": 600590001,
+          "qty": 2
+        },
+        {
+          "key": 630520005,
+          "qty": 1
+        }
+      ]
+    },
+    {
+      "key": 610710011,
+      "name": "Tanned Durable Balaur Leather",
+      "kind": "Leather",
+      "grade": "Durable",
+      "skill": "Armorsmithing",
+      "mastery_level": 80,
+      "recipe_ids": [
+        415024003,
+        425024003
+      ],
+      "materials": [
+        {
+          "key": 600590001,
+          "qty": 2
+        },
+        {
+          "key": 630520006,
+          "qty": 1
+        }
+      ]
+    }
+  ]
+}

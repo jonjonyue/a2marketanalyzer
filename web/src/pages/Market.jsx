@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { analyzeMarket, activityProfile, STONE_TIER, DEFAULT_SETTINGS, VERDICT_ORDER, byRank, isWorthCrafting, SKILLS as CRAFT_SKILLS, shortenName, parseKinah } from "../lib/metrics.js";
+import { analyzeMarket, activityProfile, STONE_TIER, BALAUR_TIER, DEFAULT_SETTINGS, VERDICT_ORDER, byRank, isWorthCrafting, masteryLabel, SKILLS as CRAFT_SKILLS, shortenName, parseKinah } from "../lib/metrics.js";
 import { kinah, pct, rate, days, ago, asPct, cx } from "../lib/format.js";
 import { KEYS, readJson, readRaw, writeRaw, useKinah, useStoredRaw, parseStoneValues } from "../lib/storage.js";
 import { entriesOf, listOne, unlistOne, listingFee, ownActiveListings } from "../lib/ledgerStore.js";
@@ -18,8 +18,8 @@ const SKILLS = ["All", "Blacksmithing", "Armorsmithing", "Handicrafting", "Alche
 // URL codes per skill; t and j are the old Tailoring / Jewelcrafting codes, kept so older links still work.
 const PROF_CODE = { Blacksmithing: "b", Armorsmithing: "r", Handicrafting: "h", Alchemy: "a" };
 const PROF_LEGACY = { t: "Armorsmithing", j: "Handicrafting" };
-const TIERS = ["All", "Expert's Splendent", "Artisan's Splendent", "True Dragon", "Splendent True Dragon", "Superior Stone"];
-const TIER_PARAM = { "Expert's Splendent": "es", "Artisan's Splendent": "as", "True Dragon": "td", "Splendent True Dragon": "std", "Superior Stone": "ss" };
+const TIERS = ["All", "Expert's Splendent", "Artisan's Splendent", "True Dragon", "Splendent True Dragon", "Superior Stone", "Balaur Material"];
+const TIER_PARAM = { "Expert's Splendent": "es", "Artisan's Splendent": "as", "True Dragon": "td", "Splendent True Dragon": "std", "Superior Stone": "ss", "Balaur Material": "bm" };
 
 // ---------- URL state (so a copied link reproduces the view) ----------
 function savedServer() {
@@ -217,6 +217,11 @@ function costTitle(r) {
       ? `Combo route: ${kinah(route.attempt)} per attempt ÷ (${asPct(route.success)} × ${asPct(route.comboProbability)} combo), about ${(1 / route.hit).toFixed(1)} attempts`
       : `30 Intermediate route: ${kinah(route.attempt)} per attempt ÷ ${asPct(route.success)}`;
   }
+  if (r.simpleDetail) {
+    const sd = r.simpleDetail;
+    if (r.cost == null) return sd.success === 0 ? `Needs ${masteryLabel(sd.recipeLevel)} ${sd.skill}` : "An input has no price on this server";
+    return `${kinah(sd.attempt)} per craft (2 Balaur's Essence + NPC tool) ÷ ${asPct(sd.success)} success`;
+  }
   const d = r.costDetail;
   if (!d) return r.cost == null ? "No crafting cost known" : `Average cost at your proficiency (${r.success != null ? asPct(r.success) : "—"} success)`;
   return `${kinah(d.attempt)} per attempt (${d.baseName} ${kinah(d.base)} + materials ${kinah(d.matsCost)})`;
@@ -233,7 +238,7 @@ function salesTitle(r) {
   if (!e) return "No listing history";
   if (e.perDay == null) return "Not enough history yet";
   return `Estimated: ${e.sales} sales seen in ${e.days.toFixed(1)} days` + (e.repriced ? ` (${e.repriced} pulled or reposted listing${e.repriced > 1 ? "s" : ""} left out)` : "") +
-    (r.stackable ? ". Sold in stacks: this counts listings that sold out, not stones, and partial buys from a stack aren't visible" : "");
+    (r.stackable ? ". Sold in stacks: this counts listings that sold out, not units, and partial buys from a stack aren't visible" : "");
 }
 const overTransfer = (r) => r.transfer?.cost != null && r.price != null && r.price > r.transfer.cost;
 
@@ -249,7 +254,7 @@ const COLUMNS = [
             <span className="chev" aria-hidden="true">{open === r.key ? "▾" : "▸"}</span>{r.shortName}
           </button>
           {r.influx && <> <SupplyTag influx={r.influx} /></>}
-          <span className="meta">{r.tier === "Artisan's Splendent" ? "" : `${shortenName(r.tier)} · `}{r.skill} · {r.category}</span>
+          <span className="meta">{r.tier === "Artisan's Splendent" || r.tier === BALAUR_TIER ? "" : `${shortenName(r.tier)} · `}{r.skill} · {r.category}</span>
         </span>
         <ExtLink row={r} icon />
       </span>
@@ -444,8 +449,8 @@ export default function Market() {
         <div className="field">
           <span>Tier</span>
           <Chips id="tiers" label="Tier" value={ui.tier} onChange={(tier) => set({ tier })}
-            options={TIERS.filter((t) => t !== STONE_TIER || (all || []).some((r) => r.tier === STONE_TIER))}
-            display={(v) => (v === "Superior Stone" ? "Superior Stones" : asmo ? v.replace("True Dragon", "Star Dragon") : v)} />
+            options={TIERS.filter((t) => (t !== STONE_TIER && t !== BALAUR_TIER) || (all || []).some((r) => r.tier === t))}
+            display={(v) => (v === "Superior Stone" ? "Superior Stones" : v === BALAUR_TIER ? "Balaur" : asmo ? v.replace("True Dragon", "Star Dragon") : v)} />
         </div>
         <div className="field">
           <span>Skill</span>

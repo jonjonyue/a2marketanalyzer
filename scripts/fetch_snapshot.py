@@ -35,7 +35,7 @@ from pathlib import Path
 DEFAULT_BASE = "https://aion2.exchange"
 # Bump when the published data gains new content (e.g. 2 = Superior stones): a refresh then fetches even if the API
 # has no new snapshot, so the new content shows up without waiting for one.
-DATA_VERSION = 3  # 3: Superior stones turned off again
+DATA_VERSION = 4  # 4: Balaur materials
 SKIP_EXIT = 3  # --skip-unchanged: nothing to do this run (API down, or no new snapshot since the published data)
 THIN_NO_PRICIER_SALES = 3  # mirrors ESTIMATOR.thinNoPricierSales in the dashboard's metrics.js
 ACTIVITY_KEEP_DAYS = 180  # hourly activity totals kept in each server file (the API itself keeps only ~10 days)
@@ -45,6 +45,7 @@ DEFAULT_SERVERS = (11201, 12201)  # NA West: Siel (Elyos) and Israphel (Asmodian
 WORKERS = 3  # servers fetched in parallel; each still waits DELAY_S between its own requests
 RECIPES_DIR = Path(__file__).resolve().parent.parent / "recipes"
 TD_RECIPES = RECIPES_DIR / "true_dragon.json"
+BALAUR_RECIPES = RECIPES_DIR / "balaur.json"  # Balaur horns / scales / leathers (sold in stacks)
 STONE_RECIPES = RECIPES_DIR / "magic_stones.json"  # Superior manastones / soulstones (Alchemy, sold in stacks)
 # Off for now (Oct 2026): at market prices for Lesser stones they're almost always a loss. Set True to bring them back
 # (and bump DATA_VERSION so the next refresh picks them up); the dashboard shows them whenever the data has them.
@@ -67,6 +68,7 @@ TARGET_FIELDS = (
 EXPERT_TIER = "Expert's Splendent"
 TD_TIER, STD_TIER = "True Dragon", "Splendent True Dragon"
 STONE_TIER = "Superior Stone"
+BALAUR_TIER = "Balaur Material"
 BASE_TIER = "Artisan's Splendent"
 
 ITEM_FIELDS = (
@@ -223,6 +225,27 @@ def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tup
     except Exception as err:  # the stones are an extra; never fail the gear over them
         errors.append(f"stones: {err}")
         print(errors[-1], file=sys.stderr)
+
+    # Balaur horns, scales and leathers: one craft each from recipes/balaur.json, listed in stacks.
+    balaur_recipes = json.loads(BALAUR_RECIPES.read_text())
+    balaur = {c["key"]: c for c in balaur_recipes["crafts"]}
+    time.sleep(DELAY_S)
+    try:
+        resp = get_json(base, "/api/items", {"keys": ",".join(map(str, balaur)), "limit": 100, "server": server_id}) or {}
+        for i in resp.get("items") or []:
+            c = balaur.get(i["item_key"])
+            if not c:
+                continue
+            items.append(pick(i, ITEM_FIELDS))
+            targets.append({
+                "target_key": i["item_key"], "name": i.get("name"), "tier": BALAUR_TIER,
+                "category": "Balaur " + c["kind"], "skill": c["skill"], "profile_label": "Balaur " + c["kind"] + "s", "stackable": True,
+                "cost": None, "cost_market": None, "carried": None, "missing": 0,
+                "market_price": i.get("price"), "listings": i.get("listings"), "margin": None, "margin_pct": None,
+            })
+    except Exception as err:  # an extra; never fail the gear over them
+        errors.append(f"balaur: {err}")
+        print(errors[-1], file=sys.stderr)
     keys = [t["target_key"] for t in targets]
 
     since = datetime.now(timezone.utc) - timedelta(days=HISTORY_DAYS)
@@ -236,7 +259,7 @@ def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tup
             print(errors[-1], file=sys.stderr)
 
     # True Dragon recipe materials, priced at the current cheapest listing on this server.
-    mat_names = {**td_recipes["materials"], **stone_recipes["materials"]}
+    mat_names = {**td_recipes["materials"], **stone_recipes["materials"], **balaur_recipes["materials"]}
     time.sleep(DELAY_S)
     resp = get_json(base, "/api/items", {"keys": ",".join(mat_names), "limit": 100, "server": server_id}) or {}
     priced = {str(i["item_key"]): i for i in resp.get("items") or []}
@@ -274,6 +297,7 @@ def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tup
         "materials": materials,
         "icons": icons,
         "chains": chains,
+        "balaur_recipes": {k: balaur_recipes[k] for k in ("crafts", "npc_prices", "materials")},
         **({"stone_recipes": {k: stone_recipes[k] for k in ("stones", "npc_prices", "powder")}} if stones else {}),
     }
     return market, crafts.get("model"), errors

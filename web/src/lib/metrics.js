@@ -334,7 +334,7 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
   const soldAvg = officialAvg ?? num(est?.avgSalePrice);
   const priceSource = officialAvg != null ? "official" : soldAvg != null ? "estimate" : null;
 
-  const cost = target.costDetail || target.stoneDetail ? num(target.cost)
+  const cost = target.costDetail || target.stoneDetail || target.simpleDetail ? num(target.cost)
     : s.costBasis === "market" ? num(target.cost_market) ?? num(target.cost) : num(target.cost);
   const price = sellPrice(listing, soldAvg, s.priceBasis);
   // Both fees scale with the price you list at, so one listing that sells keeps price × (1 − tax − fee).
@@ -372,7 +372,7 @@ export function analyzeCraft(target, item, settings = DEFAULT_SETTINGS, est = nu
     success: target.success ?? null, recipeLevel: target.recipeLevel ?? null, playerLevel: target.playerLevel ?? null, locked: !!target.locked,
     salesSource, priceSource, est, costDetail: target.costDetail || null, transfer: target.transfer || null,
     influx: supplyInflux(est),
-    stoneDetail: target.stoneDetail || null, stackable: !!target.stackable,
+    stoneDetail: target.stoneDetail || null, simpleDetail: target.simpleDetail || null, stackable: !!target.stackable,
     missingInputs: num(target.missing) ?? 0,
     verdict: target.locked
       ? { id: "locked", label: `Needs ${masteryLabel(target.recipeLevel)}`, tone: "neutral" }
@@ -538,6 +538,33 @@ export function stoneCost(stone, ctx, settings = DEFAULT_SETTINGS) {
 }
 
 /**
+ * Balaur horns, scales and leathers (recipes/balaur.json, in market.balaur_recipes): crafting materials sold in stacks.
+ * One craft = 2 Balaur's Essence (market) + 1 bound tool from the skill's merchant NPC, and gives one item. The success
+ * rate isn't published, so it's the True Dragon cap at your mastery. Returns the cost and a `detail` route
+ * ({ materials, attempt, success, cost, recipeLevel, missing }) for the recipe panel.
+ */
+export const BALAUR_TIER = "Balaur Material";
+export function balaurCost(craft, ctx, settings = DEFAULT_SETTINGS) {
+  const s = { ...DEFAULT_SETTINGS, ...settings };
+  const npc = ctx.balaurRecipes?.npc_prices || {};
+  const level = s.proficiency?.[craft.skill] ?? null;
+  const materials = craft.materials.map((m) => {
+    const listed = num(ctx.materials.get(m.key)?.price) ?? num(ctx.items.get(m.key)?.price);
+    const price = npc[m.key] ?? listed;
+    const name = ctx.materials.get(m.key)?.name ?? ctx.balaurRecipes?.materials?.[m.key] ?? String(m.key);
+    return { key: m.key, name, qty: m.qty, price, method: price == null ? null : npc[m.key] != null ? "npc" : "buy" };
+  });
+  const missing = materials.filter((m) => m.price == null).map((m) => m.key);
+  const attempt = materials.reduce((t, m) => t + (m.price ?? 0) * m.qty, 0);
+  const success = successAt(level, craft.mastery_level, PROFICIENCY.trueDragonCap) ?? 1;
+  const cost = missing.length || !(success > 0) ? null : attempt / success;
+  return {
+    cost, missing: missing.length, success, hit: success, attempt, locked: success === 0, recipeLevel: craft.mastery_level, playerLevel: level,
+    detail: { route: "regular", materials, attempt, success, hit: success, cost, recipeLevel: craft.mastery_level, playerLevel: level, missing, skill: craft.skill },
+  };
+}
+
+/**
  * Crafting cost from a recipe file (recipes/true_dragon.json).
  *
  * One craft attempt = 1 Artisan's Splendent item of the same slot + materials (+ gold fee).
@@ -658,6 +685,7 @@ export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
 
   const ctx = {
     stoneRecipes: market.stone_recipes || null,
+    balaurRecipes: market.balaur_recipes || null,
     items,
     targets: new Map(targets.map((t) => [t.target_key, t])),
     materials: new Map((market.materials || []).map((m) => [m.item_key, m])),
@@ -671,6 +699,7 @@ export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
     if (!recipeFor.has(r.combo_key)) recipeFor.set(r.combo_key, r);
   }
   const stoneByKey = new Map((market.stone_recipes?.stones || []).map((st) => [st.key, st]));
+  const balaurByKey = new Map((market.balaur_recipes?.crafts || []).map((c) => [c.key, c]));
   const rows = targets
     .map((t0) => {
       let t = t0;
@@ -680,7 +709,13 @@ export function analyzeMarket(market, settings = DEFAULT_SETTINGS) {
         t = { ...t, cost: c.cost, cost_market: c.cost, missing: c.missing, stoneDetail: c.detail, attemptCost: c.cost != null ? c.attempt : null,
               hitChance: c.hit > 0 ? c.hit : null, success: c.success, locked: c.locked, recipeLevel: c.recipeLevel, playerLevel: c.playerLevel };
       }
-      const recipe = !stone && !stepOf.has(t.target_key) && t.cost == null ? recipeFor.get(t.target_key) : null;
+      const bal = t.tier === BALAUR_TIER ? balaurByKey.get(t.target_key) : null;
+      if (bal) {
+        const c = balaurCost(bal, ctx, s);
+        t = { ...t, cost: c.cost, cost_market: c.cost, missing: c.missing, simpleDetail: c.detail, attemptCost: c.cost != null ? c.attempt : null,
+              hitChance: c.hit > 0 ? c.hit : null, success: c.success, locked: c.locked, recipeLevel: c.recipeLevel, playerLevel: c.playerLevel };
+      }
+      const recipe = !stone && !bal && !stepOf.has(t.target_key) && t.cost == null ? recipeFor.get(t.target_key) : null;
       if (recipe) {
         const c = trueDragonCost(recipe, t.target_key, { ...ctx, skill: t.skill }, s);
         t = { ...t, cost: c.cost, cost_market: c.cost, missing: c.missing, costDetail: c.detail,

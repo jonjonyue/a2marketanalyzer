@@ -193,12 +193,12 @@ function StoneValue({ id, name }) {
 
 const STONE_METHOD = { npc: "NPC", buy: "Bought", craft: "Crafted", yours: "Your value" };
 
-function StoneRoute({ route, label, picked }) {
+function StoneRoute({ route, label, picked, skill = "Alchemy", only = false }) {
   const rows = route.materials.map((m) => ({ id: m.key, name: m.name, qty: m.qty, market: m.listing ?? (m.method === "craft" ? null : m.price),
     crafted: m.craft ?? (m.method === "craft" ? m.price : null), used: m.method === "craft" ? "crafted" : "market",
     method: m.price == null ? <span className="neg">No price</span> : STONE_METHOD[m.method] || m.method, cost: m.price == null ? "—" : kinah(m.price * m.qty) }));
   const sum = route.success === 0
-    ? <>Needs <strong>{masteryLabel(route.recipeLevel)}</strong> Alchemy.</>
+    ? <>Needs <strong>{masteryLabel(route.recipeLevel)}</strong> {skill}.</>
     : route.cost == null
       ? <>Needs a value for {route.materials.filter((m) => m.price == null).map((m) => m.name).join(", ")}.</>
       : route.route === "combo"
@@ -206,7 +206,7 @@ function StoneRoute({ route, label, picked }) {
         : <>{asPct(route.success)} success → <strong>{kinah(route.cost)}</strong> each.</>;
   return (
     <details className="sub" open={picked}>
-      <summary>{label}{picked ? " (used: cheaper)" : ""} · needs {masteryLabel(route.recipeLevel)}</summary>
+      <summary>{label}{picked && !only ? " (used: cheaper)" : ""} · needs {masteryLabel(route.recipeLevel)}</summary>
       <div className="recipe-card">
         <RecipeTable rows={rows} perAttempt={route.attempt} />
         <p className="detail-sum">{sum}</p>
@@ -246,7 +246,7 @@ function StoneCard({ row }) {
 }
 
 export function RecipeDetail({ row, chains }) {
-  const c = row.costDetail || row.stoneDetail ? null : chainOf(chains, row.key);
+  const c = row.costDetail || row.stoneDetail || row.simpleDetail ? null : chainOf(chains, row.key);
   return <>
     <div className="detail-head">
       <div>
@@ -255,11 +255,12 @@ export function RecipeDetail({ row, chains }) {
       </div>
       <ExtLink row={row} />
     </div>
-    {row.stoneDetail ? <StoneCard row={row} />
+    {row.simpleDetail ? <StoneRoute route={row.simpleDetail} label="Recipe" picked only skill={row.simpleDetail.skill} />
+      : row.stoneDetail ? <StoneCard row={row} />
       : row.costDetail ? <TrueDragonCard row={row} chains={chains} />
       : c ? <StepCard chain={c.chain} index={c.index} />
         : <p className="muted">No recipe available for this item.</p>}
-    {(row.costDetail || row.stoneDetail || c) && (
+    {(row.costDetail || row.stoneDetail || row.simpleDetail || c) && (
       <p className="muted small">Highlighted price is the one used.</p>
     )}
   </>;
