@@ -6,6 +6,7 @@ import { entriesOf, listOne, unlistOne, listingFee, ownActiveListings } from "..
 import { useToast } from "../components/Toast.jsx";
 import { DEFAULT_SERVER, serverLabel, useServerDoc, useSnapshot } from "../lib/data.js";
 import { ItemIcon } from "../components/ItemIcon.jsx";
+import { Fold, FoldTitle } from "../components/Fold.jsx";
 import { planView, PlanGoal, PlanRefresh, useHeldPlan, requestPlanRefresh } from "../components/Plan.jsx";
 import { BarChart, Scatter, Tooltip, noCostsInView, useTip } from "../components/Charts.jsx";
 import { ExtLink, RecipeDetail } from "../components/Recipe.jsx";
@@ -505,14 +506,14 @@ export default function Market() {
       {market && <Kpis rows={rows} sharePct={ui.sharePct} />}
       {!market && <section className="kpis" id="kpis" aria-label="Summary" />}
 
-      <section className="panel plan" aria-labelledby="planTitle">
+      <Fold id="plan" title="What to craft with your kinah" titleId="planTitle" className="panel plan" aria-labelledby="planTitle">
         <div className="table-head">
-          <div className="plan-title-row"><h2 id="planTitle">What to craft with your kinah</h2><PlanGoal goal={settings.planGoal} />{market && <PlanRefresh stale={held.stale} onClick={held.refresh} />}</div>
+          <div className="plan-title-row"><FoldTitle id="planTitle">What to craft with your kinah</FoldTitle><PlanGoal goal={settings.planGoal} />{market && <PlanRefresh stale={held.stale} onClick={held.refresh} />}</div>
           <p className="muted" id="planNote">{plan?.note}</p>
         </div>
         <div id="planBody">{plan?.body}</div>
         {plan?.plan?.picks?.length > 0 && activity?.best && <p className="muted small plan-time">{bestTimeNote(activity)}.</p>}
-      </section>
+      </Fold>
 
       {all && (() => {
         // Units you have listed (Profit Calculator) and units the plan suggests, per item, for the overlap column.
@@ -525,34 +526,34 @@ export default function Market() {
       {activity && <ActivityPanel activity={activity} serverName={srv?.name} />}
 
       <section className="charts">
-        <figure className="panel">
+        <Fold as="figure" id="chart-bar" title={turnoverMode ? "Turnover per day, whole market" : "Expected daily profit, whole market"} titleId="barTitle" className="panel">
           <figcaption>
-            <h2 id="barTitle">{turnoverMode ? "Turnover per day, whole market" : "Expected daily profit, whole market"}</h2>
+            <FoldTitle id="barTitle">{turnoverMode ? "Turnover per day, whole market" : "Expected daily profit, whole market"}</FoldTitle>
             <p id="barNote">{turnoverMode
               ? "Sell price after fees × sold per day."
               : "Profit per craft × sold per day."}</p>
           </figcaption>
           <div className="chart" id="barChart">{market && <BarChart rows={rows} tipFor={tipFor} />}</div>
-        </figure>
-        <figure className="panel">
+        </Fold>
+        <Fold as="figure" id="chart-scatter" title="Margin vs. how fast it sells" className="panel">
           <figcaption>
-            <h2>Margin vs. how fast it sells</h2>
+            <FoldTitle>Margin vs. how fast it sells</FoldTitle>
             <p>Top right is best. Solid dots are worth crafting.</p>
           </figcaption>
           <div className="chart" id="scatter">{market && <Scatter rows={rows} tipFor={tipFor} />}</div>
-        </figure>
+        </Fold>
       </section>
 
-      <section className="panel table-panel">
+      <Fold id="crafts" title="All crafts" className="panel table-panel">
         <div className="table-head">
-          <h2>All crafts</h2>
+          <FoldTitle>All crafts</FoldTitle>
           <p className="muted" id="tableNote">{market && `${rows.length} crafts · click a row for its recipe`}</p>
         </div>
         <div className="table-scroll">
           {market ? <CraftTable rows={rows} ui={ui} setUi={setUi} budget={budget} icons={icons} chains={all?.chains || market.chains} />
             : <table id="table"><thead /><tbody /></table>}
         </div>
-      </section>
+      </Fold>
 
       <MarketMethod modelNote={model ? `Cost model #${model.model_id ?? "?"} (algorithm v${model.algorithm_version ?? "?"}, mastery ${model.mastery ?? "?"}), built from game files.` : ""} />
     </main>

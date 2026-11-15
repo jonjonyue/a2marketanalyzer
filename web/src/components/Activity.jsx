@@ -1,3 +1,4 @@
+import { Fold, FoldTitle } from "./Fold.jsx";
 // "When buyers are active": hour-of-day and day-of-week activity from metrics.activityProfile, in local time.
 
 export const hourLabel = (h) => `${h % 12 || 12} ${h < 12 ? "AM" : "PM"}`;
@@ -17,9 +18,9 @@ export function ActivityPanel({ activity: a, serverName }) {
   const days = Math.max(1, Math.round((a.span[1] - a.span[0]) / 1440));
   const maxDay = Math.max(...a.days.map((d) => d.perDay || 0), 1);
   return (
-    <section className="panel activity-panel" aria-labelledby="activityTitle">
+    <Fold id="activity" title="When buyers are active" titleId="activityTitle" className="panel activity-panel" aria-labelledby="activityTitle">
       <div className="table-head">
-        <h2 id="activityTitle">When buyers are active</h2>
+        <FoldTitle id="activityTitle">When buyers are active</FoldTitle>
         <p className="muted">{serverName || "This server"} · your local time · last {days} days</p>
       </div>
       {a.best && (
@@ -52,6 +53,6 @@ export function ActivityPanel({ activity: a, serverName }) {
         const fewest = Math.min(...seen), most = Math.max(...seen);
         return <p className="muted small">Sales per day by weekday ({Math.floor(fewest)}–{Math.round(most)} of each weekday so far){fewest < 4 ? ", so treat these as rough; it gets more reliable as history builds up" : ""}.</p>;
       })()}
-    </section>
+    </Fold>
   );
 }

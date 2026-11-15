@@ -1,3 +1,4 @@
+import { Fold, FoldTitle } from "./Fold.jsx";
 import { rate } from "../lib/format.js";
 import { ItemIcon } from "./ItemIcon.jsx";
 
@@ -18,9 +19,9 @@ export function SupplyPanel({ rows, mine, planned, icons }) {
     .sort((a, b) => (b.mine + b.planned > 0) - (a.mine + a.planned > 0) || (b.r.influx.level === "flood") - (a.r.influx.level === "flood") || b.r.influx.ratio - a.r.influx.ratio);
   const hits = list.filter((x) => x.mine || x.planned).length;
   return (
-    <section className="panel table-panel supply-panel" aria-labelledby="supplyTitle">
+    <Fold id="supply" title="New supply" titleId="supplyTitle" className="panel table-panel supply-panel" aria-labelledby="supplyTitle">
       <div className="table-head">
-        <h2 id="supplyTitle">New supply</h2>
+        <FoldTitle id="supplyTitle">New supply</FoldTitle>
         <p className="muted">{list.length ? `${list.length} item${list.length > 1 ? "s" : ""} with crafters piling in over the last 24h${hits ? ` · ${hits} you're in` : ""}${list.length > 5 ? " · scroll for more" : ""}` : "No unusual new supply in the last 24h."}</p>
       </div>
       {list.length > 0 && (
@@ -42,6 +43,6 @@ export function SupplyPanel({ rows, mine, planned, icons }) {
           </table>
         </div>
       )}
-    </section>
+    </Fold>
   );
 }

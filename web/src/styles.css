@@ -518,3 +518,12 @@ td.over-budget { color: var(--serious); }
 .plan-goal button { height: 28px; font-size: 12.5px; }
 .plan-refresh { height: 28px; margin-left: auto; }
 .plan-refresh.stale { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+/* Collapsible panels (components/Fold.jsx): the title is the toggle; a collapsed panel is one line. */
+.fold-title { margin: 0; }
+.fold-btn { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font: inherit; color: inherit; border-radius: 6px; }
+.fold-btn:hover { color: var(--accent); }
+.fold-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.fold-chev { display: inline-block; width: 12px; font-size: 11px; color: var(--muted); }
+.panel.folded { padding-top: 11px; padding-bottom: 11px; }
+.panel.folded .fold-btn { width: 100%; }

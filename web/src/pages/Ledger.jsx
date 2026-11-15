@@ -7,6 +7,7 @@ import { ItemIcon } from "../components/ItemIcon.jsx";
 import { listingEntry, ownListings, ownActiveListings, activeListingCount, stackableTest } from "../lib/ledgerStore.js";
 import { SupplyTag } from "../components/Supply.jsx";
 import { bestTimeNote } from "../components/Activity.jsx";
+import { Fold, FoldTitle, setFolded } from "../components/Fold.jsx";
 import { planView, PlanGoal, PlanRefresh, useHeldPlan, requestPlanRefresh } from "../components/Plan.jsx";
 import { LedgerMethod } from "./LedgerMethod.jsx";
 
@@ -371,7 +372,8 @@ export default function Ledger() {
     setSide(e.side);
     setForm({ item: e.name, qty: String(e.qty), price: String(e.price), when: localInputValue(e.ts), note: e.note || "" });
     setFormError(null);
-    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setFolded("entry-form", false); // editing needs the form open
+    requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     priceRef.current?.focus({ preventScroll: true });
   }
 
@@ -523,18 +525,18 @@ export default function Ledger() {
     </header>
 
     <main className="wrap">
-      <section className="panel plan ledger-plan" aria-labelledby="planTitle">
+      <Fold id="ledger-plan" title="What to craft with your kinah" titleId="planTitle" className="panel plan ledger-plan" aria-labelledby="planTitle">
         <div className="table-head">
-          <div className="plan-title-row"><h2 id="planTitle">What to craft with your kinah</h2><PlanGoal goal={settings.planGoal} />{planRows && <PlanRefresh stale={held.stale} onClick={held.refresh} />}</div>
+          <div className="plan-title-row"><FoldTitle id="planTitle">What to craft with your kinah</FoldTitle><PlanGoal goal={settings.planGoal} />{planRows && <PlanRefresh stale={held.stale} onClick={held.refresh} />}</div>
           <p className="muted"><span id="planNote">{plan?.note}</span> <a href="#/">Change settings on Market Analysis</a></p>
         </div>
         <div id="planBody">{plan ? plan.body : <p className="muted plan-empty">Loading market data…</p>}</div>
         {plan?.plan?.picks?.length > 0 && bestTime && <p className="muted small plan-time">{bestTime}.</p>}
-      </section>
+      </Fold>
 
-      <form className="panel entry-form" id="entryForm" ref={formRef} autoComplete="off" noValidate onSubmit={submit}>
+      <Fold as="form" id="entry-form" title={editing ? "Edit transaction" : "Add a transaction"} titleId="formTitle" className="panel entry-form" ref={formRef} autoComplete="off" noValidate onSubmit={submit}>
         <div className="form-head">
-          <h2 id="formTitle">{editing ? "Edit transaction" : "Add a transaction"}</h2>
+          <FoldTitle id="formTitle">{editing ? "Edit transaction" : "Add a transaction"}</FoldTitle>
           <button type="button" className="text-btn" id="cancelEdit" hidden={!editing} onClick={() => resetForm()}>Cancel edit</button>
         </div>
         <div className="form-grid">
@@ -581,7 +583,7 @@ export default function Ledger() {
         </div>
         <p className="preview" id="preview" aria-live="polite"><Preview f={f} item={item} /></p>
         <p className="form-error" id="formError" role="alert" hidden={!formError}>{formError}</p>
-      </form>
+      </Fold>
 
       {active.length > 0 && (
         <Listings active={active} entries={entries} now={now} adviceFor={adviceFor} feePct={log.settings.feePct} bestTime={bestTime}
@@ -622,27 +624,27 @@ export default function Ledger() {
         ))}
       </section>
 
-      <section className="panel table-panel">
+      <Fold id="by-item" title="By item" className="panel table-panel">
         <div className="table-head">
-          <h2>By item</h2>
+          <FoldTitle>By item</FoldTitle>
           <p className="muted">On hand = bought − sold − listed.</p>
         </div>
         <div className="table-scroll"><ByItem inView={inView} entries={entries} /></div>
-      </section>
+      </Fold>
 
-      <section className="panel table-panel">
+      <Fold id="transactions" title="Transactions" className="panel table-panel">
         <div className="table-head">
-          <h2>Transactions</h2>
+          <FoldTitle>Transactions</FoldTitle>
           <p className="muted" id="txNote">{inView.length ? `${inView.length} of ${entries.length} entries` : ""}</p>
         </div>
         <div className="table-scroll">
           <Transactions inView={inView} entries={entries} sort={sort} setSort={setSort} editing={editing} onEdit={startEdit} onDelete={remove} />
         </div>
-      </section>
+      </Fold>
 
-      <section className="panel backup">
+      <Fold id="backup" title="Back up or move your log" className="panel backup">
         <div>
-          <h2>Back up or move your log</h2>
+          <FoldTitle>Back up or move your log</FoldTitle>
           <p className="muted">Entries are saved in this browser only.</p>
         </div>
         <div className="backup-actions">
@@ -651,7 +653,7 @@ export default function Ledger() {
           <label className="ext-button file-btn">Import backup<input type="file" id="importFile" accept="application/json,.json" hidden
             onChange={(ev) => { const file = ev.target.files[0]; if (file) importJson(file); ev.target.value = ""; }} /></label>
         </div>
-      </section>
+      </Fold>
 
       <LedgerMethod />
     </main>
@@ -764,9 +766,9 @@ function Listings({ active, entries, now, adviceFor, feePct, bestTime, slotsUsed
     units += left; value += gross - Math.round(gross * l.taxPct / 100);
   }
   return (
-    <section className="panel table-panel" id="listingsPanel">
+    <Fold id="listings" title="Active listings" className="panel table-panel" id="listingsPanel">
       <div className="table-head">
-        <h2>Active listings</h2>
+        <FoldTitle>Active listings</FoldTitle>
         <p className="muted" id="listingsNote">{(slotsUsed ?? units).toLocaleString()} of {DEFAULT_SETTINGS.maxListings} slots used · worth {kinah(value)} after tax{bestTime ? ` · ${bestTime}` : ""}</p>
       </div>
       <div className="table-scroll">
@@ -777,7 +779,7 @@ function Listings({ active, entries, now, adviceFor, feePct, bestTime, slotsUsed
           </tbody>
         </table>
       </div>
-    </section>
+    </Fold>
   );
 }
 
