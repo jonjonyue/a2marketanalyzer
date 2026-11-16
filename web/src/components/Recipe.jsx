@@ -3,6 +3,7 @@ import { masteryLabel, PROFICIENCY, shortenName, parseKinah } from "../lib/metri
 import { KEYS, readRaw, writeRaw } from "../lib/storage.js";
 import { kinah, asPct } from "../lib/format.js";
 import { API } from "./ItemIcon.jsx";
+import { MaterialTag } from "./Materials.jsx";
 
 // ---------- recipe breakdown (expanded table row), laid out the way the game (and questlog.gg) shows it ----------
 // Each Artisan's Splendent item has aion2.exchange's cost chain: step 1 makes the Splendent item, step 2 the
@@ -21,7 +22,7 @@ export function ExtLink({ row, icon = false }) {
     : <a className="ext-button" href={url} target="_blank" rel="noopener">Open {label} on aion2.exchange ↗</a>;
 }
 
-const MatLink = ({ id, name }) => <a href={`${API}/items/${id}`} target="_blank" rel="noopener" title="Open on aion2.exchange">{name}</a>;
+const MatLink = ({ id, name }) => <><a href={`${API}/items/${id}`} target="_blank" rel="noopener" title="Open on aion2.exchange">{name}</a><MaterialTag id={id} /></>;
 
 const METHOD = { buy: "Bought", convert: "Converted", morph: "Converted", craft: "Crafted" };
 function methodLabel(m) {

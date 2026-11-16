@@ -7,6 +7,8 @@ import { useToast } from "../components/Toast.jsx";
 import { DEFAULT_SERVER, serverLabel, useServerDoc, useSnapshot } from "../lib/data.js";
 import { ItemIcon } from "../components/ItemIcon.jsx";
 import { Fold, FoldTitle } from "../components/Fold.jsx";
+import { MaterialsPanel, MaterialSignals } from "../components/Materials.jsx";
+import { analyzeMaterials } from "../lib/materials.js";
 import { planView, PlanGoal, PlanRefresh, useHeldPlan, requestPlanRefresh } from "../components/Plan.jsx";
 import { BarChart, Scatter, Tooltip, noCostsInView, useTip } from "../components/Charts.jsx";
 import { ExtLink, RecipeDetail } from "../components/Recipe.jsx";
@@ -388,6 +390,8 @@ export default function Market() {
     return rows;
   }, [market, settings]);
   const activity = useMemo(() => (market ? activityProfile(market, doc?.activity) : null), [market, doc]);
+  const materials = useMemo(() => (market ? analyzeMaterials(market) : []), [market]);
+  const materialMap = useMemo(() => new Map(materials.map((m) => [m.key, m])), [materials]);
   const rows = useMemo(() => (all || []).filter((r) =>
     (ui.tier === "All" || r.tier === ui.tier) && (ui.skill === "All" || r.skill === ui.skill) && !(ui.hideLoss && r.profit != null && r.profit <= 0)),
   [all, ui.tier, ui.skill, ui.hideLoss]);
@@ -429,6 +433,7 @@ export default function Market() {
       </div>
     </header>
 
+    <MaterialSignals.Provider value={materialMap}>
     <main className="wrap">
       {banner && <div className="banner" role="alert">{banner}</div>}
       <section className="controls" aria-label="Filters and assumptions">
@@ -515,6 +520,8 @@ export default function Market() {
         {plan?.plan?.picks?.length > 0 && activity?.best && <p className="muted small plan-time">{bestTimeNote(activity)}.</p>}
       </Fold>
 
+      <MaterialsPanel materials={materials} icons={icons} />
+
       {all && (() => {
         // Units you have listed (Profit Calculator) and units the plan suggests, per item, for the overlap column.
         const act = ownActiveListings(entriesOf(ledgerRaw));
@@ -557,6 +564,7 @@ export default function Market() {
 
       <MarketMethod modelNote={model ? `Cost model #${model.model_id ?? "?"} (algorithm v${model.algorithm_version ?? "?"}, mastery ${model.mastery ?? "?"}), built from game files.` : ""} />
     </main>
+    </MaterialSignals.Provider>
 
     <footer className="wrap foot">
       Data from <a href="https://aion2.exchange" target="_blank" rel="noopener">aion2.exchange</a>. Not affiliated with NCSOFT.

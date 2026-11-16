@@ -35,7 +35,7 @@ from pathlib import Path
 DEFAULT_BASE = "https://aion2.exchange"
 # Bump when the published data gains new content (e.g. 2 = Superior stones): a refresh then fetches even if the API
 # has no new snapshot, so the new content shows up without waiting for one.
-DATA_VERSION = 4  # 4: Balaur materials
+DATA_VERSION = 5  # 5: material price history
 SKIP_EXIT = 3  # --skip-unchanged: nothing to do this run (API down, or no new snapshot since the published data)
 THIN_NO_PRICIER_SALES = 3  # mirrors ESTIMATOR.thinNoPricierSales in the dashboard's metrics.js
 ACTIVITY_KEEP_DAYS = 180  # hourly activity totals kept in each server file (the API itself keeps only ~10 days)
@@ -51,6 +51,7 @@ STONE_RECIPES = RECIPES_DIR / "magic_stones.json"  # Superior manastones / souls
 # (and bump DATA_VERSION so the next refresh picks them up); the dashboard shows them whenever the data has them.
 INCLUDE_STONES = False   # True Dragon (combo -> Splendent True Dragon)
 HISTORY_DAYS = 10       # 7-day estimate window + 3 days so expiries of earlier listings can be matched
+MATERIAL_DAYS = 14      # material price history for "Materials: stock up?" (hourly cheapest price)
 USER_AGENT = "a2marketanalyzer-dashboard/1.0 (+https://github.com/jonjonyue/a2marketanalyzer)"
 DELAY_S = float(__import__("os").environ.get("FETCH_DELAY_S", "0.25"))  # be gentle with the site: ~4 requests/second max
 
@@ -128,6 +129,52 @@ def fetch_history(base: str, server_id: int, item_key: int, since: datetime) -> 
         for p in resp.get("points") or []
         if p.get("ts")
     ]
+
+
+def material_watchlist(model: dict, td_recipes: dict, balaur_recipes: dict) -> dict[int, dict]:
+    """Materials you'd buy on the market: { key: {"name", "uses": [...]} }.
+
+    Every material of the site's Splendent cost model (its steps' materials, and the leaves of its crafting routes,
+    so base materials like Orichalcum Ore and Raw Leather), the True Dragon recipes' materials and Balaur's Essence.
+    Left out: anything you craft or morph yourself (a material with a route in the model, and the Balaur materials),
+    and anything from an NPC (bound items, fixed prices, the Balaur tools).
+    """
+    out: dict[int, dict] = {}
+
+    def add(key, name, use):
+        e = out.setdefault(int(key), {"name": name, "uses": []})
+        if use not in e["uses"]:
+            e["uses"].append(use)
+
+    for p in (model or {}).get("profiles") or []:
+        for st in p.get("steps") or []:
+            for m in st.get("materials") or []:
+                add(m["material_key"], m["name"], f"Splendent {p.get('label') or p.get('profile')}")
+    crafted, npc = set(), set(int(k) for k in balaur_recipes.get("npc_prices") or {})
+    for rt in (model or {}).get("routes") or []:
+        crafted.add(int(rt["material_key"]))
+        for o in rt.get("options") or []:
+            for leaf in o.get("leaves") or []:
+                if leaf.get("fixed_price") is not None or "(Bound)" in (leaf.get("name") or ""):
+                    npc.add(int(leaf["item_key"]))
+                else:
+                    add(leaf["item_key"], leaf["name"], f"→ {rt['name']}")
+    crafted |= {int(c["key"]) for c in balaur_recipes.get("crafts") or []}
+    for k, name in td_recipes["materials"].items():
+        add(k, name, "True Dragon gear")
+    for k, name in (balaur_recipes.get("materials") or {}).items():
+        add(k, name, "Balaur materials")
+    return {k: v for k, v in out.items() if k not in crafted and k not in npc and "(Bound)" not in v["name"]}
+
+
+def fetch_material_history(base: str, server_id: int, item_key: int, since: datetime) -> list[list]:
+    """Hourly cheapest price since `since`: [epochMinutes, cheapestPrice]; hours with nothing listed left out."""
+    resp = get_json(base, f"/api/items/{item_key}/prices", {
+        "bucket": "1h",
+        "from": since.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "server": server_id,
+    }) or {}
+    return [[epoch_minutes(p["ts"]), p["low"]] for p in resp.get("points") or [] if p.get("ts") and p.get("low")]
 
 
 def fetch_icon_index(base: str) -> dict:
@@ -269,20 +316,40 @@ def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tup
         for k, name in mat_names.items()
     ]
 
+    # Material prices over the last MATERIAL_DAYS, for "Materials: stock up?". Extras: never fail the run over them.
+    material_watch: list[dict] = []
+    material_history: dict[str, list] = {}
+    try:
+        time.sleep(DELAY_S)
+        watch = material_watchlist(get_json(base, "/api/crafts/model", {"server": server_id}) or {}, td_recipes, balaur_recipes)
+        since = datetime.now(timezone.utc) - timedelta(days=MATERIAL_DAYS)
+        for key, info in watch.items():
+            time.sleep(DELAY_S)
+            try:
+                material_history[str(key)] = fetch_material_history(base, server_id, key, since)
+            except Exception as err:
+                errors.append(f"material history {key}: {err}")
+                print(errors[-1], file=sys.stderr)
+                continue
+            material_watch.append({"item_key": key, "name": info["name"], "uses": info["uses"]})
+    except Exception as err:
+        errors.append(f"materials: {err}")
+        print(errors[-1], file=sys.stderr)
+
     # Item icons: the site's icon index maps item key -> [file index, rarity index, ...].
     # The page loads the images straight from the site (/item-icons/{file}.webp).
     icons: dict[str, list] = {}
     try:
         idx = icon_idx or {}
         files, rarities, entries = idx.get("files") or {}, idx.get("rarities") or [], idx.get("items") or {}
-        for t in targets:
-            e = entries.get(str(t["target_key"]))
+        for k in [t["target_key"] for t in targets] + [m["item_key"] for m in material_watch]:
+            e = entries.get(str(k))
             if not e:
                 continue
             f = files.get(str(e[0])) if isinstance(files, dict) else (files[e[0]] if e[0] < len(files) else None)
             r = rarities[e[1]] if len(e) > 1 and isinstance(e[1], int) and e[1] < len(rarities) else {}
             if f:
-                icons[str(t["target_key"])] = [f, r.get("color"), r.get("name")]
+                icons[str(k)] = [f, r.get("color"), r.get("name")]
     except Exception as err:  # icons are cosmetic; never fail the run over them
         errors.append(f"icons: {err}")
         print(errors[-1], file=sys.stderr)
@@ -295,6 +362,8 @@ def fetch_market(base: str, server_id: int, icon_idx: dict | None = None) -> tup
         "recipes": [r for r in td_recipes["recipes"] if r["base_key"] in recipe_by_base and
                     any(t["target_key"] == r["base_key"] for t in targets)],  # this server's faction only
         "materials": materials,
+        "material_watch": material_watch,
+        "material_history": material_history,
         "icons": icons,
         "chains": chains,
         "balaur_recipes": {k: balaur_recipes[k] for k in ("crafts", "npc_prices", "materials")},
